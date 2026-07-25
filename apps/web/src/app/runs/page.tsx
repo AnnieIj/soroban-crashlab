@@ -28,7 +28,18 @@ export default function RunsPage() {
       }
     };
     void load();
-    return () => { cancelled = true; };
+
+    const handleVisibility = () => {
+      if (!cancelled && document.visibilityState === 'visible') {
+        void load();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, []);
 
   const totalPages = Math.max(1, Math.ceil(runs.length / ITEMS_PER_PAGE));

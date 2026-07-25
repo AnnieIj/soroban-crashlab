@@ -37,7 +37,7 @@ export async function GET(
     if (runsApiUrl) {
       const upstream = await fetch(
         `${runsApiUrl}/runs/${encodeURIComponent(id)}`,
-        { headers: { Accept: 'application/json' } },
+        { headers: { Accept: 'application/json' }, cache: 'no-store' },
       );
       if (upstream.status === 404) {
         return NextResponse.json({ error: 'Run not found' }, { status: 404 });

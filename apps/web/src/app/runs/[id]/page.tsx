@@ -2,6 +2,9 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { FuzzingRun, LedgerStateChange } from '../../types';
 import RunTimeline from './RunTimeline';
+import RunDetailAutoRefresh from './RunDetailAutoRefresh';
+
+export const dynamic = 'force-dynamic';
 
 interface RunDetail extends FuzzingRun {
     ledgerChanges?: LedgerStateChange[];
@@ -41,7 +44,7 @@ export default async function RunDetailPage({ params }: RunDetailPageProps) {
                         <p className="code-text mt-1" style={{ color: '#666666' }}>ID: {run.id}</p>
                     </div>
                     <div className="flex items-center gap-2">
-                        <span className={`badge badge-${run.status}`}>{run.status}</span>
+                        <RunDetailAutoRefresh runId={run.id} initialStatus={run.status} />
                         <Link href="/" className="btn-outline text-sm">Dashboard</Link>
                     </div>
                 </div>
