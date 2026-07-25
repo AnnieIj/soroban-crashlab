@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { WebhookConfig, RunEventType } from '@/app/webhook-manager';
 import { jsonError, readJsonBody, withRouteErrorHandling } from '@/lib/route-handler';
+import { getWebhookStore } from '@/lib/webhook-store';
 
 const VALID_PROTOCOLS = new Set(['http:', 'https:']);
 
@@ -13,8 +14,7 @@ const VALID_EVENT_TYPES = new Set<RunEventType>([
   'crash.detected',
 ]);
 
-// In-memory store (persists for the lifetime of the process)
-const store = new Map<string, WebhookConfig>();
+const store = getWebhookStore();
 
 function isValidUrl(url: unknown): url is string {
   if (typeof url !== 'string') return false;
@@ -107,7 +107,7 @@ function parseWebhookBody(body: unknown): WebhookConfig | { error: string } {
  * Returns all registered webhook configurations.
  */
 export const GET = withRouteErrorHandling('GET /api/webhooks', async () => {
-  const webhooks = [...store.values()].map((wh) => ({
+  const webhooks = store.getAllConfigs().map((wh) => ({
     ...wh,
     secret: wh.secret !== undefined ? '***' : undefined,
   }));
@@ -127,7 +127,7 @@ export const POST = withRouteErrorHandling('POST /api/webhooks', async (request:
     return jsonError(result.error, 422);
   }
 
-  if (store.has(result.id)) {
+  if (store.hasConfig(result.id)) {
     return jsonError(`Webhook with id "${result.id}" already exists.`, 409);
   }
 
@@ -136,7 +136,7 @@ export const POST = withRouteErrorHandling('POST /api/webhooks', async (request:
     maxRetries: result.maxRetries ?? 3,
     timeoutMs: result.timeoutMs ?? 5000,
   };
-  store.set(stored.id, stored);
+  store.setConfig(stored);
 
   return NextResponse.json(
     { ...stored, secret: stored.secret !== undefined ? '***' : undefined },
@@ -156,11 +156,11 @@ export const DELETE = withRouteErrorHandling('DELETE /api/webhooks', async (requ
     return jsonError('Query parameter "id" is required.', 400);
   }
 
-  if (!store.has(id)) {
+  if (!store.hasConfig(id)) {
     return jsonError(`Webhook "${id}" not found.`, 404);
   }
 
-  store.delete(id);
+  store.deleteConfig(id);
   return NextResponse.json({ deleted: id });
 });
 
@@ -176,7 +176,7 @@ export const PATCH = withRouteErrorHandling('PATCH /api/webhooks', async (reques
     return jsonError('Query parameter "id" is required.', 400);
   }
 
-  const existing = store.get(id);
+  const existing = store.getConfig(id);
   if (!existing) {
     return jsonError(`Webhook "${id}" not found.`, 404);
   }
@@ -255,7 +255,7 @@ export const PATCH = withRouteErrorHandling('PATCH /api/webhooks', async (reques
       patch.headers === null ? undefined : (patch.headers as Record<string, string>);
   }
 
-  store.set(id, updated);
+  store.setConfig(updated);
 
   return NextResponse.json({
     ...updated,
