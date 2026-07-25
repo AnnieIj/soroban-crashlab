@@ -85,8 +85,8 @@ function EmptyState() {
 // Main page
 // ---------------------------------------------------------------------------
 export default function LogViewerPage() {
-  const [dataState, setDataState] = useState<PageDataState>('loading');
-  const [entries, setEntries] = useState<LogEntry[]>([]);
+  const [dataState, setDataState] = useState<PageDataState>('success');
+  const [entries, setEntries] = useState<LogEntry[]>(MOCK_LOG_ENTRIES);
   const [levelFilter, setLevelFilter] = useState<LogLevelFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearchQuery = useDebounce(searchQuery, 300);

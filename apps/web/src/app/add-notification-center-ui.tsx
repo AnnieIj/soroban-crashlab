@@ -4,6 +4,11 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { loadPreferences, filterByPreferences } from './notification-preferences-utils';
 import type { NotificationType, NotificationPriority } from './notification-preferences-utils';
+import {
+  mergeNotificationFeed,
+  countUnread,
+  pruneDismissedIds,
+} from './notification-feed-utils';
 import { api, type NotificationFeedItem } from '../lib/api-client';
 
 export type { NotificationType, NotificationPriority };
@@ -54,6 +59,8 @@ export default function NotificationCenter({ className = '' }: NotificationCente
   const dropdownRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Ids the user dismissed locally, so a poll doesn't resurrect them (#1077).
+  const dismissedIdsRef = useRef<Set<string>>(new Set());
 
   const prefs = loadPreferences();
 
@@ -62,19 +69,12 @@ export default function NotificationCenter({ className = '' }: NotificationCente
       const data = await api.notifications.list();
       const feed: NotificationFeedItem[] = data.notifications ?? [];
       const mapped = feed.map(mapFeedItemToNotification);
-      setNotifications((prev) => {
-        const prevIds = new Set(prev.map((n) => n.id));
-        const merged = prev.filter((n) => feed.some((f) => f.id === n.id));
-        for (const item of mapped) {
-          if (!prevIds.has(item.id)) {
-            merged.push(item);
-          } else {
-            const existing = prev.find((n) => n.id === item.id);
-            if (existing) merged.push({ ...item, read: existing.read });
-          }
-        }
-        return merged;
-      });
+
+      dismissedIdsRef.current = pruneDismissedIds(dismissedIdsRef.current, mapped);
+
+      setNotifications((prev) =>
+        mergeNotificationFeed(prev, mapped, dismissedIdsRef.current),
+      );
     } catch {
       // silently fail — keep existing notifications
     }
@@ -146,7 +146,7 @@ export default function NotificationCenter({ className = '' }: NotificationCente
   const effectiveNotifications = notifications.filter((n) =>
     filterByPreferences(n, prefs),
   );
-  const unreadCount = effectiveNotifications.filter(n => !n.read).length;
+  const unreadCount = countUnread(effectiveNotifications);
   const filteredNotifications = filter === 'unread' 
     ? effectiveNotifications.filter(n => !n.read)
     : effectiveNotifications;
@@ -164,6 +164,9 @@ export default function NotificationCenter({ className = '' }: NotificationCente
   };
 
   const dismissNotification = (id: string) => {
+    // Remember the dismissal, otherwise the next poll re-adds the notification
+    // and the badge count climbs back up (#1077).
+    dismissedIdsRef.current.add(id);
     setNotifications((prev: Notification[]) => prev.filter((n: Notification) => n.id !== id));
   };
 
@@ -279,7 +282,9 @@ export default function NotificationCenter({ className = '' }: NotificationCente
                     : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
                 }`}
               >
-                All ({notifications.length})
+                {/* Count what is actually listed — preference-filtered items
+                    are not shown, so including them misreported the total. */}
+                All ({effectiveNotifications.length})
               </button>
               <button
                 onClick={() => setFilter('unread')}

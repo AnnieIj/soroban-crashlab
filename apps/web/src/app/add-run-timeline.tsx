@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState, useRef, useCallback, useEffect } from 'react';
 import type { FuzzingRun, RunStatus } from './types';
+import { dedupeRunsById } from './run-timeline-utils';
 
 type DataState = 'loading' | 'error' | 'success';
 
@@ -151,7 +152,10 @@ export default function AddRunTimeline({
   const runBlockRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
   const timelineRuns = useMemo(() => {
-    return runs
+    // Dedupe before slicing (#1076): repeated ids in `runs` produced duplicate
+    // React keys below, and also collided in `runBlockRefs` so arrow-key
+    // navigation focused the wrong block.
+    return dedupeRunsById(runs)
       .filter(r => r.startedAt)
       .slice(0, 10)
       .sort((a, b) => new Date(a.startedAt!).getTime() - new Date(b.startedAt!).getTime());
