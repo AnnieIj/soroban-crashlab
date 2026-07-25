@@ -132,7 +132,7 @@ impl LocalArtifactStore {
 
     /// Validates artifact ID to prevent directory traversal attacks.
     fn validate_artifact_id(id: &str) -> Result<(), StorageError> {
-        if id.is_empty() || id.contains("..") || id.contains("/") || id.contains("\\") {
+        if id.is_empty() || id == ".." || id.contains("/") || id.contains("\\") {
             return Err(StorageError::InvalidId {
                 artifact_id: id.to_string(),
             });
@@ -366,6 +366,30 @@ mod tests {
                 "should reject invalid ID: {}",
                 invalid_id
             );
+        }
+
+        let _ = fs::remove_dir_all(&tmpdir);
+    }
+
+    #[test]
+    fn accept_ids_with_consecutive_dots() {
+        let tmpdir = unique_tmp();
+        let store = LocalArtifactStore::new(&tmpdir).expect("create store");
+        let bundle = to_bundle(CaseSeed {
+            id: 1,
+            payload: vec![1],
+        });
+
+        let valid_ids = vec!["run-v2..1", "artifact..name", "test..file", "..foo", "bar.."];
+
+        for valid_id in valid_ids {
+            let result = store.store_artifact(valid_id, &bundle);
+            assert!(
+                result.is_ok(),
+                "should accept ID with consecutive dots: {}",
+                valid_id
+            );
+            let _ = store.delete_artifact(valid_id);
         }
 
         let _ = fs::remove_dir_all(&tmpdir);
