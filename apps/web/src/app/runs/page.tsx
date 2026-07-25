@@ -48,6 +48,18 @@ export default function RunsPage() {
       }
     };
     void load();
+
+    const handleVisibility = () => {
+      if (!cancelled && document.visibilityState === 'visible') {
+        void load();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
     return () => { cancelled = true; };
   }, [fetchAttempt]);
 
