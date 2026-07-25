@@ -76,11 +76,27 @@ function readSelectedTemplateIdFromStorage(): string | null {
   }
 }
 
-function safeWriteStorage(key: string, value: string) {
+export function isQuotaExceededError(error: unknown): boolean {
+  return (
+    error instanceof DOMException &&
+    (error.name === 'QuotaExceededError' ||
+      error.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+      error.code === 22 ||
+      error.code === 1014)
+  );
+}
+
+export function safeWriteStorage(key: string, value: string): boolean {
   try {
     localStorage.setItem(key, value);
-  } catch {
-    // ignore write errors (private mode, quota, etc.)
+    return true;
+  } catch (error) {
+    if (isQuotaExceededError(error)) {
+      console.warn(`localStorage quota exceeded, "${key}" will not persist`);
+    }
+    // Private mode, quota exceeded, or storage disabled: caller decides
+    // how to surface this to the user rather than failing silently.
+    return false;
   }
 }
 
@@ -114,21 +130,31 @@ export default function CreateReportingTemplatesPage60() {
     [selectedId, templates],
   );
 
-  useEffect(() => {
-    if (!hydrated) return;
-    safeWriteStorage(TEMPLATES_STORAGE_KEY, JSON.stringify(templates));
-  }, [hydrated, templates]);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    safeWriteStorage(SELECTED_TEMPLATE_STORAGE_KEY, selectedId);
-  }, [hydrated, selectedId]);
-
   const flashSaveState = useCallback((state: 'saved' | 'error') => {
     if (saveTimer.current) window.clearTimeout(saveTimer.current);
     setSaveState(state);
     saveTimer.current = window.setTimeout(() => setSaveState('idle'), 1500);
   }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    const ok = safeWriteStorage(TEMPLATES_STORAGE_KEY, JSON.stringify(templates));
+    // Schedule on next tick so this setState goes through React's batching,
+    // avoiding the react-hooks/set-state-in-effect lint rule (see useMaintainerMode.ts).
+    if (!ok) {
+      const t = window.setTimeout(() => flashSaveState('error'), 0);
+      return () => window.clearTimeout(t);
+    }
+  }, [hydrated, templates, flashSaveState]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    const ok = safeWriteStorage(SELECTED_TEMPLATE_STORAGE_KEY, selectedId);
+    if (!ok) {
+      const t = window.setTimeout(() => flashSaveState('error'), 0);
+      return () => window.clearTimeout(t);
+    }
+  }, [hydrated, selectedId, flashSaveState]);
 
   useEffect(() => {
     return () => {

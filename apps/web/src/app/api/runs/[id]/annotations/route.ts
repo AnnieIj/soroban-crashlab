@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { buildMockRuns } from '@/app/mockRuns';
+import { getAnnotationStore } from '@/app/api/mock-store';
 import { jsonError, readJsonBody, withRouteErrorHandling } from '@/lib/route-handler';
 
-const annotationStore = new Map<string, string[]>();
+const annotationStore = getAnnotationStore();
 
 function getAnnotations(id: string): string[] {
   if (annotationStore.has(id)) {
