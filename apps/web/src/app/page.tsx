@@ -15,6 +15,8 @@ import {
   type DashboardSectionId,
 } from "./dashboard-layout-utils";
 import { ResourceFeeInsightPanel } from "./implement-resource-fee-insight-panel-component";
+import Pagination from "./Pagination";
+import { getPageSlice, computeTotalPages, clampPage } from "./pagination-utils";
 
 const AddTaggingAndLabelsUi = dynamic(
   () => import("./add-tagging-and-labels-ui"),
@@ -32,6 +34,8 @@ const makeSuggestedLabels = (run: FuzzingRun): string[] => [
   run.minResourceFee >= 3_000 ? "high-fee" : "fee-ok",
 ];
 
+const PAGE_SIZE = 10;
+
 function DashboardContent() {
   const [runs, setRuns] = useState<FuzzingRun[]>([]);
   const [dataState, setDataState] = useState<"loading" | "error" | "success">("loading");
@@ -40,6 +44,8 @@ function DashboardContent() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const activeTag = searchParams.get("filter_tag") ?? "all";
+  const rawPage = parseInt(searchParams.get("page") ?? "1", 10);
+  const currentPage = isNaN(rawPage) ? 1 : rawPage;
 
   useEffect(() => {
     let cancelled = false;
@@ -83,6 +89,21 @@ function DashboardContent() {
       } else {
         next.set("filter_tag", tag);
       }
+      next.delete("page");
+      const query = next.toString();
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams],
+  );
+
+  const handlePageChange = useCallback(
+    (page: number) => {
+      const next = new URLSearchParams(searchParams.toString());
+      if (page <= 1) {
+        next.delete("page");
+      } else {
+        next.set("page", String(page));
+      }
       const query = next.toString();
       router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
     },
@@ -96,7 +117,9 @@ function DashboardContent() {
     );
   }, [activeTag, runs]);
 
-  const recentRuns = filteredRuns.slice(0, 8);
+  const totalPages = computeTotalPages(filteredRuns.length, PAGE_SIZE);
+  const clampedPage = clampPage(currentPage, totalPages);
+  const recentRuns = getPageSlice(filteredRuns, clampedPage, PAGE_SIZE);
 
   const { getRowProps } = useDataTableKeyboardNav({
     rowCount: recentRuns.length,
@@ -242,6 +265,13 @@ function DashboardContent() {
                         </tbody>
                       </table>
                     </div>
+                    {totalPages > 1 && (
+                      <Pagination
+                        currentPage={clampedPage}
+                        totalPages={totalPages}
+                        onPageChange={handlePageChange}
+                      />
+                    )}
                   </div>
                 </>
               ),
