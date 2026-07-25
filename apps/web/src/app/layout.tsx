@@ -32,13 +32,14 @@ export default function RootLayout({
               var d = t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches);
               document.documentElement.classList.toggle('dark', d);
             } catch(e) {}
+            document.documentElement.classList.add('theme-ready');
           `
         }} />
       </head>
       <body className="antialiased min-h-screen">
         <ThemeProvider>
           <NavBar />
-          <main style={{ background: 'var(--bg)', paddingTop: '52px', minHeight: '100vh', transition: 'background 0.3s ease' }}>
+          <main style={{ background: 'var(--bg)', paddingTop: '52px', minHeight: '100vh' }}>
             {children}
           </main>
         </ThemeProvider>
