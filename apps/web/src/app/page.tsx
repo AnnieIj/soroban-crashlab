@@ -40,6 +40,7 @@ function DashboardContent() {
   const [runs, setRuns] = useState<FuzzingRun[]>([]);
   const [dataState, setDataState] = useState<"loading" | "error" | "success">("loading");
   const [layout, setLayout] = useState<DashboardSectionConfig[]>(DEFAULT_DASHBOARD_LAYOUT);
+  const [fetchAttempt, setFetchAttempt] = useState(0);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -49,10 +50,11 @@ function DashboardContent() {
 
   useEffect(() => {
     let cancelled = false;
+    const ctrl = new AbortController();
     const load = async () => {
       setDataState("loading");
       try {
-        const data = await fetchRuns();
+        const data = await fetchRuns(ctrl.signal);
         if (!cancelled) {
           setRuns(data.runs ?? []);
           setDataState("success");
@@ -64,6 +66,26 @@ function DashboardContent() {
     void load();
     return () => {
       cancelled = true;
+      ctrl.abort();
+    };
+  }, [fetchAttempt]);
+
+  useEffect(() => {
+    let mounted = true;
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible" && mounted) {
+        setFetchAttempt((n) => n + 1);
+      }
+    };
+    const handleFocus = () => {
+      if (mounted) setFetchAttempt((n) => n + 1);
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("focus", handleFocus);
+    return () => {
+      mounted = false;
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("focus", handleFocus);
     };
   }, []);
 
@@ -178,7 +200,24 @@ function DashboardContent() {
       )}
       {dataState === "error" && (
         <div role="alert" className="card card-padding mb-4 sm:mb-6" style={{ borderLeft: "4px solid #CC1016" }}>
-          <p className="font-semibold" style={{ color: "#CC1016" }}>Connection Error</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-semibold" style={{ color: "#CC1016" }}>Connection Error</p>
+              <p className="text-meta">Could not reach the backend API.</p>
+            </div>
+            <button
+              onClick={() => setFetchAttempt((n) => n + 1)}
+              className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white shadow transition"
+              style={{ backgroundColor: "#CC1016" }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#a50d12")}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#CC1016")}
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582M20 20v-5h-.581M5.635 15A9 9 0 1118.365 9" />
+              </svg>
+              Retry
+            </button>
+          </div>
         </div>
       )}
 
