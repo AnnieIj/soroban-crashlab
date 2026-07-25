@@ -74,7 +74,6 @@ html {
   -moz-osx-font-smoothing: grayscale;
   background: var(--bg);
   color: var(--text-primary);
-  transition: background 0.3s ease, color 0.3s ease;
 }
 
 body {
@@ -83,7 +82,14 @@ body {
   font-size: 14px;
   line-height: 1.4;
   min-height: 100vh;
-  transition: background 0.3s ease;
+}
+
+/* Enable theme transitions only after the inline script has applied the
+   correct theme class.  Without this gate the transition animates the
+   initial light→dark (or dark→light) swap, producing a visible flash. */
+html.theme-ready,
+html.theme-ready body {
+  transition: background 0.3s ease, color 0.3s ease;
 }
 
 ::selection {
