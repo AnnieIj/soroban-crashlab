@@ -1,10 +1,30 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import { useMaintainerMode } from '../useMaintainerMode';
+import { loadFromStorage } from './api/api-config-utils';
+
+function readActiveUrl(): string {
+  const config = loadFromStorage();
+  return config.backendUrl || process.env.NEXT_PUBLIC_API_URL || '';
+}
+
+function getInitialApiUrl(): string {
+  if (typeof window === 'undefined') return '';
+  const activeUrl = readActiveUrl();
+  return activeUrl || 'Not configured (using mock data)';
+}
+
+function getInitialIsMockData(): boolean {
+  if (typeof window === 'undefined') return true;
+  return !readActiveUrl();
+}
 
 export default function SettingsPage() {
   const { isMaintainer, toggle: toggleMaintainer, mounted, storageError } = useMaintainerMode();
+  const [apiUrl] = useState<string>(getInitialApiUrl);
+  const [isMockData] = useState<boolean>(getInitialIsMockData);
   return (
     <div className="container-full page-padding fade-in">
       <div className="mb-4 sm:mb-6">
@@ -20,7 +40,7 @@ export default function SettingsPage() {
             </svg>
             <div>
               <p className="text-sm font-medium text-amber-800 dark:text-amber-200">Storage quota exceeded</p>
-              <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">Your browser's local storage is full. Settings may not persist between sessions. Please clear some data or free up storage space.</p>
+              <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">Your browser&apos;s local storage is full. Settings may not persist between sessions. Please clear some data or free up storage space.</p>
             </div>
           </div>
         </div>
@@ -31,6 +51,9 @@ export default function SettingsPage() {
           { href: '/settings/alerting', title: 'Alerting', desc: 'Configure notification presets and alert thresholds', icon: '◉' },
           { href: '/settings/reporting', title: 'Reporting', desc: 'Report generation templates and export preferences', icon: '⊞' },
           { href: '/settings/accessibility', title: 'Accessibility', desc: 'Keyboard navigation, screen reader and contrast settings', icon: '◈' },
+          { href: '/settings/api', title: 'API Configuration', desc: 'Backend URL, rate limits and connection settings', icon: '⚙' },
+          { href: '/settings/notifications', title: 'Notifications', desc: 'Configure notification types, delivery and quiet hours', icon: '◉' },
+          { href: '/settings/network', title: 'Network', desc: 'Manage Stellar RPC and Horizon network endpoints', icon: '◎' },
         ].map((item) => (
           <Link key={item.href} href={item.href} className="card card-padding card-interactive flex items-start gap-3 sm:gap-4 text-decoration-none">
             <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-base sm:text-lg flex-shrink-0" style={{ background: '#E7F0F9', color: '#0A66C2' }}>
@@ -43,24 +66,15 @@ export default function SettingsPage() {
             <span className="text-meta shrink-0">→</span>
           </Link>
         ))}
-        <div className="card card-padding flex items-start gap-4" style={{ opacity: 0.6 }}>
-          <div className="w-10 h-10 rounded-lg flex items-center justify-center text-lg flex-shrink-0" style={{ background: '#F0F0F0', color: '#666666' }}>
-            ⚙
-          </div>
-          <div className="flex-1">
-            <h3 className="font-semibold" style={{ color: '#191919' }}>API Configuration</h3>
-            <p className="text-meta mt-1">Coming soon - Backend URL, rate limits and authentication</p>
-          </div>
-        </div>
       </div>
 
         <div className="card card-padding">
           <h3 className="font-semibold text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>Current Configuration</h3>
           <div className="space-y-3">
             {[
-              { label: 'API URL', value: process.env.NEXT_PUBLIC_API_URL || 'Not configured (using mock data)' },
+              { label: 'API URL', value: apiUrl },
               { label: 'Environment', value: process.env.NEXT_PUBLIC_VERCEL_ENV || 'Development' },
-              { label: 'Mock Data', value: process.env.NEXT_PUBLIC_ENABLE_MOCK_DATA !== 'false' ? 'Enabled' : 'Disabled', color: process.env.NEXT_PUBLIC_ENABLE_MOCK_DATA !== 'false' ? '#057642' : '#CC1016' },
+              { label: 'Mock Data', value: isMockData ? 'Enabled' : 'Disabled', color: isMockData ? '#057642' : '#CC1016' },
             ].map((info) => (
               <div key={info.label} className="flex justify-between items-center py-1">
                 <span className="text-meta">{info.label}</span>

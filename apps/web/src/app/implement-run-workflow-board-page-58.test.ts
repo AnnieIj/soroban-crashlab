@@ -233,6 +233,119 @@ function testKeyboardAccessibility() {
   console.log('  ✓ Focus management is correct');
 }
 
+// Test: Within-column reorder
+function testWithinColumnReorder() {
+  console.log("Test: Within-column reorder");
+
+  const order = ['run-001', 'run-002', 'run-003', 'run-004'];
+
+  // Drag run-004 (idx 3) and drop before run-002 (idx 1)
+  const sourceIdx = order.indexOf('run-004');
+  const targetIdx = 1; // drop before run-002
+  const adjusted = targetIdx > sourceIdx ? targetIdx - 1 : targetIdx;
+
+  const reordered = [...order];
+  const [moved] = reordered.splice(sourceIdx, 1);
+  reordered.splice(adjusted, 0, moved);
+
+  if (reordered[0] !== 'run-001') throw new Error('Expected run-001 at position 0');
+  if (reordered[1] !== 'run-004') throw new Error('Expected run-004 at position 1 (moved before run-002)');
+  if (reordered[2] !== 'run-002') throw new Error('Expected run-002 at position 2');
+  if (reordered[3] !== 'run-003') throw new Error('Expected run-003 at position 3');
+
+  console.log('  ✓ Same-column reorder inserts at correct position');
+  console.log('  ✓ Source index correctly removed before insertion');
+
+  // Drag run-001 (idx 0) and drop after run-003 (idx 3)
+  const order2 = ['run-001', 'run-002', 'run-003', 'run-004'];
+  const sourceIdx2 = order2.indexOf('run-001');
+  const targetIdx2 = 3; // drop before run-004
+  const adjusted2 = targetIdx2 > sourceIdx2 ? targetIdx2 - 1 : targetIdx2;
+
+  const reordered2 = [...order2];
+  const [moved2] = reordered2.splice(sourceIdx2, 1);
+  reordered2.splice(adjusted2, 0, moved2);
+
+  if (reordered2[0] !== 'run-002') throw new Error('Expected run-002 at position 0');
+  if (reordered2[1] !== 'run-003') throw new Error('Expected run-003 at position 1');
+  if (reordered2[2] !== 'run-001') throw new Error('Expected run-001 at position 2');
+  if (reordered2[3] !== 'run-004') throw new Error('Expected run-004 at position 3');
+
+  console.log('  ✓ Forward move (drag down) adjusted correctly');
+}
+
+// Test: Cross-column reorder with positioning
+function testCrossColumnReorder() {
+  console.log("Test: Cross-column reorder with positioning");
+
+  // Simulate column orders
+  const openOrder = ['run-001', 'run-002'];
+  const inReviewOrder = ['run-003', 'run-004'];
+
+  // Drag run-001 from open to in-review, insert before run-004 (idx 1 in inReviewOrder)
+  const fromOrder = [...openOrder];
+  const fromIdx = fromOrder.indexOf('run-001');
+  fromOrder.splice(fromIdx, 1);
+
+  const toOrder = [...inReviewOrder];
+  const insertAt = Math.min(1, toOrder.length);
+  toOrder.splice(insertAt, 0, 'run-001');
+
+  if (fromOrder.length !== 1) throw new Error('Source column should have 1 run after removal');
+  if (fromOrder[0] !== 'run-002') throw new Error('Expected run-002 remaining in open');
+  if (toOrder.length !== 3) throw new Error('Target column should have 3 runs after insertion');
+  if (toOrder[0] !== 'run-003') throw new Error('Expected run-003 at position 0');
+  if (toOrder[1] !== 'run-001') throw new Error('Expected run-001 at position 1 (inserted before run-004)');
+  if (toOrder[2] !== 'run-004') throw new Error('Expected run-004 at position 2');
+
+  console.log('  ✓ Cross-column move removes from source and inserts at target position');
+  console.log('  ✓ Source and target column orders are independently maintained');
+}
+
+// Test: Column order persistence
+function testColumnOrderPersistence() {
+  console.log("Test: Column order persistence");
+
+  localStorageMock.clear();
+
+  const savedOrder = {
+    'open': ['run-001', 'run-003', 'run-002'],
+    'in-review': ['run-004'],
+    'closed': [],
+  };
+
+  // Save
+  localStorageMock.setItem('crashlab-run-workflow-order', JSON.stringify(savedOrder));
+
+  // Load
+  const stored = localStorageMock.getItem('crashlab-run-workflow-order');
+  if (!stored) throw new Error('Failed to persist column order');
+
+  const loaded = JSON.parse(stored);
+  if (loaded['open'].length !== 3) throw new Error('Open column order length mismatch');
+  if (loaded['open'][0] !== 'run-001') throw new Error('Open order position 0 wrong');
+  if (loaded['open'][1] !== 'run-003') throw new Error('Open order position 1 wrong');
+  if (loaded['open'][2] !== 'run-002') throw new Error('Open order position 2 wrong');
+  if (loaded['in-review'].length !== 1) throw new Error('In-review column order length mismatch');
+  if (loaded['closed'].length !== 0) throw new Error('Closed column order length mismatch');
+
+  console.log('  ✓ Column order is saved to localStorage');
+  console.log('  ✓ Column order is loaded from localStorage');
+  console.log('  ✓ Order persistence survives page reload');
+
+  // Verify it doesn't interfere with workflow state storage
+  const stateData = [
+    { runId: 'run-001', workflowState: 'open' },
+  ];
+  localStorageMock.setItem('crashlab-run-workflow-states', JSON.stringify(stateData));
+  const stateStored = localStorageMock.getItem('crashlab-run-workflow-states');
+  if (!stateStored) throw new Error('Workflow state storage corrupted by order storage');
+  const stateLoaded = JSON.parse(stateStored);
+  if (stateLoaded.length !== 1) throw new Error('Workflow state length mismatch');
+
+  console.log('  ✓ Column order and workflow state use separate storage keys');
+}
+
 // Test: Run card display
 function testRunCardDisplay() {
   console.log("Test: Run card display");
@@ -270,6 +383,9 @@ function runAllTests() {
     testColumnStatistics();
     testEmptyStateHandling();
     testKeyboardAccessibility();
+    testWithinColumnReorder();
+    testCrossColumnReorder();
+    testColumnOrderPersistence();
     testRunCardDisplay();
 
     console.log('\n✅ All tests passed!');

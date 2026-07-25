@@ -1,7 +1,8 @@
-import { test, expect, Page } from '@playwright/test';
+import { test, expect } from './fixtures';
+import type { Page } from '@playwright/test';
 import fs from 'fs';
 import path from 'path';
-import { createWriteStream } from 'fs';
+
 
 const TEST_FILE_CONTENT = 'test artifact content for e2e testing';
 const TEST_FILE_JSON_CONTENT = JSON.stringify({
@@ -47,7 +48,7 @@ function cleanupTestFile(filePath: string): void {
  * Helper to navigate to artifact storage integration page
  */
 async function navigateToArtifactPage(page: Page): Promise<void> {
-  await page.goto('/integrate-storage-backend-integration-for-artifacts');
+  await page.goto('/integrations/artifacts');
   // Wait for the page to fully load
   await page.waitForLoadState('networkidle');
 }
@@ -89,7 +90,7 @@ test.describe('Artifact Upload/Download E2E', () => {
 
     try {
       // Get initial artifact count
-      const initialArtifactItems = await page.locator('div[class*="border"]').count();
+      await page.locator('div[class*="border"]').count();
 
       // Upload artifact
       await uploadArtifactViaUI(page, testFilePath);
@@ -115,7 +116,7 @@ test.describe('Artifact Upload/Download E2E', () => {
     await page.waitForLoadState('networkidle');
 
     // Check if artifact list section exists
-    const listSection = page.locator('text=Artifacts');
+    const listSection = page.locator('text=Stored Artifacts');
     await expect(listSection).toBeVisible();
   });
 
@@ -165,21 +166,9 @@ test.describe('Artifact Upload/Download E2E', () => {
       await uploadArtifactViaUI(page, testFilePath);
       await waitForArtifactInList(page, testFileName);
 
-      // Start listening for download
-      const downloadPromise = context.waitForEvent('download');
-
-      // Find and click download button for the artifact
       const artifactRow = page.locator(`text="${testFileName}"`).first();
       await expect(artifactRow).toBeVisible();
 
-      // Click download button (usually near the artifact name)
-      const downloadButton = page
-        .locator(`text="${testFileName}"`)
-        .locator('..')
-        .locator('button', { has: page.locator('svg') })
-        .nth(0);
-
-      // Try to click if button exists
       const buttons = await page
         .locator(`text="${testFileName}"`)
         .locator('..')
@@ -187,10 +176,10 @@ test.describe('Artifact Upload/Download E2E', () => {
         .all();
 
       if (buttons.length > 0) {
-        // Click the first button (likely download)
-        await buttons[0].click({ timeout: 5000 }).catch(() => {
-          // Download button might not exist in all cases
-        });
+        const downloadPromise = context.waitForEvent('download');
+        await buttons[0].click({ timeout: 5000 });
+        const download = await downloadPromise;
+        expect(download.suggestedFilename()).toBe(testFileName);
       }
     } finally {
       cleanupTestFile(testFilePath);
@@ -274,7 +263,8 @@ test.describe('Artifact Upload/Download E2E', () => {
       await fileInput.setInputFiles(filePath);
 
       // Wait for upload to complete
-      await page.waitForTimeout(500);
+      await page.waitForTimeout(1000);
+      await page.waitForLoadState('networkidle');
 
       // Verify artifact appears
       await waitForArtifactInList(page, testFileName);
@@ -335,7 +325,7 @@ test.describe('Artifact Upload/Download E2E', () => {
     await navigateToArtifactPage(page);
 
     // If there's an error section, it should not be visible initially
-    const errorSection = page.locator('[class*="error"]', { has: page.locator('text=Failed') }).first();
+    page.locator('[class*="error"]', { has: page.locator('text=Failed') }).first();
 
     // This is a soft check - error handling depends on backend state
     // The page should remain functional even if errors occur
@@ -383,7 +373,7 @@ test.describe('Artifact Upload/Download E2E', () => {
 
 test.describe('Artifact API Endpoints', () => {
   test('GET /api/artifacts returns proper response structure', async ({ request }) => {
-    const response = await request.get('http://localhost:3000/api/artifacts');
+    const response = await request.get('/api/artifacts');
 
     expect(response.ok()).toBeTruthy();
 
@@ -394,7 +384,7 @@ test.describe('Artifact API Endpoints', () => {
     expect(Array.isArray(data.artifacts)).toBeTruthy();
   });
 
-  test('POST /api/artifacts accepts file uploads', async ({ request, page }) => {
+  test('POST /api/artifacts accepts file uploads', async ({ request }) => {
     const testFileName = `api-test-${Date.now()}.json`;
     const filePath = await createTestFile(testFileName, TEST_FILE_JSON_CONTENT);
 
@@ -402,7 +392,7 @@ test.describe('Artifact API Endpoints', () => {
       // Prepare form data
       const fileBuffer = fs.readFileSync(filePath);
 
-      const response = await request.post('http://localhost:3000/api/artifacts', {
+      const response = await request.post('/api/artifacts', {
         multipart: {
           file: {
             name: testFileName,
@@ -426,7 +416,7 @@ test.describe('Artifact API Endpoints', () => {
   });
 
   test('artifact metadata includes required fields', async ({ request }) => {
-    const response = await request.get('http://localhost:3000/api/artifacts');
+    const response = await request.get('/api/artifacts');
 
     expect(response.ok()).toBeTruthy();
 

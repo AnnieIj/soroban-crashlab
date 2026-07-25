@@ -9,11 +9,14 @@ use crashlab_core::{
     RunId, cancel_marker_path, cancel_requested, default_state_dir, replay_mismatch_message,
     replay_seed_bundle_path, replay_success_message, request_cancel_run,
     run_regression_suite_from_json,
+    RetentionPolicy, RetentionRecord, LocalArtifactStore, ArtifactStore,
+    RunCheckpoint, CaseBundleDocument,
 };
 use std::fs;
 use std::path::Path;
 
 fn main() {
+    env_logger::init();
     let mut args = std::env::args();
     let _prog = args.next();
 
@@ -82,6 +85,13 @@ fn main() {
             }
             list_runs();
         }
+        (Some("retention"), Some("sweep"), None, None) => {
+            if args.next().is_some() {
+                print_usage();
+                std::process::exit(1);
+            }
+            sweep_retention();
+        }
         _ => {
             print_usage();
             std::process::exit(1);
@@ -94,7 +104,8 @@ fn print_usage() {
         "usage: crashlab run cancel <id>\n\
                 crashlab runs list\n\
                 crashlab replay seed <bundle-json-path>\n\
-                crashlab regression-suite <suite-json-path-or-directory>"
+                crashlab regression-suite <suite-json-path-or-directory>\n\
+                crashlab retention sweep"
     );
 }
 
@@ -240,4 +251,135 @@ fn load_fixtures_from_directory(dir: &Path) -> Result<Vec<u8>, String> {
 
     // Serialize the combined array
     serde_json::to_vec(&scenarios).map_err(|e| format!("failed to serialize scenarios: {}", e))
+}
+
+fn sweep_retention() {
+    let base = default_state_dir();
+    let policy = RetentionPolicy::default();
+    let now = chrono::Utc::now();
+
+    // 1. Sweep failure bundles (artifacts)
+    let store_path = base.join("artifacts");
+    let store = match LocalArtifactStore::new(&store_path) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("failed to open artifact store at {}: {}", store_path.display(), e);
+            std::process::exit(1);
+        }
+    };
+
+    let artifacts = match store.list_artifacts() {
+        Ok(list) => list,
+        Err(e) => {
+            eprintln!("failed to list artifacts: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    let mut bundle_records = Vec::new();
+    let mut artifact_ids = Vec::new();
+
+    for art in &artifacts {
+        let path = store_path.join(format!("{}.json", art.id));
+        let bytes = match fs::read(&path) {
+            Ok(b) => b,
+            Err(e) => {
+                eprintln!("warning: failed to read artifact file {}: {}", path.display(), e);
+                continue;
+            }
+        };
+        let doc: CaseBundleDocument = match serde_json::from_slice(&bytes) {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("warning: failed to parse artifact JSON {}: {}", path.display(), e);
+                continue;
+            }
+        };
+        let created_at = match chrono::DateTime::parse_from_rfc3339(&art.created_at) {
+            Ok(dt) => dt.with_timezone(&chrono::Utc),
+            Err(_) => chrono::Utc::now(),
+        };
+
+        bundle_records.push(RetentionRecord::new(doc, created_at));
+        artifact_ids.push(art.id.clone());
+    }
+
+    let bundles_keep = policy.retain_failure_bundle_records(&bundle_records, now);
+    let mut deleted_bundles = 0;
+    for (i, &keep) in bundles_keep.iter().enumerate() {
+        if !keep {
+            let id = &artifact_ids[i];
+            match store.delete_artifact(id) {
+                Ok(()) => {
+                    println!("pruned old failure bundle: {id}");
+                    deleted_bundles += 1;
+                }
+                Err(e) => {
+                    eprintln!("failed to delete artifact {id}: {e}");
+                }
+            }
+        }
+    }
+
+    // 2. Sweep checkpoints
+    let runs_dir = base.join("runs");
+    let mut checkpoint_records = Vec::new();
+    let mut run_dirs = Vec::new();
+
+    if let Ok(entries) = fs::read_dir(&runs_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                let checkpoint_path = path.join("checkpoint.json");
+                if checkpoint_path.is_file() {
+                    let bytes = match fs::read(&checkpoint_path) {
+                        Ok(b) => b,
+                        Err(e) => {
+                            eprintln!("warning: failed to read checkpoint at {}: {}", checkpoint_path.display(), e);
+                            continue;
+                        }
+                    };
+                    let cp: RunCheckpoint = match serde_json::from_slice(&bytes) {
+                        Ok(c) => c,
+                        Err(e) => {
+                            eprintln!("warning: failed to parse checkpoint at {}: {}", checkpoint_path.display(), e);
+                            continue;
+                        }
+                    };
+                    let metadata = match fs::metadata(&checkpoint_path) {
+                        Ok(m) => m,
+                        Err(e) => {
+                            eprintln!("warning: failed to read metadata for checkpoint at {}: {}", checkpoint_path.display(), e);
+                            continue;
+                        }
+                    };
+                    let modified = metadata.modified().unwrap_or_else(|_| std::time::SystemTime::now());
+                    let duration = modified.duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
+                    let created_at = chrono::DateTime::<chrono::Utc>::from(std::time::UNIX_EPOCH + duration);
+
+                    checkpoint_records.push(RetentionRecord::new(cp, created_at));
+                    run_dirs.push(path);
+                }
+            }
+        }
+    }
+
+    let checkpoints_keep = policy.retain_checkpoint_records(&checkpoint_records, now);
+    let mut deleted_checkpoints = 0;
+    for (i, &keep) in checkpoints_keep.iter().enumerate() {
+        if !keep {
+            let dir = &run_dirs[i];
+            match fs::remove_dir_all(dir) {
+                Ok(()) => {
+                    println!("pruned old run checkpoint directory: {}", dir.display());
+                    deleted_checkpoints += 1;
+                }
+                Err(e) => {
+                    eprintln!("failed to remove run directory {}: {}", dir.display(), e);
+                }
+            }
+        }
+    }
+
+    println!("sweep summary: pruned {deleted_bundles} bundle(s), {deleted_checkpoints} checkpoint(s).");
 }

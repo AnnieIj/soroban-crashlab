@@ -1,9 +1,17 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import Link from 'next/link';
+import { loadPreferences, filterByPreferences } from './notification-preferences-utils';
+import type { NotificationType, NotificationPriority } from './notification-preferences-utils';
+import {
+  mergeNotificationFeed,
+  countUnread,
+  pruneDismissedIds,
+} from './notification-feed-utils';
+import { api, type NotificationFeedItem } from '../lib/api-client';
 
-export type NotificationType = 'info' | 'success' | 'warning' | 'error';
-export type NotificationPriority = 'low' | 'medium' | 'high' | 'critical';
+export type { NotificationType, NotificationPriority };
 
 export interface Notification {
   id: string;
@@ -23,69 +31,26 @@ interface NotificationCenterProps {
   className?: string;
 }
 
-// Mock notifications for demonstration
-const MOCK_NOTIFICATIONS: Notification[] = [
-  {
-    id: 'notif-1',
-    type: 'error',
-    priority: 'critical',
-    title: 'Critical Failure Detected',
-    message: 'Run run-1023 encountered a panic in contract::transfer. Immediate attention required.',
-    timestamp: new Date(Date.now() - 5 * 60 * 1000), // 5 minutes ago
-    read: false,
-    actionLabel: 'View Details',
-    actionUrl: '/runs/run-1023',
+const POLL_INTERVAL_MS = 30000;
+
+function mapFeedItemToNotification(item: NotificationFeedItem): Notification {
+  const priorityMap: Record<string, NotificationPriority> = {
+    error: 'critical',
+    warning: 'high',
+    success: 'medium',
+    info: 'low',
+  };
+  return {
+    id: item.id,
+    type: item.severity,
+    priority: priorityMap[item.severity] ?? 'low',
+    title: item.title,
+    message: item.message,
+    timestamp: new Date(item.createdAt),
+    read: item.read,
     dismissible: true,
-    runId: 'run-1023'
-  },
-  {
-    id: 'notif-2',
-    type: 'warning',
-    priority: 'high',
-    title: 'Resource Usage Alert',
-    message: 'Run run-1022 exceeded memory threshold (8.5MB). Consider optimizing contract logic.',
-    timestamp: new Date(Date.now() - 15 * 60 * 1000), // 15 minutes ago
-    read: false,
-    actionLabel: 'Analyze',
-    actionUrl: '/runs/run-1022',
-    dismissible: true,
-    runId: 'run-1022'
-  },
-  {
-    id: 'notif-3',
-    type: 'success',
-    priority: 'medium',
-    title: 'Campaign Completed',
-    message: 'Fuzzing campaign "Token Transfer Tests" completed successfully with 50,000 seeds.',
-    timestamp: new Date(Date.now() - 30 * 60 * 1000), // 30 minutes ago
-    read: true,
-    actionLabel: 'View Report',
-    dismissible: true
-  },
-  {
-    id: 'notif-4',
-    type: 'info',
-    priority: 'low',
-    title: 'System Update',
-    message: 'CrashLab has been updated to v2.1.0 with improved mutation algorithms.',
-    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
-    read: true,
-    dismissible: true
-  },
-  {
-    id: 'notif-5',
-    type: 'warning',
-    priority: 'medium',
-    title: 'Invariant Violation',
-    message: 'Property assertion failed in run run-1021: balance should never be negative.',
-    timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000), // 4 hours ago
-    read: false,
-    actionLabel: 'Investigate',
-    actionUrl: '/runs/run-1021',
-    dismissible: true,
-    runId: 'run-1021'
-  }
-];
+  };
+}
 
 export default function NotificationCenter({ className = '' }: NotificationCenterProps) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -93,16 +58,56 @@ export default function NotificationCenter({ className = '' }: NotificationCente
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const dropdownRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Ids the user dismissed locally, so a poll doesn't resurrect them (#1077).
+  const dismissedIdsRef = useRef<Set<string>>(new Set());
 
-  // Load notifications on mount
-  useEffect(() => {
-    // Use a timeout to avoid synchronous setState in effect
-    const timer = setTimeout(() => {
-      setNotifications(MOCK_NOTIFICATIONS);
-    }, 0);
-    
-    return () => clearTimeout(timer);
+  const prefs = loadPreferences();
+
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const data = await api.notifications.list();
+      const feed: NotificationFeedItem[] = data.notifications ?? [];
+      const mapped = feed.map(mapFeedItemToNotification);
+
+      dismissedIdsRef.current = pruneDismissedIds(dismissedIdsRef.current, mapped);
+
+      setNotifications((prev) =>
+        mergeNotificationFeed(prev, mapped, dismissedIdsRef.current),
+      );
+    } catch {
+      // silently fail — keep existing notifications
+    }
   }, []);
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      void fetchNotifications();
+    });
+    intervalRef.current = setInterval(fetchNotifications, POLL_INTERVAL_MS);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [fetchNotifications]);
+
+  useEffect(() => {
+    let mounted = true;
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && mounted) {
+        fetchNotifications();
+      }
+    };
+    const handleFocus = () => {
+      if (mounted) fetchNotifications();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      mounted = false;
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [fetchNotifications]);
 
   // Handle click outside to close dropdown
   useEffect(() => {
@@ -138,10 +143,13 @@ export default function NotificationCenter({ className = '' }: NotificationCente
     }
   }, [isOpen]);
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const effectiveNotifications = notifications.filter((n) =>
+    filterByPreferences(n, prefs),
+  );
+  const unreadCount = countUnread(effectiveNotifications);
   const filteredNotifications = filter === 'unread' 
-    ? notifications.filter(n => !n.read)
-    : notifications;
+    ? effectiveNotifications.filter(n => !n.read)
+    : effectiveNotifications;
 
   const markAsRead = (id: string) => {
     setNotifications((prev: Notification[]) => 
@@ -156,6 +164,9 @@ export default function NotificationCenter({ className = '' }: NotificationCente
   };
 
   const dismissNotification = (id: string) => {
+    // Remember the dismissal, otherwise the next poll re-adds the notification
+    // and the badge count climbs back up (#1077).
+    dismissedIdsRef.current.add(id);
     setNotifications((prev: Notification[]) => prev.filter((n: Notification) => n.id !== id));
   };
 
@@ -271,7 +282,9 @@ export default function NotificationCenter({ className = '' }: NotificationCente
                     : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
                 }`}
               >
-                All ({notifications.length})
+                {/* Count what is actually listed — preference-filtered items
+                    are not shown, so including them misreported the total. */}
+                All ({effectiveNotifications.length})
               </button>
               <button
                 onClick={() => setFilter('unread')}
@@ -287,7 +300,7 @@ export default function NotificationCenter({ className = '' }: NotificationCente
           </div>
 
           {/* Notifications List */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto" aria-live="polite">
             {filteredNotifications.length === 0 ? (
               <div className="p-8 text-center">
                 <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
@@ -384,6 +397,21 @@ export default function NotificationCenter({ className = '' }: NotificationCente
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Footer */}
+          <div className="p-3 border-t border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 rounded-b-xl">
+            <Link
+              href="/settings/notifications"
+              onClick={() => setIsOpen(false)}
+              className="flex items-center justify-center gap-2 w-full py-2 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 bg-white dark:bg-zinc-800 rounded-lg border border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600 transition-all"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              Notification Preferences
+            </Link>
           </div>
         </div>
       )}

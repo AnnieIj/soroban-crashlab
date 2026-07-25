@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FuzzingRun, RunStatus } from './types';
+import { formatDurationCompact } from './utils/format';
 
 /* ── Types ─────────────────────────────────────────────────────────── */
 
@@ -12,9 +13,12 @@ export interface RunWorkflowState {
   workflowState: WorkflowState;
 }
 
+export type ColumnOrder = Record<WorkflowState, string[]>;
+
 /* ── Constants ─────────────────────────────────────────────────────── */
 
 const STORAGE_KEY = 'crashlab-run-workflow-states';
+const ORDER_STORAGE_KEY = 'crashlab-run-workflow-order';
 
 const WORKFLOW_COLUMNS: { state: WorkflowState; label: string; color: string }[] = [
   { state: 'open', label: 'Open', color: 'blue' },
@@ -63,6 +67,21 @@ function saveWorkflowStates(states: Map<string, WorkflowState>) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
 
+function loadColumnOrder(): ColumnOrder {
+  if (typeof window === 'undefined') return { 'open': [], 'in-review': [], 'closed': [] };
+  try {
+    const raw = localStorage.getItem(ORDER_STORAGE_KEY);
+    if (!raw) return { 'open': [], 'in-review': [], 'closed': [] };
+    return JSON.parse(raw) as ColumnOrder;
+  } catch {
+    return { 'open': [], 'in-review': [], 'closed': [] };
+  }
+}
+
+function saveColumnOrder(order: ColumnOrder) {
+  localStorage.setItem(ORDER_STORAGE_KEY, JSON.stringify(order));
+}
+
 function getWorkflowState(
   runId: string,
   workflowStates: Map<string, WorkflowState>,
@@ -79,15 +98,6 @@ function getWorkflowState(
   return 'open';
 }
 
-function formatDuration(ms: number): string {
-  const seconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-  if (hours > 0) return `${hours}h ${minutes % 60}m`;
-  if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
-  return `${seconds}s`;
-}
-
 /* ── Component ──────────────────────────────────────────────────────── */
 
 interface Props {
@@ -96,8 +106,10 @@ interface Props {
 
 export default function ImplementRunWorkflowBoardPage58({ runs = [] }: Props) {
   const [workflowStates, setWorkflowStates] = useState<Map<string, WorkflowState>>(new Map());
-  const [draggedRunId, setDraggedRunId] = useState<string | null>(null);
+  const [columnOrder, setColumnOrder] = useState<ColumnOrder>({ 'open': [], 'in-review': [], 'closed': [] });
+  const [dragSource, setDragSource] = useState<{ runId: string; fromColumn: WorkflowState; fromIndex: number } | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<WorkflowState | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   // Load saved workflow states on mount
   useEffect(() => {
@@ -105,17 +117,33 @@ export default function ImplementRunWorkflowBoardPage58({ runs = [] }: Props) {
     setWorkflowStates(loadWorkflowStates());
   }, []);
 
-  // Persist whenever workflow states change (skip initial empty render)
-  const mounted = useRef(false);
+  // Load saved column order on mount
   useEffect(() => {
-    if (mounted.current) {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setColumnOrder(loadColumnOrder());
+  }, []);
+
+  // Persist whenever workflow states change (skip initial empty render)
+  const stateMounted = useRef(false);
+  useEffect(() => {
+    if (stateMounted.current) {
       saveWorkflowStates(workflowStates);
     } else {
-      mounted.current = true;
+      stateMounted.current = true;
     }
   }, [workflowStates]);
 
-  // Group runs by workflow state
+  // Persist whenever column order changes (skip initial empty render)
+  const orderMounted = useRef(false);
+  useEffect(() => {
+    if (orderMounted.current) {
+      saveColumnOrder(columnOrder);
+    } else {
+      orderMounted.current = true;
+    }
+  }, [columnOrder]);
+
+  // Group runs by workflow state, respecting saved column order
   const runsByState = useMemo(() => {
     const grouped: Record<WorkflowState, FuzzingRun[]> = {
       'open': [],
@@ -123,48 +151,144 @@ export default function ImplementRunWorkflowBoardPage58({ runs = [] }: Props) {
       'closed': [],
     };
 
+    const ordered = new Set<string>();
+
+    for (const state of ['open', 'in-review', 'closed'] as WorkflowState[]) {
+      const order = columnOrder[state] || [];
+      for (const id of order) {
+        const run = runs.find((r) => r.id === id);
+        if (!run) continue;
+        const actualState = getWorkflowState(run.id, workflowStates, run.status);
+        if (actualState === state) {
+          grouped[state].push(run);
+          ordered.add(id);
+        }
+      }
+    }
+
     runs.forEach((run) => {
+      if (ordered.has(run.id)) return;
       const state = getWorkflowState(run.id, workflowStates, run.status);
       grouped[state].push(run);
     });
 
     return grouped;
-  }, [runs, workflowStates]);
+  }, [runs, workflowStates, columnOrder]);
 
   /* ── Drag-and-drop handlers ──────────────────────────────────────── */
 
-  const handleDragStart = useCallback((runId: string) => {
-    setDraggedRunId(runId);
+  const handleDragStart = useCallback((runId: string, column: WorkflowState, index: number) => {
+    setDragSource({ runId, fromColumn: column, fromIndex: index });
   }, []);
 
-  const handleDragOver = useCallback((e: React.DragEvent, column: WorkflowState) => {
+  const handleCardDragOver = useCallback((e: React.DragEvent, column: WorkflowState, index: number) => {
     e.preventDefault();
     setDragOverColumn(column);
+    setDragOverIndex(index);
+  }, []);
+
+  const handleColumnDragOver = useCallback((e: React.DragEvent, column: WorkflowState) => {
+    e.preventDefault();
+    setDragOverColumn(column);
+    setDragOverIndex(null);
   }, []);
 
   const handleDragLeave = useCallback(() => {
     setDragOverColumn(null);
+    setDragOverIndex(null);
   }, []);
 
-  const handleDrop = useCallback(
-    (targetState: WorkflowState) => {
-      if (!draggedRunId) return;
+  const handleCardDrop = useCallback(
+    (targetColumn: WorkflowState, targetIndex: number) => {
+      if (!dragSource) return;
+      const { runId, fromColumn } = dragSource;
 
-      setWorkflowStates((prev) => {
-        const next = new Map(prev);
-        next.set(draggedRunId, targetState);
+      if (fromColumn === targetColumn && dragSource.fromIndex === targetIndex) {
+        setDragSource(null);
+        setDragOverColumn(null);
+        setDragOverIndex(null);
+        return;
+      }
+
+      if (fromColumn !== targetColumn) {
+        setWorkflowStates((prev) => {
+          const next = new Map(prev);
+          next.set(runId, targetColumn);
+          return next;
+        });
+      }
+
+      setColumnOrder((prev) => {
+        const next = { ...prev };
+
+        if (fromColumn === targetColumn) {
+          const order = [...(next[fromColumn] || [])];
+          const sourceIdx = order.indexOf(runId);
+          if (sourceIdx === -1) return prev;
+          order.splice(sourceIdx, 1);
+          const adjustedTarget = targetIndex > sourceIdx ? targetIndex - 1 : targetIndex;
+          order.splice(adjustedTarget, 0, runId);
+          next[fromColumn] = order;
+        } else {
+          const fromOrder = [...(next[fromColumn] || [])];
+          const sourceIdx = fromOrder.indexOf(runId);
+          if (sourceIdx !== -1) fromOrder.splice(sourceIdx, 1);
+          next[fromColumn] = fromOrder;
+
+          const toOrder = [...(next[targetColumn] || [])];
+          const insertAt = Math.min(targetIndex, toOrder.length);
+          toOrder.splice(insertAt, 0, runId);
+          next[targetColumn] = toOrder;
+        }
+
         return next;
       });
 
-      setDraggedRunId(null);
+      setDragSource(null);
       setDragOverColumn(null);
+      setDragOverIndex(null);
     },
-    [draggedRunId]
+    [dragSource]
+  );
+
+  const handleColumnDrop = useCallback(
+    (targetState: WorkflowState) => {
+      if (!dragSource) return;
+      const { runId, fromColumn } = dragSource;
+
+      if (fromColumn !== targetState) {
+        setWorkflowStates((prev) => {
+          const next = new Map(prev);
+          next.set(runId, targetState);
+          return next;
+        });
+      }
+
+      setColumnOrder((prev) => {
+        const next = { ...prev };
+        const fromOrder = [...(next[fromColumn] || [])];
+        const idx = fromOrder.indexOf(runId);
+        if (idx !== -1) fromOrder.splice(idx, 1);
+        next[fromColumn] = fromOrder;
+
+        const toOrder = [...(next[targetState] || [])];
+        if (!toOrder.includes(runId)) toOrder.push(runId);
+        next[targetState] = toOrder;
+
+        return next;
+      });
+
+      setDragSource(null);
+      setDragOverColumn(null);
+      setDragOverIndex(null);
+    },
+    [dragSource]
   );
 
   const handleDragEnd = useCallback(() => {
-    setDraggedRunId(null);
+    setDragSource(null);
     setDragOverColumn(null);
+    setDragOverIndex(null);
   }, []);
 
   /* ── Render ──────────────────────────────────────────────────────── */
@@ -193,11 +317,11 @@ export default function ImplementRunWorkflowBoardPage58({ runs = [] }: Props) {
         {WORKFLOW_COLUMNS.map((column) => (
           <div
             key={column.state}
-            onDragOver={(e) => handleDragOver(e, column.state)}
+            onDragOver={(e) => handleColumnDragOver(e, column.state)}
             onDragLeave={handleDragLeave}
-            onDrop={() => handleDrop(column.state)}
+            onDrop={() => handleColumnDrop(column.state)}
             className={`rounded-xl border-2 transition-colors ${
-              dragOverColumn === column.state
+              dragOverColumn === column.state && dragOverIndex === null
                 ? 'border-blue-500 dark:border-blue-400 bg-blue-50/50 dark:bg-blue-950/20'
                 : COLUMN_COLORS[column.color]
             }`}
@@ -221,14 +345,20 @@ export default function ImplementRunWorkflowBoardPage58({ runs = [] }: Props) {
                   No runs
                 </div>
               ) : (
-                runsByState[column.state].map((run) => (
+                runsByState[column.state].map((run, idx) => (
                   <div
                     key={run.id}
                     draggable
-                    onDragStart={() => handleDragStart(run.id)}
+                    onDragStart={() => handleDragStart(run.id, column.state, idx)}
+                    onDragOver={(e) => handleCardDragOver(e, column.state, idx)}
+                    onDrop={() => handleCardDrop(column.state, idx)}
                     onDragEnd={handleDragEnd}
                     className={`bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-700 p-4 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow border-l-4 ${CARD_COLORS[run.status]} ${
-                      draggedRunId === run.id ? 'opacity-50' : ''
+                      dragSource?.runId === run.id ? 'opacity-50' : ''
+                    } ${
+                      dragOverIndex === idx && dragOverColumn === column.state && dragSource?.runId !== run.id
+                        ? 'ring-2 ring-blue-500 dark:ring-blue-400'
+                        : ''
                     }`}
                   >
                     <div className="flex items-start justify-between mb-2">
@@ -273,7 +403,7 @@ export default function ImplementRunWorkflowBoardPage58({ runs = [] }: Props) {
                       </div>
                       <div className="flex justify-between">
                         <span>Duration:</span>
-                        <span className="font-medium">{formatDuration(run.duration)}</span>
+                        <span className="font-medium">{formatDurationCompact(run.duration)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span>Seeds:</span>
