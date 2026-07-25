@@ -148,6 +148,14 @@ const issueCatalog: Record<string, RunIssueLink[]> = {
 
 // ─── Public factory ───────────────────────────────────────────────────────────
 
+// Module-level caches — each builder is pure and deterministic so the result
+// can safely be reused across calls.  This avoids regenerating 25 (or more)
+// objects on every HTTP request and page render when mock data is enabled.
+let cachedMockRuns: FuzzingRun[] | null = null;
+let cachedTriageMockRuns: FuzzingRun[] | null = null;
+let cachedReplayMockRuns: FuzzingRun[] | null = null;
+let cachedComparisonMockRuns: FuzzingRun[] | null = null;
+
 /**
  * Builds a deterministic list of 25 mock `FuzzingRun` objects.
  *
@@ -160,9 +168,12 @@ const issueCatalog: Record<string, RunIssueLink[]> = {
  *
  * Returned in reverse-chronological order (newest first) so UI components that
  * slice from the front show the most recent activity.
+ *
+ * Result is cached after the first call — the function is pure and deterministic.
  */
 export function buildMockRuns(): FuzzingRun[] {
-  return Array.from({ length: 25 }, (_, index) => {
+  if (cachedMockRuns) return cachedMockRuns;
+  cachedMockRuns = Array.from({ length: 25 }, (_, index) => {
     const id = 1000 + index;
     const status = statuses[index % statuses.length];
     const scenarioIndex = index % failureScenarios.length;
@@ -243,10 +254,12 @@ export function buildMockRuns(): FuzzingRun[] {
             : [],
     };
   }).reverse();
+  return cachedMockRuns;
 }
 
 export function buildTriageMockRuns(): FuzzingRun[] {
-  return Array.from({ length: 18 }, (_, i) => ({
+  if (cachedTriageMockRuns) return cachedTriageMockRuns;
+  cachedTriageMockRuns = Array.from({ length: 18 }, (_, i) => ({
     id: `run-${1000 + i}`,
     status: (['failed', 'running', 'cancelled', 'completed'] as RunStatus[])[i % 4],
     area: (['auth', 'state', 'budget', 'xdr'] as RunArea[])[i % 4],
@@ -266,10 +279,12 @@ export function buildTriageMockRuns(): FuzzingRun[] {
           }
         : null,
   }));
+  return cachedTriageMockRuns;
 }
 
 export function buildReplayMockRuns(): FuzzingRun[] {
-  return Array.from({ length: 5 }, (_, i) => ({
+  if (cachedReplayMockRuns) return cachedReplayMockRuns;
+  cachedReplayMockRuns = Array.from({ length: 5 }, (_, i) => ({
     id: `run-${1000 + i}`,
     status: 'failed' as const,
     area: (['auth', 'state', 'budget', 'xdr'] as RunArea[])[i % 4],
@@ -286,10 +301,12 @@ export function buildReplayMockRuns(): FuzzingRun[] {
       replayAction: `cargo run --bin replay-single-seed -- bundle-${i}.json`,
     },
   }));
+  return cachedReplayMockRuns;
 }
 
 export function buildComparisonMockRuns(): FuzzingRun[] {
-  return Array.from({ length: 10 }, (_, i) => ({
+  if (cachedComparisonMockRuns) return cachedComparisonMockRuns;
+  cachedComparisonMockRuns = Array.from({ length: 10 }, (_, i) => ({
     id: `run-${1000 + i}`,
     status: (['completed', 'failed', 'running'] as RunStatus[])[i % 3],
     area: (['auth', 'state', 'budget', 'xdr'] as RunArea[])[i % 4],
@@ -309,4 +326,5 @@ export function buildComparisonMockRuns(): FuzzingRun[] {
           }
         : null,
   }));
+  return cachedComparisonMockRuns;
 }

@@ -14,8 +14,13 @@ import {
   createToast,
   addToast,
   removeToast,
+  startTimerState,
+  pauseTimerState,
+  resumeTimerState,
+  timerDelay,
   type Toast,
   type ToastInput,
+  type ToastTimerState,
 } from './toast-utils';
 
 interface ToastContextValue {
@@ -34,6 +39,11 @@ function nextToastId(): string {
   return `toast-${Date.now()}-${toastCounter}`;
 }
 
+/** A running countdown plus the `setTimeout` handle currently backing it. */
+interface ActiveTimer extends ToastTimerState {
+  handle: ReturnType<typeof setTimeout> | null;
+}
+
 /**
  * Provides the toast API and renders the toast viewport.
  *
@@ -41,38 +51,52 @@ function nextToastId(): string {
  * {@link DEFAULT_TOAST_DURATION} ≈ 5.5s) so error toasts no longer linger
  * forever. Timers pause while the pointer is over the stack and the close
  * button still allows immediate manual dismissal.
+ *
+ * Fixes #1075: hovering used to clear every timer and then restart a *full*
+ * duration, so an error toast the pointer drifted over never dismissed on
+ * schedule — and a missed `mouseleave` dropped the timer for good. Countdowns
+ * now carry their remaining time, pause per-toast rather than stack-wide, and
+ * the viewport no longer swallows pointer events when it is empty.
  */
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
-  // Track active timers so we can pause/clear them without leaking.
-  const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  // Countdown state per toast, so we can pause/resume/clear without leaking.
+  const timersRef = useRef<Map<string, ActiveTimer>>(new Map());
 
-  const dismiss = useCallback((id: string) => {
+  const clearHandle = useCallback((id: string) => {
     const timer = timersRef.current.get(id);
-    if (timer) {
-      clearTimeout(timer);
-      timersRef.current.delete(id);
-    }
-    setToasts((current) => removeToast(current, id));
+    if (timer?.handle) clearTimeout(timer.handle);
   }, []);
 
-  const scheduleDismiss = useCallback(
-    (toast: Toast) => {
-      if (!shouldAutoDismiss(toast)) return;
-      const timer = setTimeout(() => dismiss(toast.id), toast.duration);
-      timersRef.current.set(toast.id, timer);
+  const dismiss = useCallback(
+    (id: string) => {
+      clearHandle(id);
+      timersRef.current.delete(id);
+      setToasts((current) => removeToast(current, id));
     },
-    [dismiss],
+    [clearHandle],
+  );
+
+  /** Arm (or re-arm) the `setTimeout` backing an already-recorded countdown. */
+  const arm = useCallback(
+    (id: string, state: ToastTimerState) => {
+      clearHandle(id);
+      const handle = setTimeout(() => dismiss(id), timerDelay(state));
+      timersRef.current.set(id, { ...state, handle });
+    },
+    [clearHandle, dismiss],
   );
 
   const notify = useCallback(
     (input: ToastInput) => {
       const toast = createToast(input, nextToastId());
       setToasts((current) => addToast(current, toast));
-      scheduleDismiss(toast);
+      if (shouldAutoDismiss(toast)) {
+        arm(toast.id, startTimerState(toast, Date.now()));
+      }
       return toast.id;
     },
-    [scheduleDismiss],
+    [arm],
   );
 
   const notifyError = useCallback(
@@ -80,23 +104,49 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     [notify],
   );
 
-  // Pause auto-dismiss while hovering so users can read longer messages.
-  const pauseAll = useCallback(() => {
-    timersRef.current.forEach((timer) => clearTimeout(timer));
-    timersRef.current.clear();
-  }, []);
+  // Pause auto-dismiss while the pointer/focus is on a toast so users can read
+  // longer messages. Scoped to the one toast being read — hovering a single
+  // error no longer freezes the rest of the stack indefinitely.
+  const pause = useCallback(
+    (id: string) => {
+      const timer = timersRef.current.get(id);
+      if (!timer || timer.resumedAt === null) return;
+      if (timer.handle) clearTimeout(timer.handle);
+      timersRef.current.set(id, { ...pauseTimerState(timer, Date.now()), handle: null });
+    },
+    [],
+  );
 
-  const resumeAll = useCallback(() => {
-    toasts.forEach((toast) => {
-      if (!timersRef.current.has(toast.id)) scheduleDismiss(toast);
-    });
-  }, [toasts, scheduleDismiss]);
+  const resume = useCallback(
+    (id: string) => {
+      const timer = timersRef.current.get(id);
+      if (!timer || timer.resumedAt !== null) return;
+      arm(id, resumeTimerState(timer, Date.now()));
+    },
+    [arm],
+  );
+
+  // Safety net: a tab switch or a toast closing under the cursor can swallow the
+  // `mouseleave` that would normally resume the countdown. Re-arm anything still
+  // paused once the page is interactive again so nothing is stranded on screen.
+  useEffect(() => {
+    const resumeStranded = () => {
+      if (document.visibilityState !== 'visible') return;
+      timersRef.current.forEach((timer, id) => {
+        if (timer.resumedAt === null) arm(id, resumeTimerState(timer, Date.now()));
+      });
+    };
+    document.addEventListener('visibilitychange', resumeStranded);
+    return () => document.removeEventListener('visibilitychange', resumeStranded);
+  }, [arm]);
 
   // Clear any outstanding timers on unmount.
   useEffect(() => {
     const timers = timersRef.current;
     return () => {
-      timers.forEach((timer) => clearTimeout(timer));
+      timers.forEach((timer) => {
+        if (timer.handle) clearTimeout(timer.handle);
+      });
       timers.clear();
     };
   }, []);
@@ -109,13 +159,21 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div
-        className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 w-[min(92vw,22rem)]"
-        onMouseEnter={pauseAll}
-        onMouseLeave={resumeAll}
-      >
+      {/*
+        `pointer-events-none` keeps this always-mounted fixed overlay from
+        capturing hovers meant for the page underneath — which previously paused
+        every toast timer without the user ever touching a toast. Individual
+        toasts opt back in.
+      */}
+      <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 w-[min(92vw,22rem)] pointer-events-none">
         {toasts.map((toast) => (
-          <ToastItem key={toast.id} toast={toast} onClose={() => dismiss(toast.id)} />
+          <ToastItem
+            key={toast.id}
+            toast={toast}
+            onClose={() => dismiss(toast.id)}
+            onPause={() => pause(toast.id)}
+            onResume={() => resume(toast.id)}
+          />
         ))}
       </div>
     </ToastContext.Provider>
@@ -131,14 +189,30 @@ const VARIANT_STYLES: Record<Toast['variant'], string> = {
   info: 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200',
 };
 
-function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
+function ToastItem({
+  toast,
+  onClose,
+  onPause,
+  onResume,
+}: {
+  toast: Toast;
+  onClose: () => void;
+  onPause: () => void;
+  onResume: () => void;
+}) {
   return (
     <div
       // Errors are assertive so screen readers announce them immediately;
       // other variants are polite.
       role={toast.variant === 'error' ? 'alert' : 'status'}
       aria-live={toast.variant === 'error' ? 'assertive' : 'polite'}
-      className={`flex items-start gap-3 rounded-xl border px-4 py-3 shadow-lg text-sm ${VARIANT_STYLES[toast.variant]}`}
+      // Hover *and* keyboard focus hold the countdown, so a toast can't vanish
+      // mid-read or while the close button is being tabbed to.
+      onMouseEnter={onPause}
+      onMouseLeave={onResume}
+      onFocus={onPause}
+      onBlur={onResume}
+      className={`pointer-events-auto flex items-start gap-3 rounded-xl border px-4 py-3 shadow-lg text-sm ${VARIANT_STYLES[toast.variant]}`}
     >
       <span className="flex-1 break-words">{toast.message}</span>
       <button

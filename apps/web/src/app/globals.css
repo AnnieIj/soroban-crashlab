@@ -831,8 +831,6 @@ nav, header, .nav-bar {
   .parallax-fast,
   .lazy-enter,
   .lazy-enter-active,
-  .drawer,
-  .drawer.open,
   nav,
   header,
   .nav-bar,
@@ -841,6 +839,11 @@ nav, header, .nav-bar {
     transform: none !important;
     opacity: 1 !important;
     box-shadow: none !important;
+  }
+
+  .drawer.open {
+    transform: translateX(0) !important;
+    opacity: 1 !important;
   }
 }
 

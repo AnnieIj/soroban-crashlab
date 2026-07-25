@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ApiConfig,
   ValidationErrors,
@@ -9,6 +9,11 @@ import {
   validateConfig,
   saveToStorage,
   resetStorage,
+  loadDraft,
+  saveDraft,
+  clearDraft,
+  isSameConfig,
+  resolveInitialConfig,
 } from '../app/settings/api/api-config-utils';
 
 const numericFields = new Set<keyof ApiConfig>([
@@ -69,16 +74,61 @@ function Field({
 }
 
 export default function ApiConfigForm() {
-  const [config, setConfig] = useState<ApiConfig>(() =>
-    typeof window === 'undefined' ? DEFAULT_CONFIG : loadFromStorage(),
-  );
+  // Mount from the unsaved draft when one exists, so edits survive the browser
+  // discarding a backgrounded tab and remounting this form (#1074).
+  const [config, setConfig] = useState<ApiConfig>(() => {
+    if (typeof window === 'undefined') return DEFAULT_CONFIG;
+    return resolveInitialConfig(loadFromStorage(), loadDraft());
+  });
 
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [saved, setSaved] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [draftRestored, setDraftRestored] = useState(false);
+
+  // Latest config, so the visibility/pagehide listeners can flush the final
+  // keystrokes without being re-bound on every change.
+  const configRef = useRef(config);
+
+  useEffect(() => {
+    configRef.current = config;
+  }, [config]);
 
   useEffect(() => {
     queueMicrotask(() => setMounted(true));
+  }, []);
+
+  // Surface the restore so the user understands why the fields aren't the saved
+  // values. Checked after mount to keep the server and client markup identical.
+  useEffect(() => {
+    const draft = loadDraft();
+    if (draft && !isSameConfig(draft, loadFromStorage())) {
+      queueMicrotask(() => setDraftRestored(true));
+    }
+  }, []);
+
+  // A discarded tab gets no unmount callback, so mirror pending edits to storage
+  // as they happen and flush again the moment the tab is backgrounded.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const flush = () => {
+      if (!isSameConfig(configRef.current, loadFromStorage())) {
+        saveDraft(configRef.current);
+      }
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('pagehide', flush);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('pagehide', flush);
+    };
   }, []);
 
   const handleChange = useCallback(
@@ -94,6 +144,14 @@ export default function ApiConfigForm() {
 
       setConfig(updated);
       setSaved(false);
+      setDraftRestored(false);
+
+      // Persist immediately: a tab can be discarded without any further event.
+      if (isSameConfig(updated, loadFromStorage())) {
+        clearDraft();
+      } else {
+        saveDraft(updated);
+      }
 
       const validation = validateConfig(updated);
       setErrors((prev) => ({
@@ -114,7 +172,10 @@ export default function ApiConfigForm() {
       if (Object.keys(validation).length) return;
 
       if (saveToStorage(config)) {
+        // The draft has been promoted to the saved config; nothing left to restore.
+        clearDraft();
         setSaved(true);
+        setDraftRestored(false);
         return;
       }
 
@@ -127,9 +188,11 @@ export default function ApiConfigForm() {
 
   const handleReset = useCallback(() => {
     resetStorage();
+    clearDraft();
     setConfig(DEFAULT_CONFIG);
     setErrors({});
     setSaved(false);
+    setDraftRestored(false);
   }, []);
 
   const isConfigured = mounted && config.backendUrl.trim() !== '';
@@ -199,6 +262,17 @@ export default function ApiConfigForm() {
         noValidate
         onSubmit={handleSubmit}
       >
+        {draftRestored && (
+          <p
+            id="api-config-draft-restored"
+            className="text-xs"
+            role="status"
+            style={{ color: '#C37D16' }}
+          >
+            Unsaved changes were restored. Save the configuration to apply them.
+          </p>
+        )}
+
         <Field
           id="api-backend-url"
           label="Backend API URL"

@@ -1,23 +1,30 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useMaintainerMode } from '../useMaintainerMode';
 import { loadFromStorage } from './api/api-config-utils';
 
+function readActiveUrl(): string {
+  const config = loadFromStorage();
+  return config.backendUrl || process.env.NEXT_PUBLIC_API_URL || '';
+}
+
+function getInitialApiUrl(): string {
+  if (typeof window === 'undefined') return '';
+  const activeUrl = readActiveUrl();
+  return activeUrl || 'Not configured (using mock data)';
+}
+
+function getInitialIsMockData(): boolean {
+  if (typeof window === 'undefined') return true;
+  return !readActiveUrl();
+}
+
 export default function SettingsPage() {
   const { isMaintainer, toggle: toggleMaintainer, mounted, storageError } = useMaintainerMode();
-  const [apiUrl, setApiUrl] = useState<string>('');
-  const [isMockData, setIsMockData] = useState<boolean>(true);
-
-  useEffect(() => {
-    queueMicrotask(() => {
-      const config = loadFromStorage();
-      const activeUrl = config.backendUrl || process.env.NEXT_PUBLIC_API_URL || '';
-      setApiUrl(activeUrl || 'Not configured (using mock data)');
-      setIsMockData(!activeUrl);
-    });
-  }, []);
+  const [apiUrl] = useState<string>(getInitialApiUrl);
+  const [isMockData] = useState<boolean>(getInitialIsMockData);
   return (
     <div className="container-full page-padding fade-in">
       <div className="mb-4 sm:mb-6">
@@ -46,6 +53,7 @@ export default function SettingsPage() {
           { href: '/settings/accessibility', title: 'Accessibility', desc: 'Keyboard navigation, screen reader and contrast settings', icon: '◈' },
           { href: '/settings/api', title: 'API Configuration', desc: 'Backend URL, rate limits and connection settings', icon: '⚙' },
           { href: '/settings/notifications', title: 'Notifications', desc: 'Configure notification types, delivery and quiet hours', icon: '◉' },
+          { href: '/settings/network', title: 'Network', desc: 'Manage Stellar RPC and Horizon network endpoints', icon: '◎' },
         ].map((item) => (
           <Link key={item.href} href={item.href} className="card card-padding card-interactive flex items-start gap-3 sm:gap-4 text-decoration-none">
             <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-base sm:text-lg flex-shrink-0" style={{ background: '#E7F0F9', color: '#0A66C2' }}>

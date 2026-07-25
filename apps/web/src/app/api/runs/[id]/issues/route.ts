@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { buildMockRuns } from '@/app/mockRuns';
 import type { RunIssueLink } from '@/app/types';
+import { getIssueStore } from '@/app/api/mock-store';
 import { tryBackend } from '@/lib/api-proxy';
 import { jsonError, readJsonBody, withRouteErrorHandling } from '@/lib/route-handler';
 
 const ISSUES_API_URL = process.env.ISSUES_API_URL || process.env.NEXT_PUBLIC_API_URL;
 
-const issueStore = new Map<string, RunIssueLink[]>();
+const issueStore = getIssueStore<RunIssueLink>();
 
 function getIssues(id: string): RunIssueLink[] {
   if (issueStore.has(id)) {

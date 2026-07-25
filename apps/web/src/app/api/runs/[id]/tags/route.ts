@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { buildMockRuns } from '@/app/mockRuns';
 import { addTag, normalizeTag, removeTag } from '@/app/run-tags-utils';
+import { getTagStore } from '@/app/api/mock-store';
 import { jsonError, readJsonBody, withRouteErrorHandling } from '@/lib/route-handler';
 
-const tagStore = new Map<string, string[]>();
+const tagStore = getTagStore();
 
 function getTags(id: string): string[] {
   if (!tagStore.has(id)) {
