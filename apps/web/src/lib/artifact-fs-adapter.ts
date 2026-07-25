@@ -14,7 +14,7 @@ function getArtifactDir(): string {
 }
 
 function sanitizeId(id: string): string {
-  if (id.includes('..') || id.includes('/') || id.includes('\\')) {
+  if (id === '..' || id.includes('/') || id.includes('\\')) {
     throw new Error('Invalid artifact ID');
   }
   return id;
