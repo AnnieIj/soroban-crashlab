@@ -20,11 +20,11 @@ export function initSentryClient(): void {
  * It handles environment-based logic to either report to Sentry or log to the console.
  */
 export const sentryAdapter = {
-  captureException: (error: unknown, contexts?: Record<string, any>): void => {
+  captureException: (error: unknown, contexts?: Record<string, unknown>): void => {
     const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
 
     if (dsn) {
-      Sentry.captureException(error, { contexts });
+      Sentry.captureException(error, { contexts: contexts as Sentry.Contexts });
     } else {
       console.error('[Sentry Mock] captureException:', error, contexts || '');
     }

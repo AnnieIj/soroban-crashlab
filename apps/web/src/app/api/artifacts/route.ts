@@ -1,24 +1,32 @@
 import { NextResponse } from 'next/server';
-import { listArtifactMetadata } from '@/lib/artifact-fs-adapter';
-import { logger } from '@/lib/logger';
+import { listArtifactMetadata, saveArtifact } from '@/lib/artifact-fs-adapter';
+import { jsonError, withRouteErrorHandling } from '@/lib/route-handler';
+import { createdResponse } from '@/lib/api-response-utils';
 
-/**
- * GET /api/artifacts
- * Lists all artifacts from CRASHLAB_ARTIFACT_DIR
- */
-export async function GET() {
-  try {
+export const GET = withRouteErrorHandling(
+  'GET /api/artifacts',
+  async () => {
     const artifacts = await listArtifactMetadata();
-
     return NextResponse.json({
       artifacts,
       total: artifacts.length,
     });
-  } catch (error) {
-    logger.error('GET /api/artifacts failed', { error });
-    return NextResponse.json(
-      { error: 'Failed to list artifacts' },
-      { status: 500 },
-    );
-  }
-}
+  },
+  'Failed to list artifacts',
+);
+
+export const POST = withRouteErrorHandling(
+  'POST /api/artifacts',
+  async (request: Request) => {
+    const formData = await request.formData();
+    const file = formData.get('file');
+    if (!(file instanceof File)) {
+      return jsonError('file is required', 400);
+    }
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const metadata = await saveArtifact(file.name, buffer);
+    return createdResponse({ artifact: metadata });
+  },
+  'Failed to upload artifact',
+);

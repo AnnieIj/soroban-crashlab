@@ -12,7 +12,6 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   filterLogEntries,
   type LogEntry,
-  type LogLevel,
   type LogLevelFilter,
 } from '../log-viewer-utils';
 import {
@@ -21,26 +20,13 @@ import {
   type PageDataState,
 } from './log-viewer-page-utils';
 import { useDebounce } from '../../lib/useDebounce';
-
-// ---------------------------------------------------------------------------
-// Mock data loader (replace with real API call when backend is wired)
-// ---------------------------------------------------------------------------
-const MOCK_ENTRIES: LogEntry[] = [
-  { id: '1', timestamp: Date.now() - 300_000, level: 'info',  source: 'fuzz-worker', message: 'Campaign drive_run started (partition 0/4)' },
-  { id: '2', timestamp: Date.now() - 270_000, level: 'debug', source: 'fuzz-worker', message: 'Mutation stream seeded from case id 0x7a3f' },
-  { id: '3', timestamp: Date.now() - 240_000, level: 'warn',  source: 'rpc',         message: 'RPC latency p95 820ms (threshold 750ms)' },
-  { id: '4', timestamp: Date.now() - 210_000, level: 'info',  source: 'scheduler',   message: 'Checkpoint advanced: next_seed_index=18432' },
-  { id: '5', timestamp: Date.now() - 180_000, level: 'error', source: 'fuzz-worker', message: 'InvariantViolation: balance_nonnegative (signature recorded)' },
-  { id: '6', timestamp: Date.now() - 150_000, level: 'info',  source: 'rpc',         message: 'Replay envelope submitted for run-1012' },
-  { id: '7', timestamp: Date.now() - 120_000, level: 'debug', source: 'scheduler',   message: 'PRNG state commit checkpoint=73728' },
-  { id: '8', timestamp: Date.now() -  90_000, level: 'warn',  source: 'fuzz-worker', message: 'Soft budget warning on contract token (91% instr)' },
-  { id: '9', timestamp: Date.now() -  60_000, level: 'error', source: 'rpc',         message: 'Transient RPC timeout (attempt 2/3)' },
-  { id: '10', timestamp: Date.now() - 30_000, level: 'info',  source: 'scheduler',   message: 'Partition 0/4 complete – 18432 seeds processed' },
-];
+import { MOCK_LOG_ENTRIES } from '../../fixtures/logs';
+import { useDataTableKeyboardNav } from '../use-data-table-keyboard-nav';
+import LogSeverityBadge from '../../components/LogSeverityBadge';
 
 async function fetchLogs(): Promise<LogEntry[]> {
   await new Promise((r) => setTimeout(r, 800));
-  return MOCK_ENTRIES;
+  return MOCK_LOG_ENTRIES;
 }
 
 // ---------------------------------------------------------------------------
@@ -53,13 +39,6 @@ const LEVEL_OPTIONS: { value: LogLevelFilter; label: string }[] = [
   { value: 'error', label: 'Error' },
   { value: 'debug', label: 'Debug' },
 ];
-
-const LEVEL_BADGE: Record<LogLevel, string> = {
-  info:  'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800',
-  warn:  'bg-amber-100 text-amber-900 border-amber-200 dark:bg-amber-950/50 dark:text-amber-200 dark:border-amber-800',
-  error: 'bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-800',
-  debug: 'bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700',
-};
 
 function formatTimestamp(ts: number): string {
   return new Date(ts).toISOString().replace('T', ' ').slice(0, 23) + 'Z';
@@ -106,8 +85,8 @@ function EmptyState() {
 // Main page
 // ---------------------------------------------------------------------------
 export default function LogViewerPage() {
-  const [dataState, setDataState] = useState<PageDataState>('loading');
-  const [entries, setEntries] = useState<LogEntry[]>([]);
+  const [dataState, setDataState] = useState<PageDataState>('success');
+  const [entries, setEntries] = useState<LogEntry[]>(MOCK_LOG_ENTRIES);
   const [levelFilter, setLevelFilter] = useState<LogLevelFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
@@ -140,6 +119,19 @@ export default function LogViewerPage() {
       ),
     [entries, levelFilter, debouncedSearchQuery],
   );
+
+  const { getRowProps } = useDataTableKeyboardNav({
+    rowCount: visible.length,
+    onActivate: (index) => {
+      const entry = visible[index];
+      if (!entry) {
+        return;
+      }
+      const row = document.getElementById(logEntryAnchorId(entry));
+      row?.scrollIntoView({ block: 'nearest' });
+      row?.querySelector<HTMLElement>('a')?.focus();
+    },
+  });
 
   return (
     <div className="container-full page-padding fade-in">
@@ -216,7 +208,10 @@ export default function LogViewerPage() {
 
             {/* Log table */}
             <div className="table-responsive">
-              <table className="data-table w-full text-xs sm:text-sm font-mono">
+              <table
+                className="data-table w-full text-xs sm:text-sm font-mono"
+                aria-label="Log entries"
+              >
                 <thead>
                   <tr>
                     <th scope="col" className="w-24 sm:w-52">Timestamp</th>
@@ -226,8 +221,13 @@ export default function LogViewerPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {visible.map((entry) => (
-                    <tr key={entry.id} id={logEntryAnchorId(entry)}>
+                  {visible.map((entry, index) => (
+                    <tr
+                      key={entry.id}
+                      id={logEntryAnchorId(entry)}
+                      {...getRowProps(index)}
+                      aria-label={`Log entry ${entry.level} from ${entry.source}`}
+                    >
                       <td className="text-meta whitespace-nowrap text-[10px] sm:text-xs">
                         <a
                           href={logEntryAnchorHref(entry)}
@@ -238,9 +238,7 @@ export default function LogViewerPage() {
                         </a>
                       </td>
                       <td>
-                        <span className={`text-[9px] sm:text-[10px] uppercase font-bold px-1 sm:px-1.5 py-0.5 rounded border ${LEVEL_BADGE[entry.level]}`}>
-                          {entry.level}
-                        </span>
+                        <LogSeverityBadge level={entry.level} />
                       </td>
                       <td className="hidden sm:table-cell" style={{ color: '#0A66C2' }}>
                         {entry.source}

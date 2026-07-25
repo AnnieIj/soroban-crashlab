@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 
-export type ColumnId = 'id' | 'status' | 'duration' | 'seedCount' | 'report';
+export type ColumnId = 'id' | 'status' | 'area' | 'severity' | 'duration' | 'seedCount' | 'cpuInstructions' | 'memoryBytes' | 'minResourceFee' | 'report';
 
 interface ColumnCustomizationProps {
   visibleColumns: ColumnId[];
@@ -12,8 +12,13 @@ interface ColumnCustomizationProps {
 const ALL_COLUMNS: { id: ColumnId; label: string }[] = [
   { id: 'id', label: 'Run ID' },
   { id: 'status', label: 'Status' },
+  { id: 'area', label: 'Area' },
+  { id: 'severity', label: 'Severity' },
   { id: 'duration', label: 'Duration' },
   { id: 'seedCount', label: 'Seed Count' },
+  { id: 'cpuInstructions', label: 'CPU Instructions' },
+  { id: 'memoryBytes', label: 'Memory (Bytes)' },
+  { id: 'minResourceFee', label: 'Min Fee' },
   { id: 'report', label: 'Report Link' },
 ];
 

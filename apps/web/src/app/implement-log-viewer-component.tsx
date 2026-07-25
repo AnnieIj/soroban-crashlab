@@ -23,51 +23,8 @@ import {
   type LogLevel,
   type LogLevelFilter,
 } from './log-viewer-utils';
-
-const SEED_ENTRIES: LogEntry[] = [
-  {
-    id: 'seed-1',
-    timestamp: Date.now() - 120_000,
-    level: 'info',
-    source: 'fuzz-worker',
-    message: 'Campaign drive_run started (partition 0/4)',
-  },
-  {
-    id: 'seed-2',
-    timestamp: Date.now() - 90_000,
-    level: 'debug',
-    source: 'fuzz-worker',
-    message: 'Mutation stream seeded from case id 0x7a3f',
-  },
-  {
-    id: 'seed-3',
-    timestamp: Date.now() - 60_000,
-    level: 'warn',
-    source: 'rpc',
-    message: 'RPC latency p95 820ms (threshold 750ms)',
-  },
-  {
-    id: 'seed-4',
-    timestamp: Date.now() - 45_000,
-    level: 'info',
-    source: 'scheduler',
-    message: 'Checkpoint advanced: next_seed_index=18432',
-  },
-  {
-    id: 'seed-5',
-    timestamp: Date.now() - 30_000,
-    level: 'error',
-    source: 'fuzz-worker',
-    message: 'InvariantViolation: balance_nonnegative (signature recorded)',
-  },
-  {
-    id: 'seed-6',
-    timestamp: Date.now() - 10_000,
-    level: 'info',
-    source: 'rpc',
-    message: 'Replay envelope submitted for run-1012',
-  },
-];
+import { SEED_LOG_ENTRIES } from '../fixtures/logs';
+import LogSeverityBadge from '../components/LogSeverityBadge';
 
 const LEVEL_OPTIONS: { value: LogLevelFilter; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -76,13 +33,6 @@ const LEVEL_OPTIONS: { value: LogLevelFilter; label: string }[] = [
   { value: 'error', label: 'Error' },
   { value: 'debug', label: 'Debug' },
 ];
-
-const LEVEL_BADGE_CLASS: Record<LogLevel, string> = {
-  info: 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800',
-  warn: 'bg-amber-100 text-amber-900 border-amber-200 dark:bg-amber-950/50 dark:text-amber-200 dark:border-amber-800',
-  error: 'bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-800',
-  debug: 'bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700',
-};
 
 let streamSeq = 0;
 
@@ -118,7 +68,7 @@ function formatTime(ts: number): string {
 }
 
 export default function LogViewer() {
-  const [entries, setEntries] = useState<LogEntry[]>(() => [...SEED_ENTRIES]);
+  const [entries, setEntries] = useState<LogEntry[]>(() => [...SEED_LOG_ENTRIES]);
   const [paused, setPaused] = useState(false);
   const [levelFilter, setLevelFilter] = useState<LogLevelFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -157,7 +107,7 @@ export default function LogViewer() {
 
   const handleClear = useCallback(() => {
     streamSeq = 0;
-    setEntries([...SEED_ENTRIES]);
+    setEntries([...SEED_LOG_ENTRIES]);
   }, []);
 
   const handleCopy = useCallback(async () => {
@@ -296,11 +246,7 @@ export default function LogViewer() {
             {filtered.map((e) => (
               <li key={e.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-1 border-b border-zinc-800/80 pb-1 last:border-0">
                 <span className="text-zinc-500 shrink-0 tabular-nums">{formatTime(e.timestamp)}</span>
-                <span
-                  className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded border shrink-0 ${LEVEL_BADGE_CLASS[e.level]}`}
-                >
-                  {e.level}
-                </span>
+                <LogSeverityBadge level={e.level} />
                 <span className="text-cyan-400/90 shrink-0">[{e.source}]</span>
                 <span className="text-zinc-200 break-all">{e.message}</span>
               </li>

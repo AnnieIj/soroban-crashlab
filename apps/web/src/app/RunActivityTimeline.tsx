@@ -2,6 +2,7 @@
 
 import React from 'react';
 import type { FuzzingRun } from './types';
+import { dedupeRunsById } from './run-timeline-utils';
 
 const formatRelativeTime = (iso?: string): string => {
   if (!iso) return 'No timestamp';
@@ -87,7 +88,9 @@ export default function RunActivityTimeline({
     );
   }
 
-  const recentRuns = runs.slice(0, 8);
+  // Dedupe before slicing (#1076) so repeated ids can't yield duplicate React
+  // keys below, and so the "8 most recent" really are eight distinct runs.
+  const recentRuns = dedupeRunsById(runs).slice(0, 8);
 
   return (
     <section className="w-full rounded-[2rem] border border-zinc-200 bg-white/80 backdrop-blur-xl p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-950/80 md:p-10 transition-all hover:shadow-2xl hover:border-blue-500/20">

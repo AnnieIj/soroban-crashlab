@@ -128,6 +128,25 @@ pub fn sanitize_payload_fragments(payload: &[u8]) -> Vec<u8> {
     let mut index = 0;
 
     while index < payload.len() {
+        // Special case for sk_live_ and sk_test_ to redact prefix as well
+        if index + 8 <= payload.len() {
+            let prefix = &payload[index..index + 8];
+            if prefix == b"sk_live_" || prefix == b"sk_test_" {
+                // Redact the prefix
+                for i in index..index + 8 {
+                    sanitized[i] = b'x';
+                }
+                // Redact following alphanumeric characters
+                let mut val_index = index + 8;
+                while val_index < payload.len() && payload[val_index].is_ascii_alphanumeric() {
+                    sanitized[val_index] = b'x';
+                    val_index += 1;
+                }
+                index = val_index;
+                continue;
+            }
+        }
+
         let Some(key) = key_match(payload, index) else {
             index += 1;
             continue;
@@ -314,6 +333,23 @@ pub fn sanitize_payload_with_context(payload: &[u8], context: &SanitizationConte
     let mut index = 0;
 
     while index < out.len() {
+        // Special case for sk_live_ and sk_test_ to redact prefix as well
+        if index + 8 <= out.len() {
+            let prefix = &out[index..index + 8];
+            if prefix == b"sk_live_" || prefix == b"sk_test_" {
+                let mut val_index = index + 8;
+                while val_index < out.len() && out[val_index].is_ascii_alphanumeric() {
+                    val_index += 1;
+                }
+                for i in index..val_index {
+                    out[i] = b'x';
+                }
+                index = val_index;
+                report.record("credential");
+                continue;
+            }
+        }
+
         let mut matched = false;
         for rule in &context.rules {
             let pat = rule.pattern;

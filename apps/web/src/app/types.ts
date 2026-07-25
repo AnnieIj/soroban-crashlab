@@ -69,6 +69,8 @@ export interface FuzzingRun {
     associatedIssues?: RunIssueLink[];
     /** Custom annotations and notes for the run */
     annotations?: string[];
+    /** User-defined tags for triage and filtering */
+    tags?: string[];
 }
 
 /**
@@ -127,4 +129,22 @@ export interface CampaignConfig {
     authMode: CampaignAuthMode;
     parallelism: number;
     timeoutSeconds: number;
+}
+
+export type ArtifactType = 'seed' | 'log' | 'trace' | 'coverage' | 'bundle';
+
+/**
+ * A stored fuzzing artifact as displayed in the artifact explorer and
+ * preview modal.
+ */
+export interface Artifact {
+    id: string;
+    name: string;
+    type: ArtifactType;
+    /** Size in bytes */
+    size: number;
+    /** ISO 8601 timestamp */
+    updatedAt: string;
+    runId?: string;
+    content_hash?: string;
 }
