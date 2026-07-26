@@ -2,6 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import MarkdownPreview from './MarkdownPreview';
+import {
+  addVersion,
+  getVersionsForTemplate,
+  restoreVersion,
+  type TemplateVersion,
+} from './reporting-templates-version-history-utils';
 
 type ReportingTemplateKind = 'issue' | 'pr';
 
@@ -105,8 +111,11 @@ export default function CreateReportingTemplatesPage60() {
   const [templates, setTemplates] = useState<ReportingTemplate[]>(DEFAULT_TEMPLATES);
   const [selectedId, setSelectedId] = useState<string>(DEFAULT_TEMPLATES[0]!.id);
   const [saveState, setSaveState] = useState<'idle' | 'saved' | 'error'>('idle');
-  const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('edit');
+  const [activeTab, setActiveTab] = useState<'edit' | 'preview' | 'versions'>('edit');
+  const [versionHistory, setVersionHistory] = useState<TemplateVersion[]>([]);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
   const saveTimer = useRef<number | null>(null);
+  const lastSavedBodyRef = useRef<Record<string, string>>({});
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -135,6 +144,29 @@ export default function CreateReportingTemplatesPage60() {
     setSaveState(state);
     saveTimer.current = window.setTimeout(() => setSaveState('idle'), 1500);
   }, []);
+
+  useEffect(() => {
+    if (!selectedTemplate) return;
+    setVersionHistory(getVersionsForTemplate(selectedTemplate.id));
+  }, [selectedTemplate]);
+
+  const versionCount = versionHistory.length;
+
+  useEffect(() => {
+    if (!hydrated || !selectedTemplate) return;
+    const prevBody = lastSavedBodyRef.current[selectedTemplate.id];
+    if (prevBody !== undefined && prevBody !== selectedTemplate.body) {
+      const versions = addVersion(
+        selectedTemplate.id,
+        selectedTemplate.name,
+        selectedTemplate.kind,
+        prevBody,
+      );
+      const ok = (() => { try { localStorage.setItem('crashlab:reporting-templates:versions:v1', JSON.stringify(versions)); return true; } catch { return false; } })();
+      if (ok) setVersionHistory(getVersionsForTemplate(selectedTemplate.id));
+    }
+    lastSavedBodyRef.current[selectedTemplate.id] = selectedTemplate.body;
+  }, [hydrated, selectedTemplate]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -220,6 +252,18 @@ export default function CreateReportingTemplatesPage60() {
     },
     [flashSaveState, selectedTemplate],
   );
+
+  const handleRestoreVersion = useCallback((version: TemplateVersion) => {
+    setTemplates((prev) =>
+      prev.map((tpl) =>
+        tpl.id === version.templateId
+          ? { ...tpl, name: version.name, kind: version.kind as ReportingTemplateKind, body: version.body, updatedAt: new Date().toISOString() }
+          : tpl,
+      ),
+    );
+    setActiveTab('edit');
+    flashSaveState('saved');
+  }, [flashSaveState]);
 
   const resetToDefaults = useCallback(() => {
     const ok = window.confirm('Reset templates to defaults? This will overwrite your saved templates.');
@@ -446,6 +490,22 @@ export default function CreateReportingTemplatesPage60() {
                     >
                       Preview
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('versions')}
+                      className={`px-4 py-2 text-sm font-semibold border-b-2 transition relative ${
+                        activeTab === 'versions'
+                          ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400'
+                          : 'border-transparent text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
+                      }`}
+                    >
+                      Versions
+                      {versionCount > 0 && (
+                        <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+                          {versionCount}
+                        </span>
+                      )}
+                    </button>
                   </div>
                 </div>
 
@@ -460,10 +520,64 @@ export default function CreateReportingTemplatesPage60() {
                       spellCheck={false}
                     />
                   </label>
-                ) : (
+                ) : activeTab === 'preview' ? (
                   <div>
                     <div className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-2">Preview</div>
                     <MarkdownPreview content={selectedTemplate.body || '*No content yet. Switch to Edit tab to add markdown.*'} />
+                  </div>
+                ) : (
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Version History</div>
+                      <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                        {versionCount} {versionCount === 1 ? 'version' : 'versions'} saved
+                      </span>
+                    </div>
+                    {versionCount === 0 ? (
+                      <div className="rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 p-6 text-center">
+                        <p className="text-sm text-zinc-500 dark:text-zinc-400">No version history yet.</p>
+                        <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1">
+                          Previous versions are automatically saved when you edit the template body.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                        {versionHistory.map((version, idx) => (
+                          <div
+                            key={version.id}
+                            className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+                                    v{versionCount - idx}
+                                  </span>
+                                  <span className="text-xs text-zinc-400 dark:text-zinc-500">
+                                    {new Date(version.savedAt).toLocaleString('en-US', {
+                                      month: 'short',
+                                      day: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                    })}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 truncate max-w-[300px]">
+                                  {version.name}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleRestoreVersion(version)}
+                                className="shrink-0 text-xs px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium transition"
+                              >
+                                Restore
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 
