@@ -49,6 +49,7 @@ export default function AnalyticsPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 mb-6 sm:mb-8">
         {[
           { href: '/analytics/clusters', title: 'Failure Clusters', desc: 'View grouped failure signatures and crash patterns', icon: '◈' },
+          { href: '/analytics/taxonomy', title: 'Failure Taxonomy', desc: 'Crash categories grouped by family, with triage guidance and filter by category', icon: '⌘' },
           { href: '/analytics/comparison', title: 'Run Comparison', desc: 'Compare two runs side by side to inspect metrics and metadata differences', icon: '⇄' },
           { href: '/analytics/heatmap', title: 'Performance Heatmap', desc: 'Visualize run duration, CPU and memory usage patterns', icon: '⊟' },
           { href: '/analytics/flaky', title: 'Flaky Test Detection', desc: 'Identify non-deterministic crashes and unstable tests', icon: '⊕' },
