@@ -1,11 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import MarkdownPreview from './MarkdownPreview';
+import TemplateMarkdownPreview from './settings/reporting/TemplateMarkdownPreview';
+import type { PreviewMode } from './settings/reporting/template-preview-utils';
 import {
   addVersion,
   getVersionsForTemplate,
-  restoreVersion,
   type TemplateVersion,
 } from './reporting-templates-version-history-utils';
 
@@ -21,6 +21,7 @@ interface ReportingTemplate {
 
 const TEMPLATES_STORAGE_KEY = 'crashlab:reporting-templates:v1';
 const SELECTED_TEMPLATE_STORAGE_KEY = 'crashlab:reporting-templates:selected:v1';
+const VERSIONS_STORAGE_KEY = 'crashlab:reporting-templates:versions:v1';
 
 const DEFAULT_TEMPLATES: ReportingTemplate[] = [
   {
@@ -106,14 +107,26 @@ export function safeWriteStorage(key: string, value: string): boolean {
   }
 }
 
+/**
+ * Panes available in the template editor. `edit`, `preview` and `split` come
+ * from the Markdown preview feature; `versions` is the existing history pane.
+ */
+type EditorTab = PreviewMode | 'versions';
+
+const EDITOR_TABS: { id: EditorTab; label: string }[] = [
+  { id: 'edit', label: 'Edit' },
+  { id: 'preview', label: 'Preview' },
+  { id: 'split', label: 'Split' },
+  { id: 'versions', label: 'Versions' },
+];
+
 export default function CreateReportingTemplatesPage60() {
   const [hydrated, setHydrated] = useState(false);
   const [templates, setTemplates] = useState<ReportingTemplate[]>(DEFAULT_TEMPLATES);
   const [selectedId, setSelectedId] = useState<string>(DEFAULT_TEMPLATES[0]!.id);
   const [saveState, setSaveState] = useState<'idle' | 'saved' | 'error'>('idle');
-  const [activeTab, setActiveTab] = useState<'edit' | 'preview' | 'versions'>('edit');
+  const [activeTab, setActiveTab] = useState<EditorTab>('edit');
   const [versionHistory, setVersionHistory] = useState<TemplateVersion[]>([]);
-  const [showVersionHistory, setShowVersionHistory] = useState(false);
   const saveTimer = useRef<number | null>(null);
   const lastSavedBodyRef = useRef<Record<string, string>>({});
 
@@ -145,9 +158,15 @@ export default function CreateReportingTemplatesPage60() {
     saveTimer.current = window.setTimeout(() => setSaveState('idle'), 1500);
   }, []);
 
+  // Version history lives in localStorage, so it can only be read after mount.
+  // Both effects below defer their setState to the next tick to stay clear of
+  // the react-hooks/set-state-in-effect rule (same pattern as the autosave
+  // effects further down).
   useEffect(() => {
     if (!selectedTemplate) return;
-    setVersionHistory(getVersionsForTemplate(selectedTemplate.id));
+    const templateId = selectedTemplate.id;
+    const t = window.setTimeout(() => setVersionHistory(getVersionsForTemplate(templateId)), 0);
+    return () => window.clearTimeout(t);
   }, [selectedTemplate]);
 
   const versionCount = versionHistory.length;
@@ -155,17 +174,22 @@ export default function CreateReportingTemplatesPage60() {
   useEffect(() => {
     if (!hydrated || !selectedTemplate) return;
     const prevBody = lastSavedBodyRef.current[selectedTemplate.id];
-    if (prevBody !== undefined && prevBody !== selectedTemplate.body) {
-      const versions = addVersion(
-        selectedTemplate.id,
-        selectedTemplate.name,
-        selectedTemplate.kind,
-        prevBody,
-      );
-      const ok = (() => { try { localStorage.setItem('crashlab:reporting-templates:versions:v1', JSON.stringify(versions)); return true; } catch { return false; } })();
-      if (ok) setVersionHistory(getVersionsForTemplate(selectedTemplate.id));
-    }
-    lastSavedBodyRef.current[selectedTemplate.id] = selectedTemplate.body;
+    const templateId = selectedTemplate.id;
+    lastSavedBodyRef.current[templateId] = selectedTemplate.body;
+
+    if (prevBody === undefined || prevBody === selectedTemplate.body) return;
+
+    const versions = addVersion(
+      templateId,
+      selectedTemplate.name,
+      selectedTemplate.kind,
+      prevBody,
+    );
+    const ok = safeWriteStorage(VERSIONS_STORAGE_KEY, JSON.stringify(versions));
+    if (!ok) return;
+
+    const t = window.setTimeout(() => setVersionHistory(getVersionsForTemplate(templateId)), 0);
+    return () => window.clearTimeout(t);
   }, [hydrated, selectedTemplate]);
 
   useEffect(() => {
@@ -467,45 +491,28 @@ export default function CreateReportingTemplatesPage60() {
 
                 {/* Tab navigation */}
                 <div className="border-b border-zinc-200 dark:border-zinc-800">
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('edit')}
-                      className={`px-4 py-2 text-sm font-semibold border-b-2 transition ${
-                        activeTab === 'edit'
-                          ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400'
-                          : 'border-transparent text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
-                      }`}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('preview')}
-                      className={`px-4 py-2 text-sm font-semibold border-b-2 transition ${
-                        activeTab === 'preview'
-                          ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400'
-                          : 'border-transparent text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
-                      }`}
-                    >
-                      Preview
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('versions')}
-                      className={`px-4 py-2 text-sm font-semibold border-b-2 transition relative ${
-                        activeTab === 'versions'
-                          ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400'
-                          : 'border-transparent text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
-                      }`}
-                    >
-                      Versions
-                      {versionCount > 0 && (
-                        <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
-                          {versionCount}
-                        </span>
-                      )}
-                    </button>
+                  <div role="tablist" aria-label="Template editor panes" className="flex gap-2 overflow-x-auto">
+                    {EDITOR_TABS.map((tab) => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={activeTab === tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`px-4 py-2 text-sm font-semibold border-b-2 transition shrink-0 ${
+                          activeTab === tab.id
+                            ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400'
+                            : 'border-transparent text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
+                        }`}
+                      >
+                        {tab.label}
+                        {tab.id === 'versions' && versionCount > 0 && (
+                          <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+                            {versionCount}
+                          </span>
+                        )}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
@@ -521,9 +528,28 @@ export default function CreateReportingTemplatesPage60() {
                     />
                   </label>
                 ) : activeTab === 'preview' ? (
-                  <div>
-                    <div className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-2">Preview</div>
-                    <MarkdownPreview content={selectedTemplate.body || '*No content yet. Switch to Edit tab to add markdown.*'} />
+                  <TemplateMarkdownPreview
+                    body={selectedTemplate.body}
+                    templateName={selectedTemplate.name}
+                    isLoading={!hydrated}
+                  />
+                ) : activeTab === 'split' ? (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <label className="flex flex-col gap-1">
+                      <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Template body</span>
+                      <textarea
+                        value={selectedTemplate.body}
+                        onChange={(e) => updateSelectedTemplate({ body: e.target.value })}
+                        className="min-h-[420px] px-3 py-2 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-mono"
+                        placeholder="Write markdown here…"
+                        spellCheck={false}
+                      />
+                    </label>
+                    <TemplateMarkdownPreview
+                      body={selectedTemplate.body}
+                      templateName={selectedTemplate.name}
+                      isLoading={!hydrated}
+                    />
                   </div>
                 ) : (
                   <div>
