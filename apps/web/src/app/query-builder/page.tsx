@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   createCondition,
   createGroup,
@@ -13,38 +13,57 @@ import {
   AVAILABLE_FIELDS,
   OPERATORS,
   type FilterGroup,
+  type FilterCondition,
+  type FilterOperator,
 } from './query-builder-utils';
 
 export default function QueryBuilderPage() {
   const [queryGroup, setQueryGroup] = useState<FilterGroup>(createGroup('root'));
   const [queryOutput, setQueryOutput] = useState('');
 
-  const handleAddCondition = (groupId: string) => {
-    const condition = createCondition(`cond-${Date.now()}`, 'status');
-    setQueryGroup(prev => updateGroupRecursive(prev, groupId, g => addCondition(g, condition)));
-    updateQuery();
-  };
+  const handleAddCondition = useCallback((groupId: string) => {
+    const id = `cond-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const condition = createCondition(id, 'status');
+    setQueryGroup(prev => {
+      const next = updateGroupRecursive(prev, groupId, g => addCondition(g, condition));
+      setQueryOutput(generateQueryString(next));
+      return next;
+    });
+  }, []);
 
-  const handleRemoveCondition = (groupId: string, conditionId: string) => {
-    setQueryGroup(prev => updateGroupRecursive(prev, groupId, g => removeCondition(g, conditionId)));
-    updateQuery();
-  };
+  const handleRemoveCondition = useCallback((groupId: string, conditionId: string) => {
+    setQueryGroup(prev => {
+      const next = updateGroupRecursive(prev, groupId, g => removeCondition(g, conditionId));
+      setQueryOutput(generateQueryString(next));
+      return next;
+    });
+  }, []);
 
-  const handleUpdateCondition = (groupId: string, updatedCondition: any) => {
-    setQueryGroup(prev => updateGroupRecursive(prev, groupId, g => updateCondition(g, updatedCondition)));
-    updateQuery();
-  };
+  const handleUpdateCondition = useCallback((groupId: string, updatedCondition: FilterCondition) => {
+    setQueryGroup(prev => {
+      const next = updateGroupRecursive(prev, groupId, g => updateCondition(g, updatedCondition));
+      setQueryOutput(generateQueryString(next));
+      return next;
+    });
+  }, []);
 
-  const handleAddGroup = (parentGroupId: string) => {
-    const newGroup = createGroup(`group-${Date.now()}`);
-    setQueryGroup(prev => updateGroupRecursive(prev, parentGroupId, g => addGroup(g, newGroup)));
-    updateQuery();
-  };
+  const handleAddGroup = useCallback((parentGroupId: string) => {
+    const id = `group-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const newGroup = createGroup(id);
+    setQueryGroup(prev => {
+      const next = updateGroupRecursive(prev, parentGroupId, g => addGroup(g, newGroup));
+      setQueryOutput(generateQueryString(next));
+      return next;
+    });
+  }, []);
 
-  const handleRemoveGroup = (parentGroupId: string, groupId: string) => {
-    setQueryGroup(prev => updateGroupRecursive(prev, parentGroupId, g => removeGroup(g, groupId)));
-    updateQuery();
-  };
+  const handleRemoveGroup = useCallback((parentGroupId: string, groupId: string) => {
+    setQueryGroup(prev => {
+      const next = updateGroupRecursive(prev, parentGroupId, g => removeGroup(g, groupId));
+      setQueryOutput(generateQueryString(next));
+      return next;
+    });
+  }, []);
 
   const updateGroupRecursive = (group: FilterGroup, targetId: string, update: (g: FilterGroup) => FilterGroup): FilterGroup => {
     if (group.id === targetId) return update(group);
@@ -52,10 +71,6 @@ export default function QueryBuilderPage() {
       ...group,
       groups: group.groups.map(g => updateGroupRecursive(g, targetId, update)),
     };
-  };
-
-  const updateQuery = () => {
-    setQueryOutput(generateQueryString(queryGroup));
   };
 
   return (
@@ -106,7 +121,7 @@ interface QueryGroupBuilderProps {
   group: FilterGroup;
   onAddCondition: (groupId: string) => void;
   onRemoveCondition: (groupId: string, conditionId: string) => void;
-  onUpdateCondition: (groupId: string, condition: any) => void;
+  onUpdateCondition: (groupId: string, condition: FilterCondition) => void;
   onAddGroup: (parentGroupId: string) => void;
   onRemoveGroup: (parentGroupId: string, groupId: string) => void;
 }
@@ -134,7 +149,7 @@ function QueryGroupBuilder({
           <select
             value={condition.field}
             onChange={e =>
-              onUpdateCondition(group.id, { ...condition, field: e.target.value })
+              onUpdateCondition(group.id, { ...condition, field: e.target.value, operator: 'equals', value: '' })
             }
             className="px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 text-sm"
           >
@@ -146,7 +161,7 @@ function QueryGroupBuilder({
           <select
             value={condition.operator}
             onChange={e =>
-              onUpdateCondition(group.id, { ...condition, operator: e.target.value })
+              onUpdateCondition(group.id, { ...condition, operator: e.target.value as FilterOperator })
             }
             className="px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 text-sm"
           >

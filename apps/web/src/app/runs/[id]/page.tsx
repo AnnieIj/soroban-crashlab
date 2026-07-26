@@ -9,7 +9,6 @@ export const dynamic = 'force-dynamic';
 interface RunDetail extends FuzzingRun {
     ledgerChanges?: LedgerStateChange[];
 }
-import type { LedgerStateChange } from '../../types';
 import { buildMockRuns } from '../../mockRuns';
 import RunIssueLinkPage53 from '../../add-run-issue-link-page-53';
 import RunStatusTimeline from '../../RunStatusTimeline';
@@ -71,6 +70,7 @@ export default async function RunDetailPage({ params }: RunDetailPageProps) {
                     <div className="flex items-center gap-2">
                         <RunDetailAutoRefresh runId={run.id} initialStatus={run.status} />
                         <Link href="/" className="btn-outline text-sm">Dashboard</Link>
+                    </div>
                     <div className="flex flex-wrap gap-2">
                         <DownloadArtifactsButton run={run} ledgerChanges={ledgerChanges} />
                         <Link
