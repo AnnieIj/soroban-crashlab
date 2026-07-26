@@ -37,6 +37,10 @@ export default function NavBar() {
   }, []);
 
   useEffect(() => {
+    // Close the mobile drawer on every route change.
+    // Calling a setter directly in an effect is intentional here — the drawer
+    // must close synchronously as soon as the URL changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDrawerOpen(false);
   }, [pathname]);
 

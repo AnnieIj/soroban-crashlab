@@ -6,7 +6,6 @@
  */
 
 import * as assert from 'node:assert/strict';
-import { setTimeout as realSetTimeout } from 'node:timers';
 import {
   debounce,
   clampDelay,
