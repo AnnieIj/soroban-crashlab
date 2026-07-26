@@ -81,7 +81,6 @@ export function useDebounce<T>(
       // Do NOT clear maxWaitTimerRef here — it should survive individual
       // trailing-timer resets so that it still fires at the hard deadline.
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, delay, maxWait]);
 
   // Cleanup on unmount

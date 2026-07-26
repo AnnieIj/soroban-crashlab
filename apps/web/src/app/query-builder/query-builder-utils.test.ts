@@ -2,10 +2,8 @@ import {
   createCondition,
   createGroup,
   addCondition,
-  removeCondition,
   generateQueryString,
   AVAILABLE_FIELDS,
-  OPERATORS,
 } from './query-builder-utils';
 
 const group = createGroup('test-group');

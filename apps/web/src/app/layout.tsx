@@ -67,7 +67,6 @@ export default function RootLayout({
       <body className="antialiased min-h-screen">
         <ThemeProvider>
           <NavBar />
-          <main style={{ background: 'var(--bg)', paddingTop: '52px', minHeight: '100vh' }}>
           <AddKeyboardShortcutCheatsheetModal />
           <OnboardingWizardHost />
           <main style={{ background: 'var(--bg)', paddingTop: '52px', minHeight: '100vh', transition: 'background 0.3s ease' }}>
