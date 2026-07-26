@@ -159,6 +159,19 @@ const INTEGRATIONS: Integration[] = [
     category: 'Monitoring'
   },
   {
+    id: 'grafana',
+    title: 'Grafana Annotations',
+    description: 'Post fuzzing run lifecycle events to your Grafana dashboards via the Annotations API. Mark starts, failures, and completions as timeline markers.',
+    icon: (
+      <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17v-2a2 2 0 012-2h2a2 2 0 012 2v2m-9 4h14a2 2 0 002-2V7.414a2 2 0 00-.586-1.414l-3.414-3.414A2 2 0 0014.586 2H5a2 2 0 00-2 2v15a2 2 0 002 2z" />
+      </svg>
+    ),
+    href: '/integrations/grafana',
+    status: 'available',
+    category: 'Monitoring'
+  },
+  {
     id: 'auth',
     title: 'External Authentication',
     description: 'Integrate with external authentication providers to manage user access and security.',
