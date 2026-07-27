@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { downloadArtifacts } from '../../utils/artifact-download';
-import { collectRunArtifacts } from '../../utils/artifact-collection';
+import { buildRunArtifactZipFilename, generateRunArtifactZip } from '../../utils/artifact-zip';
+import { triggerBrowserDownload } from '../../utils/browser-download';
 import type { FuzzingRun, LedgerStateChange } from '../../types';
 
 interface DownloadArtifactsButtonProps {
@@ -21,8 +21,8 @@ export default function DownloadArtifactsButton({
   const handleDownload = async () => {
     setState('loading');
     try {
-      const artifacts = collectRunArtifacts(run, ledgerChanges);
-      downloadArtifacts(artifacts, run.id);
+      const zipBlob = await generateRunArtifactZip(run, ledgerChanges);
+      triggerBrowserDownload(zipBlob, buildRunArtifactZipFilename(run.id));
       setState('idle');
     } catch {
       setState('error');
@@ -42,7 +42,7 @@ export default function DownloadArtifactsButton({
         aria-label={
           isLoading
             ? 'Preparing artifact bundle…'
-            : 'Download run artifacts including metadata, traces, and fixture exports'
+            : 'Download run artifact bundle as a zip containing a manifest, metadata, traces and fixture exports'
         }
         className={`inline-flex items-center justify-center h-10 px-4 rounded-full font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600 ${
           isLoading
@@ -110,13 +110,18 @@ export default function DownloadArtifactsButton({
                 d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
               />
             </svg>
-            Download Artifacts
+            Download Bundle (.zip)
           </>
         )}
       </button>
-      {isError && (
+      {isError ? (
         <p role="alert" className="text-xs text-red-600 dark:text-red-400">
           Download failed. Check your browser permissions and try again.
+        </p>
+      ) : (
+        <p className="text-meta text-xs">
+          Manifest, metadata, traces and {ledgerChanges.length} ledger fixture
+          {ledgerChanges.length === 1 ? '' : 's'}
         </p>
       )}
     </div>

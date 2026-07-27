@@ -1,3 +1,5 @@
+import { WebhookStore } from './webhook-store';
+
 export type WebhookDeliveryStatus = 'queued' | 'delivered' | 'failed';
 
 export interface WebhookDeliveryRequest {
@@ -29,6 +31,7 @@ export interface WebhookDeliveryAdapter {
 
 export interface WebhookDeliveryWorkerOptions {
   adapter?: WebhookDeliveryAdapter;
+  store?: WebhookStore;
   maxAttempts?: number;
   retryBaseMs?: number;
   timeoutMs?: number;
@@ -83,6 +86,7 @@ export class FetchWebhookDeliveryAdapter implements WebhookDeliveryAdapter {
 
 export class WebhookDeliveryWorker {
   private readonly adapter: WebhookDeliveryAdapter;
+  private readonly store: WebhookStore | null;
   private readonly maxAttempts: number;
   private readonly retryBaseMs: number;
   private readonly timeoutMs: number;
@@ -95,6 +99,7 @@ export class WebhookDeliveryWorker {
 
   constructor(options: WebhookDeliveryWorkerOptions = {}) {
     this.adapter = options.adapter ?? new FetchWebhookDeliveryAdapter();
+    this.store = options.store ?? null;
     this.maxAttempts = options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
     this.retryBaseMs = options.retryBaseMs ?? DEFAULT_RETRY_BASE_MS;
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -107,13 +112,34 @@ export class WebhookDeliveryWorker {
 
   enqueue(request: WebhookDeliveryRequest): void {
     this.assertRequest(request);
-    this.queue.push({
+    const enriched = {
       ...request,
       timeoutMs: request.timeoutMs ?? this.timeoutMs,
-    });
+    };
+    this.queue.push(enriched);
+
+    if (this.store) {
+      this.store.enqueue(enriched);
+    }
 
     if (this.active) {
       void this.drain();
+    }
+  }
+
+  /**
+   * Load any pending deliveries from the persistent store and re-enqueue
+   * them.  Called on startup so that queued deliveries survive restarts.
+   */
+  recoverPendingDeliveries(): void {
+    if (!this.store) return;
+
+    const pending = this.store.getQueue();
+    for (const request of pending) {
+      // Avoid duplicating items already in the in-memory queue
+      if (!this.queue.some((q) => q.id === request.id)) {
+        this.queue.push(request);
+      }
     }
   }
 
@@ -122,6 +148,7 @@ export class WebhookDeliveryWorker {
       return;
     }
 
+    this.recoverPendingDeliveries();
     this.active = true;
     void this.drain();
   }
@@ -151,6 +178,11 @@ export class WebhookDeliveryWorker {
   private async processQueue(): Promise<void> {
     while (this.active && this.queue.length > 0) {
       const request = this.queue.shift()!;
+
+      if (this.store) {
+        this.store.removeFromQueue(request.id);
+      }
+
       await this.deliverWithRetries(request);
     }
   }
@@ -167,14 +199,27 @@ export class WebhookDeliveryWorker {
       const willRetry =
         !delivered && !finalAttempt && this.shouldRetry(result.statusCode);
 
-      this.recordAttempt({
+      const attemptRecord: WebhookDeliveryAttempt = {
         requestId: request.id,
         attempt,
         status: delivered ? 'delivered' : willRetry ? 'queued' : 'failed',
         statusCode: result.statusCode,
         error: result.error,
         deliveredAt: this.now().toISOString(),
-      });
+      };
+
+      this.recordAttempt(attemptRecord);
+
+      if (this.store && (delivered || !willRetry)) {
+        this.store.addDeliveryLog({
+          webhookId: request.id,
+          success: delivered,
+          statusCode: result.statusCode,
+          error: result.error,
+          retryCount: attempt - 1,
+          timestamp: attemptRecord.deliveredAt,
+        });
+      }
 
       if (!willRetry) {
         return;

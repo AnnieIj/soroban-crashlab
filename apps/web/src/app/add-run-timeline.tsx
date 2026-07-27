@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState, useRef, useCallback, useEffect } from 'react';
 import type { FuzzingRun, RunStatus } from './types';
+import { dedupeRunsById } from './run-timeline-utils';
 
 type DataState = 'loading' | 'error' | 'success';
 
@@ -56,7 +57,7 @@ const SKELETON_ROWS = [
 
 function TimelineSkeleton() {
   return (
-    <section className="w-full rounded-[2.5rem] border border-black/[.08] bg-white/80 p-8 shadow-xl backdrop-blur-md dark:border-white/[.145] dark:bg-zinc-950/80">
+    <section role="status" aria-label="Loading timeline" className="w-full rounded-[2.5rem] border border-black/[.08] bg-white/80 p-8 shadow-xl backdrop-blur-md dark:border-white/[.145] dark:bg-zinc-950/80">
       <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
           <div className="mb-3 flex items-center gap-2">
@@ -85,7 +86,7 @@ function TimelineSkeleton() {
 
 function TimelineError({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
-    <section className="w-full rounded-[2.5rem] border border-rose-200 dark:border-rose-900/50 bg-rose-50/80 dark:bg-rose-950/30 p-8 shadow-lg">
+    <section role="alert" className="w-full rounded-[2.5rem] border border-rose-200 dark:border-rose-900/50 bg-rose-50/80 dark:bg-rose-950/30 p-8 shadow-lg">
       <div className="flex flex-col items-center justify-center py-8">
         <div className="h-12 w-12 rounded-full bg-rose-100 dark:bg-rose-900/50 flex items-center justify-center mb-4">
           <svg className="h-6 w-6 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -151,7 +152,10 @@ export default function AddRunTimeline({
   const runBlockRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
   const timelineRuns = useMemo(() => {
-    return runs
+    // Dedupe before slicing (#1076): repeated ids in `runs` produced duplicate
+    // React keys below, and also collided in `runBlockRefs` so arrow-key
+    // navigation focused the wrong block.
+    return dedupeRunsById(runs)
       .filter(r => r.startedAt)
       .slice(0, 10)
       .sort((a, b) => new Date(a.startedAt!).getTime() - new Date(b.startedAt!).getTime());

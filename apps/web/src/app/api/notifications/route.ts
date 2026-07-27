@@ -71,6 +71,7 @@ async function fetchNotificationsFeed(request: NextRequest, feedUrl: string): Pr
       Accept: 'application/json',
     },
     cache: 'no-store',
+    signal: AbortSignal.timeout(10_000),
   });
 
   if (!response.ok) {

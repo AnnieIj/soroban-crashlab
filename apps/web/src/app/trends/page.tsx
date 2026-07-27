@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { FuzzingRun, RunArea, RunSeverity } from '../types';
 import { FilterBar } from './FilterBar';
 import { CrashTrendChart } from './CrashTrendChart';
+import { fetchRuns } from '../../lib/api-client';
 import {
   transformRunsToCrashEvents,
   bucketByDay,
@@ -21,15 +22,16 @@ import {
  */
 export default function CrashTrendPage() {
   const [runs, setRuns] = useState<FuzzingRun[]>([]);
+  const [_dataState, setDataState] = useState<'loading' | 'success' | 'error'>('loading');
 
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/runs')
-      .then((res) => res.json())
-      .then((data) => { if (!cancelled) setRuns(data.runs); })
-      .catch(() => {});
+    fetchRuns()
+      .then((data) => { if (!cancelled) { setRuns(data.runs ?? []); setDataState('success'); } })
+      .catch(() => { if (!cancelled) setDataState('error'); });
     return () => { cancelled = true; };
   }, []);
+
 
   // Filter state
   const [selectedAreas, setSelectedAreas] = useState<RunArea[]>([]);
@@ -83,6 +85,8 @@ export default function CrashTrendPage() {
 
   const isEmpty = isChartDataEmpty(chartData);
   const hasNoRuns = runs.length === 0;
+
+  const totalCrashes = useMemo(() => calculateTotalCrashes(chartData), [chartData]);
 
   return (
     <div className="min-h-screen bg-white dark:bg-zinc-950">
@@ -155,7 +159,7 @@ export default function CrashTrendPage() {
                 />
 
                 {/* Summary stats */}
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mt-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
                   <StatCard
                     label="Total Days"
                     value={chartData.length.toString()}
@@ -170,7 +174,7 @@ export default function CrashTrendPage() {
                   />
                   <StatCard
                     label="Total Crashes"
-                    value={calculateTotalCrashes(chartData).toString()}
+                    value={totalCrashes.toString()}
                   />
                 </div>
               </div>
@@ -184,8 +188,12 @@ export default function CrashTrendPage() {
 
 /**
  * Display helper: statistics card for summary metrics.
+ *
+ * Memoized so a parent re-render (e.g. a filter change that only affects
+ * one of the four cards) doesn't force the other, unchanged cards to
+ * re-render as well.
  */
-function StatCard({ label, value }: { label: string; value: string }) {
+const StatCard = memo(function StatCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="p-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg">
       <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">
@@ -196,7 +204,7 @@ function StatCard({ label, value }: { label: string; value: string }) {
       </p>
     </div>
   );
-}
+});
 
 /**
  * Calculate total crashes across all chart data points.

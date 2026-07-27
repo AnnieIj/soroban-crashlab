@@ -37,7 +37,11 @@ export default function NavBar() {
   }, []);
 
   useEffect(() => {
-    queueMicrotask(() => setDrawerOpen(false));
+    // Close the mobile drawer on every route change.
+    // Calling a setter directly in an effect is intentional here — the drawer
+    // must close synchronously as soon as the URL changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDrawerOpen(false);
   }, [pathname]);
 
   useEffect(() => {
@@ -105,13 +109,15 @@ export default function NavBar() {
           <NotificationCenter />
 
           {/* Search - hidden on small mobile */}
-          <div
-            className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full"
-            style={{ background: mounted ? (theme === 'dark' ? '#1a1a1a' : '#EEF3F8') : 'var(--hover-bg)' }}
+          <Link
+            id="navbar-search-link"
+            href="/runs/query"
+            className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full text-decoration-none"
+            style={{ background: mounted ? (theme === 'dark' ? '#1a1a1a' : '#EEF3F8') : 'var(--hover-bg)', cursor: 'pointer' }}
           >
             <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>🔍</span>
             <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Search runs...</span>
-          </div>
+          </Link>
 
           {/* Theme toggle */}
           {mounted && (
