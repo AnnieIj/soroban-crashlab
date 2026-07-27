@@ -2,21 +2,7 @@
 
 import React, { useState } from 'react';
 import type { FuzzingRun } from './types';
-import { triggerBrowserDownload } from './utils/browser-download';
-
-const CSV_COLUMN_DEFS: Record<string, { header: string; value: (run: FuzzingRun) => string | number }> = {
-  id: { header: 'ID', value: (run) => run.id },
-  status: { header: 'Status', value: (run) => run.status },
-  area: { header: 'Area', value: (run) => run.area },
-  severity: { header: 'Severity', value: (run) => run.severity },
-  duration: { header: 'Duration (ms)', value: (run) => run.duration.toFixed(0) },
-  seedCount: { header: 'Seed Count', value: (run) => run.seedCount },
-  cpuInstructions: { header: 'CPU Instructions', value: (run) => run.cpuInstructions },
-  memoryBytes: { header: 'Memory (Bytes)', value: (run) => run.memoryBytes },
-  minResourceFee: { header: 'Min Fee', value: (run) => run.minResourceFee },
-};
-
-const ALL_CSV_COLUMNS = Object.keys(CSV_COLUMN_DEFS);
+import { buildRunsCsv } from './export-run-csv-utils';
 
 type ExportRunCsvProps = {
   runs: FuzzingRun[];
@@ -31,19 +17,16 @@ export default function AddExportRunCsv({ runs, visibleColumns }: ExportRunCsvPr
     
     setTimeout(() => {
       try {
-        const cols = visibleColumns
-          ? visibleColumns.filter(c => c in CSV_COLUMN_DEFS)
-          : ALL_CSV_COLUMNS;
-        const headers = cols.map(c => CSV_COLUMN_DEFS[c].header);
-        const csvRows = [
-          headers.join(','),
-          ...runs.map(run => cols.map(c => CSV_COLUMN_DEFS[c].value(run)).join(',')),
-        ];
-        
-        triggerBrowserDownload(
-          new Blob([csvRows.join('\n')], { type: 'text/csv' }),
-          `soroban-runs-export-${new Date().toISOString().split('T')[0]}.csv`,
-        );
+        const csvString = buildRunsCsv(runs, visibleColumns);
+        const blob = new Blob([csvString], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `soroban-runs-export-${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
       } catch (error) {
         console.error('CSV Export failed:', error);
       } finally {
