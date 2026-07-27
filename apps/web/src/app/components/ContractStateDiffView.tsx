@@ -1,267 +1,336 @@
 'use client';
 
-import { useState } from 'react';
-import type { LedgerStateChange } from '../types';
+/**
+ * Ledger state change diff view for contract runs (#1119).
+ *
+ * Shows what a run did to ledger state as a before/after comparison: a filter
+ * chip per change type, a side-by-side or unified payload view, and an
+ * expandable field-level breakdown for each entry.
+ *
+ * Comparison logic lives in `state-diff-utils` so it can be unit-tested against
+ * the same code this component runs. Colours come from the Navy Professional
+ * CSS variables, so both themes are covered without a second palette.
+ */
+
+import { useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
+import type { LedgerChangeType, LedgerStateChange } from '../types';
+import {
+  STATE_CHANGE_FILTERS,
+  compareLedgerValues,
+  countFieldChanges,
+  countForFilter,
+  filterStateChanges,
+  formatLedgerValue,
+  summarizeStateChanges,
+  type StateChangeFilter,
+} from './state-diff-utils';
 
 interface ContractStateDiffViewProps {
   changes: LedgerStateChange[];
+  /** Renders a skeleton while ledger data is still being fetched. */
+  isLoading?: boolean;
+  /** Message to surface instead of the diff when loading failed. */
+  error?: string | null;
 }
 
-const changeBadge = {
-  created: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 border-green-200 dark:border-green-900/60',
-  updated: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border-blue-200 dark:border-blue-900/60',
-  deleted: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 border-red-200 dark:border-red-900/60',
+type DiffLayout = 'split' | 'unified';
+
+const CHANGE_COLORS: Record<LedgerChangeType, string> = {
+  created: '#057642',
+  updated: '#0A66C2',
+  deleted: '#CC1016',
 };
 
-/**
- * Compares two JSON strings and returns a structured diff.
- */
-function compareJsonObjects(before: string | undefined, after: string | undefined): {
-  added: Record<string, unknown>;
-  removed: Record<string, unknown>;
-  changed: Record<string, { before: unknown; after: unknown }>;
-  unchanged: Record<string, unknown>;
-} {
-  const result = {
-    added: {} as Record<string, unknown>,
-    removed: {} as Record<string, unknown>,
-    changed: {} as Record<string, { before: unknown; after: unknown }>,
-    unchanged: {} as Record<string, unknown>,
-  };
-
-  if (!before && !after) {
-    return result;
-  }
-
-  try {
-    const beforeObj = before ? JSON.parse(before) : {};
-    const afterObj = after ? JSON.parse(after) : {};
-
-    const allKeys = new Set([
-      ...Object.keys(beforeObj),
-      ...Object.keys(afterObj),
-    ]);
-
-    for (const key of allKeys) {
-      const hasBeforeKey = key in beforeObj;
-      const hasAfterKey = key in afterObj;
-
-      if (!hasBeforeKey && hasAfterKey) {
-        result.added[key] = afterObj[key];
-      } else if (hasBeforeKey && !hasAfterKey) {
-        result.removed[key] = beforeObj[key];
-      } else if (JSON.stringify(beforeObj[key]) !== JSON.stringify(afterObj[key])) {
-        result.changed[key] = {
-          before: beforeObj[key],
-          after: afterObj[key],
-        };
-      } else {
-        result.unchanged[key] = beforeObj[key];
-      }
-    }
-  } catch {
-    // If JSON parsing fails, treat the entire content as changed
-  }
-
-  return result;
+/** Tinted pill matching the semantic colour of a change type. */
+function ChangeBadge({ changeType }: { changeType: LedgerChangeType }) {
+  const color = CHANGE_COLORS[changeType];
+  return (
+    <span
+      className="badge text-xs"
+      style={{ background: `color-mix(in srgb, ${color} 12%, transparent)`, color }}
+    >
+      {changeType.toUpperCase()}
+    </span>
+  );
 }
 
-export default function ContractStateDiffView({ changes }: ContractStateDiffViewProps) {
+/** Monospace payload block; falls back to a placeholder when a side is absent. */
+function PayloadBlock({ value, absentLabel }: { value?: string; absentLabel: string }) {
+  const formatted = formatLedgerValue(value);
+  return (
+    <pre
+      className="code-text m-0 p-3 rounded-lg overflow-x-auto whitespace-pre-wrap break-all"
+      style={{
+        background: 'var(--bg)',
+        border: '1px solid var(--border-color)',
+        color: formatted ? 'var(--text-primary)' : 'var(--text-secondary)',
+      }}
+    >
+      {formatted || absentLabel}
+    </pre>
+  );
+}
+
+/** One added / removed / changed field row. */
+function FieldRow({ name, color, children }: { name: string; color: string; children: ReactNode }) {
+  return (
+    <div
+      className="code-text rounded px-2 py-1"
+      style={{
+        background: `color-mix(in srgb, ${color} 8%, transparent)`,
+        border: `1px solid color-mix(in srgb, ${color} 30%, transparent)`,
+      }}
+    >
+      <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>
+        {name}:
+      </span>{' '}
+      {children}
+    </div>
+  );
+}
+
+function EmptyState({ title, hint }: { title: string; hint: string }) {
+  return (
+    <div
+      className="rounded-xl border border-dashed p-8 text-center"
+      style={{ borderColor: 'var(--border-color)', background: 'var(--bg)' }}
+    >
+      <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+        {title}
+      </p>
+      <p className="text-meta mt-1">{hint}</p>
+    </div>
+  );
+}
+
+export default function ContractStateDiffView({
+  changes,
+  isLoading = false,
+  error = null,
+}: ContractStateDiffViewProps) {
+  const [filter, setFilter] = useState<StateChangeFilter>('all');
+  const [layout, setLayout] = useState<DiffLayout>('split');
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
+  const summary = useMemo(() => summarizeStateChanges(changes), [changes]);
+  const visibleChanges = useMemo(() => filterStateChanges(changes, filter), [changes, filter]);
+
   const toggleExpanded = (id: string) => {
-    setExpandedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+    setExpandedIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
 
-  if (changes.length === 0) {
+  if (error) {
     return (
-      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/30 p-8 text-center">
-        <svg
-          className="w-12 h-12 mx-auto mb-3 text-zinc-400 dark:text-zinc-600"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-          />
-        </svg>
-        <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-          No state changes detected
+      <div
+        role="alert"
+        className="rounded-xl border p-4"
+        style={{ borderColor: '#CC1016', background: 'rgba(204, 16, 22, 0.06)' }}
+      >
+        <p className="text-sm font-semibold" style={{ color: '#CC1016' }}>
+          Could not load ledger state changes
         </p>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-          This run did not modify any contract or ledger state
-        </p>
+        <p className="text-meta mt-1">{error}</p>
       </div>
     );
   }
 
+  if (isLoading) {
+    return (
+      <div className="space-y-3" role="status" aria-live="polite">
+        <span className="sr-only">Loading ledger state changes</span>
+        <div className="skeleton h-8 w-64" />
+        {[0, 1, 2].map((index) => (
+          <div key={index} className="skeleton h-28 w-full rounded-xl" />
+        ))}
+      </div>
+    );
+  }
+
+  if (summary.total === 0) {
+    return (
+      <EmptyState
+        title="No state changes detected"
+        hint="This run did not commit any contract or ledger state. Runs still in flight report their footprint once they finish."
+      />
+    );
+  }
+
   return (
-    <div className="space-y-3">
-      {changes.map((change) => {
-        const isExpanded = expandedIds.has(change.id);
-        const diff = compareJsonObjects(change.before, change.after);
-        const hasDetails =
-          Object.keys(diff.added).length > 0 ||
-          Object.keys(diff.removed).length > 0 ||
-          Object.keys(diff.changed).length > 0;
+    <div className="space-y-4">
+      {/* Filters and layout toggle */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by change type">
+          {STATE_CHANGE_FILTERS.map((option) => {
+            const isActive = filter === option.id;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => setFilter(option.id)}
+                aria-pressed={isActive}
+                className={`chip text-xs ${isActive ? 'chip-active' : ''}`}
+              >
+                {option.label} ({countForFilter(summary, option.id)})
+              </button>
+            );
+          })}
+        </div>
 
-        return (
-          <article
-            key={change.id}
-            className="border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden"
-          >
-            {/* Header */}
-            <div className="p-4 bg-zinc-50 dark:bg-zinc-900/30">
-              <div className="flex flex-wrap items-center gap-2 mb-2">
-                <span
-                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${changeBadge[change.changeType]}`}
-                >
-                  {change.changeType.toUpperCase()}
-                </span>
-                <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 rounded px-2 py-0.5">
-                  {change.entryType}
-                </span>
-                <span className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">
-                  {change.id}
-                </span>
-              </div>
+        <div className="flex gap-2" role="group" aria-label="Diff layout">
+          {(['split', 'unified'] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => setLayout(option)}
+              aria-pressed={layout === option}
+              className={`chip text-xs ${layout === option ? 'chip-active' : ''}`}
+            >
+              {option === 'split' ? 'Side by side' : 'Unified'}
+            </button>
+          ))}
+        </div>
+      </div>
 
-              {hasDetails && (
-                <button
-                  type="button"
-                  onClick={() => toggleExpanded(change.id)}
-                  className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
-                >
-                  {isExpanded ? (
-                    <>
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                      Hide details
-                    </>
+      {visibleChanges.length === 0 ? (
+        <EmptyState
+          title="No entries match this filter"
+          hint={`This run has no ${filter} ledger entries. Choose a different change type above.`}
+        />
+      ) : (
+        <div className="space-y-3">
+          {visibleChanges.map((change) => {
+            const isExpanded = expandedIds.has(change.id);
+            const diff = compareLedgerValues(change.before, change.after);
+            const fieldChanges = countFieldChanges(diff);
+            const detailsId = `state-diff-details-${change.id}`;
+
+            return (
+              <article
+                key={change.id}
+                className="rounded-xl border overflow-hidden"
+                style={{ borderColor: 'var(--border-color)', background: 'var(--surface)' }}
+              >
+                <div className="p-4" style={{ background: 'var(--bg)' }}>
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
+                    <ChangeBadge changeType={change.changeType} />
+                    <span className="chip text-xs">{change.entryType}</span>
+                    <span className="code-text truncate" style={{ color: 'var(--text-secondary)' }}>
+                      {change.id}
+                    </span>
+                  </div>
+
+                  {diff.parseFailed ? (
+                    <p className="text-meta">
+                      Payload is not JSON — showing the raw before and after values.
+                    </p>
+                  ) : fieldChanges > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => toggleExpanded(change.id)}
+                      aria-expanded={isExpanded}
+                      aria-controls={detailsId}
+                      className="link text-xs"
+                    >
+                      {isExpanded
+                        ? 'Hide field-level changes'
+                        : `Show ${fieldChanges} field-level change${fieldChanges === 1 ? '' : 's'}`}
+                    </button>
                   ) : (
-                    <>
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                      Show {Object.keys(diff.added).length + Object.keys(diff.removed).length + Object.keys(diff.changed).length} changes
-                    </>
+                    <p className="text-meta">No field-level differences.</p>
                   )}
-                </button>
-              )}
-            </div>
-
-            {/* Before/After comparison */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4">
-              <div>
-                <div className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400 mb-1">
-                  Before
                 </div>
-                <pre className="text-xs rounded-lg bg-zinc-100 dark:bg-zinc-950 p-3 overflow-x-auto whitespace-pre-wrap break-all">
-                  {change.before ?? 'N/A (created)'}
-                </pre>
-              </div>
-              <div>
-                <div className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400 mb-1">
-                  After
-                </div>
-                <pre className="text-xs rounded-lg bg-zinc-100 dark:bg-zinc-950 p-3 overflow-x-auto whitespace-pre-wrap break-all">
-                  {change.after ?? 'N/A (deleted)'}
-                </pre>
-              </div>
-            </div>
 
-            {/* Expanded detail view */}
-            {isExpanded && hasDetails && (
-              <div className="border-t border-zinc-200 dark:border-zinc-800 p-4 bg-white dark:bg-zinc-950">
-                <h4 className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-3">
-                  Field-level changes
-                </h4>
-
-                {Object.keys(diff.added).length > 0 && (
-                  <div className="mb-3">
-                    <div className="text-xs font-medium text-green-700 dark:text-green-300 mb-1">
-                      Added fields
-                    </div>
-                    <div className="space-y-1">
-                      {Object.entries(diff.added).map(([key, value]) => (
-                        <div
-                          key={key}
-                          className="text-xs bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900/40 rounded px-2 py-1"
-                        >
-                          <span className="font-mono font-semibold">{key}:</span>{' '}
-                          <span className="text-green-700 dark:text-green-300">
-                            {JSON.stringify(value)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {Object.keys(diff.removed).length > 0 && (
-                  <div className="mb-3">
-                    <div className="text-xs font-medium text-red-700 dark:text-red-300 mb-1">
-                      Removed fields
-                    </div>
-                    <div className="space-y-1">
-                      {Object.entries(diff.removed).map(([key, value]) => (
-                        <div
-                          key={key}
-                          className="text-xs bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/40 rounded px-2 py-1"
-                        >
-                          <span className="font-mono font-semibold">{key}:</span>{' '}
-                          <span className="text-red-700 dark:text-red-300 line-through">
-                            {JSON.stringify(value)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {Object.keys(diff.changed).length > 0 && (
+                {/* Before / after payloads */}
+                <div
+                  className={
+                    layout === 'split'
+                      ? 'grid grid-cols-1 md:grid-cols-2 gap-3 p-4'
+                      : 'flex flex-col gap-3 p-4'
+                  }
+                >
                   <div>
-                    <div className="text-xs font-medium text-blue-700 dark:text-blue-300 mb-1">
-                      Changed fields
-                    </div>
-                    <div className="space-y-1">
-                      {Object.entries(diff.changed).map(([key, { before, after }]) => (
-                        <div
-                          key={key}
-                          className="text-xs bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/40 rounded px-2 py-1"
-                        >
-                          <span className="font-mono font-semibold">{key}:</span>{' '}
-                          <span className="text-zinc-500 dark:text-zinc-400 line-through">
-                            {JSON.stringify(before)}
-                          </span>
-                          {' → '}
-                          <span className="text-blue-700 dark:text-blue-300">
-                            {JSON.stringify(after)}
-                          </span>
+                    <div className="text-caption uppercase tracking-wide mb-1">Before</div>
+                    <PayloadBlock value={change.before} absentLabel="— entry did not exist" />
+                  </div>
+                  <div>
+                    <div className="text-caption uppercase tracking-wide mb-1">After</div>
+                    <PayloadBlock value={change.after} absentLabel="— entry was removed" />
+                  </div>
+                </div>
+
+                {isExpanded && fieldChanges > 0 && (
+                  <div
+                    id={detailsId}
+                    className="p-4 border-t space-y-3"
+                    style={{ borderColor: 'var(--border-color)' }}
+                  >
+                    {Object.keys(diff.added).length > 0 && (
+                      <div>
+                        <div className="text-caption mb-1" style={{ color: CHANGE_COLORS.created }}>
+                          Added fields
                         </div>
-                      ))}
-                    </div>
+                        <div className="space-y-1">
+                          {Object.entries(diff.added).map(([key, value]) => (
+                            <FieldRow key={key} name={key} color={CHANGE_COLORS.created}>
+                              <span style={{ color: CHANGE_COLORS.created }}>
+                                {JSON.stringify(value)}
+                              </span>
+                            </FieldRow>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {Object.keys(diff.removed).length > 0 && (
+                      <div>
+                        <div className="text-caption mb-1" style={{ color: CHANGE_COLORS.deleted }}>
+                          Removed fields
+                        </div>
+                        <div className="space-y-1">
+                          {Object.entries(diff.removed).map(([key, value]) => (
+                            <FieldRow key={key} name={key} color={CHANGE_COLORS.deleted}>
+                              <span className="line-through" style={{ color: CHANGE_COLORS.deleted }}>
+                                {JSON.stringify(value)}
+                              </span>
+                            </FieldRow>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {Object.keys(diff.changed).length > 0 && (
+                      <div>
+                        <div className="text-caption mb-1" style={{ color: CHANGE_COLORS.updated }}>
+                          Changed fields
+                        </div>
+                        <div className="space-y-1">
+                          {Object.entries(diff.changed).map(([key, value]) => (
+                            <FieldRow key={key} name={key} color={CHANGE_COLORS.updated}>
+                              <span className="line-through" style={{ color: 'var(--text-secondary)' }}>
+                                {JSON.stringify(value.before)}
+                              </span>
+                              {' → '}
+                              <span style={{ color: CHANGE_COLORS.updated }}>
+                                {JSON.stringify(value.after)}
+                              </span>
+                            </FieldRow>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
-              </div>
-            )}
-          </article>
-        );
-      })}
+              </article>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

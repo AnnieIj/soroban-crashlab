@@ -1,46 +1,20 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import type { FuzzingRun, LedgerStateChange } from '../../types';
-import RunTimeline from './RunTimeline';
 import RunDetailAutoRefresh from './RunDetailAutoRefresh';
-
-export const dynamic = 'force-dynamic';
-
-interface RunDetail extends FuzzingRun {
-    ledgerChanges?: LedgerStateChange[];
-}
 import { buildMockRuns } from '../../mockRuns';
+import { buildLedgerChangesForRun } from '../../mock-ledger-changes';
 import RunIssueLinkPage53 from '../../add-run-issue-link-page-53';
 import RunStatusTimeline from '../../RunStatusTimeline';
 import DownloadArtifactsButton from './DownloadArtifactsButton';
 import ContractStateDiffView from '../../components/ContractStateDiffView';
+import { summarizeStateChanges } from '../../components/state-diff-utils';
 import AddRunReplayHistoryWithTimestamps from '../../add-run-replay-history-with-timestamps';
+
+export const dynamic = 'force-dynamic';
 
 interface RunDetailPageProps {
     params: Promise<{ id: string }>;
 }
-
-const ledgerChanges: LedgerStateChange[] = [
-    {
-        id: 'entry-1',
-        entryType: 'ContractData',
-        changeType: 'created',
-        after: '{"key":"allowance:alice:bob","value":"1000"}',
-    },
-    {
-        id: 'entry-2',
-        entryType: 'Account',
-        changeType: 'updated',
-        before: '{"balance":"10000000","seq":"184"}',
-        after: '{"balance":"9800000","seq":"185"}',
-    },
-    {
-        id: 'entry-3',
-        entryType: 'TrustLine',
-        changeType: 'deleted',
-        before: '{"asset":"USDC","limit":"500","balance":"0"}',
-    },
-];
 
 const formatBytes = (bytes: number): string => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 const formatDate = (value?: string): string => (value ? new Date(value).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }) : 'Pending');
@@ -56,6 +30,9 @@ export default async function RunDetailPage({ params }: RunDetailPageProps) {
     const cpuWarn = run.cpuInstructions >= 900_000;
     const memoryWarn = run.memoryBytes >= 7_000_000;
     const feeWarn = run.minResourceFee >= 3_000;
+
+    const ledgerChanges = buildLedgerChangesForRun(run);
+    const ledgerSummary = summarizeStateChanges(ledgerChanges);
 
     return (
         <div className="px-6 md:px-8 max-w-5xl mx-auto w-full py-14">
@@ -142,7 +119,19 @@ export default async function RunDetailPage({ params }: RunDetailPageProps) {
                 )}
 
                 <section>
-                    <h2 className="text-lg font-semibold mb-3">Ledger State Change Diff</h2>
+                    <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+                        <h2 className="text-lg font-semibold">Ledger State Change Diff</h2>
+                        <p className="text-meta">
+                            {ledgerSummary.total} {ledgerSummary.total === 1 ? 'entry' : 'entries'}
+                            {ledgerSummary.total > 0 && (
+                                <>
+                                    {' · '}
+                                    {ledgerSummary.created} created, {ledgerSummary.updated} updated,{' '}
+                                    {ledgerSummary.deleted} deleted
+                                </>
+                            )}
+                        </p>
+                    </div>
                     <ContractStateDiffView changes={ledgerChanges} />
                 </section>
 
