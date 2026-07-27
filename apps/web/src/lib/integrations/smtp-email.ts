@@ -2,6 +2,8 @@
  * SMTP email integration for sending critical event notifications
  */
 
+import * as nodemailer from "nodemailer";
+
 export interface SmtpConfig {
   host: string;
   port: number;
@@ -11,6 +13,7 @@ export interface SmtpConfig {
     pass: string;
   };
   from: string;
+  enabled: boolean;
 }
 
 export interface EmailMessage {
@@ -93,9 +96,20 @@ export function validateEmailMessage(message: EmailMessage): string | null {
   return null;
 }
 
+function createTransporter(config: SmtpConfig) {
+  return nodemailer.createTransport({
+    host: config.host,
+    port: config.port,
+    secure: config.secure,
+    auth: {
+      user: config.auth.user,
+      pass: config.auth.pass,
+    },
+  });
+}
+
 /**
- * Sends email via SMTP
- * Note: This is a simplified implementation. In production, use nodemailer or similar library.
+ * Sends email via SMTP using nodemailer.
  */
 export async function sendEmail(
   config: SmtpConfig,
@@ -111,26 +125,50 @@ export async function sendEmail(
     return { success: false, error: messageError };
   }
 
-  // Note: This is a placeholder implementation
-  // In production, integrate with nodemailer or similar SMTP library
   try {
-    // Simulate SMTP connection and sending
-    // Real implementation would use nodemailer.createTransport() and transporter.sendMail()
-    const mockMessageId = `<${Date.now()}.${Math.random()}@crashlab.local>`;
-
-    // Validate connection parameters
-    if (config.port === 0 || !config.host) {
-      throw new Error("Invalid SMTP configuration");
-    }
+    const transporter = createTransporter(config);
+    const info = await transporter.sendMail({
+      from: config.from,
+      to: message.to,
+      cc: message.cc,
+      bcc: message.bcc,
+      subject: message.subject,
+      text: message.text,
+      html: message.html,
+    });
 
     return {
       success: true,
-      messageId: mockMessageId,
+      messageId: info.messageId,
     };
   } catch (error) {
     return {
       success: false,
       error: `Failed to send email: ${error instanceof Error ? error.message : "Unknown error"}`,
+    };
+  }
+}
+
+/**
+ * Verifies that the SMTP server is reachable and the supplied credentials
+ * are accepted, without sending an email.
+ */
+export async function verifySmtpConnection(
+  config: SmtpConfig,
+): Promise<EmailNotificationResult> {
+  const configError = validateSmtpConfig(config);
+  if (configError) {
+    return { success: false, error: configError };
+  }
+
+  try {
+    const transporter = createTransporter(config);
+    await transporter.verify();
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: `SMTP connection failed: ${error instanceof Error ? error.message : "Unknown error"}`,
     };
   }
 }
