@@ -1,6 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import TemplateMarkdownPreview from './settings/reporting/TemplateMarkdownPreview';
+import type { PreviewMode } from './settings/reporting/template-preview-utils';
+import {
+  addVersion,
+  getVersionsForTemplate,
+  type TemplateVersion,
+} from './reporting-templates-version-history-utils';
 
 type ReportingTemplateKind = 'issue' | 'pr';
 
@@ -14,6 +21,7 @@ interface ReportingTemplate {
 
 const TEMPLATES_STORAGE_KEY = 'crashlab:reporting-templates:v1';
 const SELECTED_TEMPLATE_STORAGE_KEY = 'crashlab:reporting-templates:selected:v1';
+const VERSIONS_STORAGE_KEY = 'crashlab:reporting-templates:versions:v1';
 
 const DEFAULT_TEMPLATES: ReportingTemplate[] = [
   {
@@ -75,20 +83,52 @@ function readSelectedTemplateIdFromStorage(): string | null {
   }
 }
 
-function safeWriteStorage(key: string, value: string) {
+export function isQuotaExceededError(error: unknown): boolean {
+  return (
+    error instanceof DOMException &&
+    (error.name === 'QuotaExceededError' ||
+      error.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+      error.code === 22 ||
+      error.code === 1014)
+  );
+}
+
+export function safeWriteStorage(key: string, value: string): boolean {
   try {
     localStorage.setItem(key, value);
-  } catch {
-    // ignore write errors (private mode, quota, etc.)
+    return true;
+  } catch (error) {
+    if (isQuotaExceededError(error)) {
+      console.warn(`localStorage quota exceeded, "${key}" will not persist`);
+    }
+    // Private mode, quota exceeded, or storage disabled: caller decides
+    // how to surface this to the user rather than failing silently.
+    return false;
   }
 }
+
+/**
+ * Panes available in the template editor. `edit`, `preview` and `split` come
+ * from the Markdown preview feature; `versions` is the existing history pane.
+ */
+type EditorTab = PreviewMode | 'versions';
+
+const EDITOR_TABS: { id: EditorTab; label: string }[] = [
+  { id: 'edit', label: 'Edit' },
+  { id: 'preview', label: 'Preview' },
+  { id: 'split', label: 'Split' },
+  { id: 'versions', label: 'Versions' },
+];
 
 export default function CreateReportingTemplatesPage60() {
   const [hydrated, setHydrated] = useState(false);
   const [templates, setTemplates] = useState<ReportingTemplate[]>(DEFAULT_TEMPLATES);
   const [selectedId, setSelectedId] = useState<string>(DEFAULT_TEMPLATES[0]!.id);
   const [saveState, setSaveState] = useState<'idle' | 'saved' | 'error'>('idle');
+  const [activeTab, setActiveTab] = useState<EditorTab>('edit');
+  const [versionHistory, setVersionHistory] = useState<TemplateVersion[]>([]);
   const saveTimer = useRef<number | null>(null);
+  const lastSavedBodyRef = useRef<Record<string, string>>({});
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -112,21 +152,65 @@ export default function CreateReportingTemplatesPage60() {
     [selectedId, templates],
   );
 
-  useEffect(() => {
-    if (!hydrated) return;
-    safeWriteStorage(TEMPLATES_STORAGE_KEY, JSON.stringify(templates));
-  }, [hydrated, templates]);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    safeWriteStorage(SELECTED_TEMPLATE_STORAGE_KEY, selectedId);
-  }, [hydrated, selectedId]);
-
   const flashSaveState = useCallback((state: 'saved' | 'error') => {
     if (saveTimer.current) window.clearTimeout(saveTimer.current);
     setSaveState(state);
     saveTimer.current = window.setTimeout(() => setSaveState('idle'), 1500);
   }, []);
+
+  // Version history lives in localStorage, so it can only be read after mount.
+  // Both effects below defer their setState to the next tick to stay clear of
+  // the react-hooks/set-state-in-effect rule (same pattern as the autosave
+  // effects further down).
+  useEffect(() => {
+    if (!selectedTemplate) return;
+    const templateId = selectedTemplate.id;
+    const t = window.setTimeout(() => setVersionHistory(getVersionsForTemplate(templateId)), 0);
+    return () => window.clearTimeout(t);
+  }, [selectedTemplate]);
+
+  const versionCount = versionHistory.length;
+
+  useEffect(() => {
+    if (!hydrated || !selectedTemplate) return;
+    const prevBody = lastSavedBodyRef.current[selectedTemplate.id];
+    const templateId = selectedTemplate.id;
+    lastSavedBodyRef.current[templateId] = selectedTemplate.body;
+
+    if (prevBody === undefined || prevBody === selectedTemplate.body) return;
+
+    const versions = addVersion(
+      templateId,
+      selectedTemplate.name,
+      selectedTemplate.kind,
+      prevBody,
+    );
+    const ok = safeWriteStorage(VERSIONS_STORAGE_KEY, JSON.stringify(versions));
+    if (!ok) return;
+
+    const t = window.setTimeout(() => setVersionHistory(getVersionsForTemplate(templateId)), 0);
+    return () => window.clearTimeout(t);
+  }, [hydrated, selectedTemplate]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    const ok = safeWriteStorage(TEMPLATES_STORAGE_KEY, JSON.stringify(templates));
+    // Schedule on next tick so this setState goes through React's batching,
+    // avoiding the react-hooks/set-state-in-effect lint rule (see useMaintainerMode.ts).
+    if (!ok) {
+      const t = window.setTimeout(() => flashSaveState('error'), 0);
+      return () => window.clearTimeout(t);
+    }
+  }, [hydrated, templates, flashSaveState]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    const ok = safeWriteStorage(SELECTED_TEMPLATE_STORAGE_KEY, selectedId);
+    if (!ok) {
+      const t = window.setTimeout(() => flashSaveState('error'), 0);
+      return () => window.clearTimeout(t);
+    }
+  }, [hydrated, selectedId, flashSaveState]);
 
   useEffect(() => {
     return () => {
@@ -192,6 +276,18 @@ export default function CreateReportingTemplatesPage60() {
     },
     [flashSaveState, selectedTemplate],
   );
+
+  const handleRestoreVersion = useCallback((version: TemplateVersion) => {
+    setTemplates((prev) =>
+      prev.map((tpl) =>
+        tpl.id === version.templateId
+          ? { ...tpl, name: version.name, kind: version.kind as ReportingTemplateKind, body: version.body, updatedAt: new Date().toISOString() }
+          : tpl,
+      ),
+    );
+    setActiveTab('edit');
+    flashSaveState('saved');
+  }, [flashSaveState]);
 
   const resetToDefaults = useCallback(() => {
     const ok = window.confirm('Reset templates to defaults? This will overwrite your saved templates.');
@@ -393,16 +489,123 @@ export default function CreateReportingTemplatesPage60() {
                   </label>
                 </div>
 
-                <label className="flex flex-col gap-1">
-                  <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Template body</span>
-                  <textarea
-                    value={selectedTemplate.body}
-                    onChange={(e) => updateSelectedTemplate({ body: e.target.value })}
-                    className="min-h-[320px] px-3 py-2 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-mono"
-                    placeholder="Write markdown here…"
-                    spellCheck={false}
+                {/* Tab navigation */}
+                <div className="border-b border-zinc-200 dark:border-zinc-800">
+                  <div role="tablist" aria-label="Template editor panes" className="flex gap-2 overflow-x-auto">
+                    {EDITOR_TABS.map((tab) => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={activeTab === tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`px-4 py-2 text-sm font-semibold border-b-2 transition shrink-0 ${
+                          activeTab === tab.id
+                            ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400'
+                            : 'border-transparent text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
+                        }`}
+                      >
+                        {tab.label}
+                        {tab.id === 'versions' && versionCount > 0 && (
+                          <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+                            {versionCount}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {activeTab === 'edit' ? (
+                  <label className="flex flex-col gap-1">
+                    <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Template body</span>
+                    <textarea
+                      value={selectedTemplate.body}
+                      onChange={(e) => updateSelectedTemplate({ body: e.target.value })}
+                      className="min-h-[320px] px-3 py-2 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-mono"
+                      placeholder="Write markdown here…"
+                      spellCheck={false}
+                    />
+                  </label>
+                ) : activeTab === 'preview' ? (
+                  <TemplateMarkdownPreview
+                    body={selectedTemplate.body}
+                    templateName={selectedTemplate.name}
+                    isLoading={!hydrated}
                   />
-                </label>
+                ) : activeTab === 'split' ? (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <label className="flex flex-col gap-1">
+                      <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Template body</span>
+                      <textarea
+                        value={selectedTemplate.body}
+                        onChange={(e) => updateSelectedTemplate({ body: e.target.value })}
+                        className="min-h-[420px] px-3 py-2 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-mono"
+                        placeholder="Write markdown here…"
+                        spellCheck={false}
+                      />
+                    </label>
+                    <TemplateMarkdownPreview
+                      body={selectedTemplate.body}
+                      templateName={selectedTemplate.name}
+                      isLoading={!hydrated}
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Version History</div>
+                      <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                        {versionCount} {versionCount === 1 ? 'version' : 'versions'} saved
+                      </span>
+                    </div>
+                    {versionCount === 0 ? (
+                      <div className="rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 p-6 text-center">
+                        <p className="text-sm text-zinc-500 dark:text-zinc-400">No version history yet.</p>
+                        <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1">
+                          Previous versions are automatically saved when you edit the template body.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                        {versionHistory.map((version, idx) => (
+                          <div
+                            key={version.id}
+                            className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+                                    v{versionCount - idx}
+                                  </span>
+                                  <span className="text-xs text-zinc-400 dark:text-zinc-500">
+                                    {new Date(version.savedAt).toLocaleString('en-US', {
+                                      month: 'short',
+                                      day: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                    })}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 truncate max-w-[300px]">
+                                  {version.name}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleRestoreVersion(version)}
+                                className="shrink-0 text-xs px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium transition"
+                              >
+                                Restore
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-900/20 p-4">
                   <div className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-1">Selection</div>

@@ -2,6 +2,12 @@
 
 import React, { useState, useMemo } from "react";
 import { FuzzingRun, RunStatus, RunSeverity } from "./types";
+import { useDataTableKeyboardNav } from "./use-data-table-keyboard-nav";
+import {
+  getSortIndicator,
+  getNextSortState,
+  type SortState,
+} from "./run-history-sort-utils";
 
 interface RunHistoryTableProps {
   /** Array of fuzzing runs to display */
@@ -110,26 +116,53 @@ export default function EnhancedRunHistoryTable({
   onToggleRunSelection,
   onToggleAllRunsSelection,
 }: RunHistoryTableProps) {
-  const [sortField, setSortField] = useState<keyof FuzzingRun>("id");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  // Single source of truth for the active sort column + direction. Keeping
+  // field and order together lets the sort-indicator helpers (#838) derive the
+  // correct arrow/aria-sort for every header from one value.
+  const [sort, setSort] = useState<SortState<keyof FuzzingRun & string>>({
+    field: "id",
+    order: "desc",
+  });
 
   const sortedRuns = useMemo(() => {
     return [...runs].sort((a: FuzzingRun, b: FuzzingRun) => {
-      const valA = a[sortField] ?? "";
-      const valB = b[sortField] ?? "";
-      if (valA < valB) return sortOrder === "asc" ? -1 : 1;
-      if (valA > valB) return sortOrder === "asc" ? 1 : -1;
+      const valA = a[sort.field] ?? "";
+      const valB = b[sort.field] ?? "";
+      if (valA < valB) return sort.order === "asc" ? -1 : 1;
+      if (valA > valB) return sort.order === "asc" ? 1 : -1;
       return 0;
     });
-  }, [runs, sortField, sortOrder]);
+  }, [runs, sort]);
 
-  const toggleSort = (field: keyof FuzzingRun) => {
-    if (sortField === field) {
-      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-    } else {
-      setSortField(field);
-      setSortOrder("desc");
-    }
+  const { getRowProps } = useDataTableKeyboardNav({
+    rowCount: sortedRuns.length,
+    onActivate: (index) => {
+      const run = sortedRuns[index];
+      if (run) {
+        onSelectRun(run.id);
+      }
+    },
+  });
+
+  const toggleSort = (field: keyof FuzzingRun & string) => {
+    setSort((current) => getNextSortState(current, field));
+  };
+
+  /**
+   * Render the sort glyph for a column: a bold up/down arrow when the column is
+   * active, and a dimmed neutral ↕ on inactive sortable columns so it's always
+   * clear which column drives the current order (#838).
+   */
+  const renderSortGlyph = (field: keyof FuzzingRun & string) => {
+    const indicator = getSortIndicator(field, sort);
+    return (
+      <span
+        aria-hidden="true"
+        className={indicator.active ? "text-blue-600 dark:text-blue-400" : "text-zinc-300 dark:text-zinc-600"}
+      >
+        {indicator.symbol}
+      </span>
+    );
   };
 
   if (runs.length === 0) {
@@ -164,7 +197,7 @@ export default function EnhancedRunHistoryTable({
   return (
     <div className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl overflow-hidden shadow-2xl transition-all hover:shadow-blue-500/5">
       <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
+        <table className="w-full text-left border-collapse" aria-label="Fuzzing run history">
           <thead>
             <tr className="bg-zinc-50/50 dark:bg-zinc-900/50 border-b border-zinc-100 dark:border-zinc-900">
               {onToggleRunSelection && (
@@ -190,11 +223,16 @@ export default function EnhancedRunHistoryTable({
               )}
               {visibleColumns.includes("id") && (
                 <th
+                  className={`px-6 py-5 text-[10px] font-bold uppercase tracking-widest cursor-pointer transition-colors ${
+                    sortField === "id"
+                      ? "text-blue-600 dark:text-blue-400"
+                      : "text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+                  }`}
                   className="px-6 py-5 text-[10px] font-bold text-zinc-400 uppercase tracking-widest cursor-pointer hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+                  aria-sort={getSortIndicator("id", sort).ariaSort}
                   onClick={() => toggleSort("id")}
                 >
-                  Run Identifier{" "}
-                  {sortField === "id" && (sortOrder === "asc" ? "↑" : "↓")}
+                  Run Identifier {renderSortGlyph("id")}
                 </th>
               )}
               {visibleColumns.includes("status") && (
@@ -209,22 +247,30 @@ export default function EnhancedRunHistoryTable({
               )}
               {visibleColumns.includes("duration") && (
                 <th
+                  className={`px-6 py-5 text-[10px] font-bold uppercase tracking-widest text-right cursor-pointer transition-colors ${
+                    sortField === "duration"
+                      ? "text-blue-600 dark:text-blue-400"
+                      : "text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+                  }`}
                   className="px-6 py-5 text-[10px] font-bold text-zinc-400 uppercase tracking-widest text-right cursor-pointer hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+                  aria-sort={getSortIndicator("duration", sort).ariaSort}
                   onClick={() => toggleSort("duration")}
                 >
-                  Timeline{" "}
-                  {sortField === "duration" &&
-                    (sortOrder === "asc" ? "↑" : "↓")}
+                  Timeline {renderSortGlyph("duration")}
                 </th>
               )}
               {visibleColumns.includes("seedCount") && (
                 <th
+                  className={`px-6 py-5 text-[10px] font-bold uppercase tracking-widest text-right cursor-pointer transition-colors ${
+                    sortField === "seedCount"
+                      ? "text-blue-600 dark:text-blue-400"
+                      : "text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+                  }`}
                   className="px-6 py-5 text-[10px] font-bold text-zinc-400 uppercase tracking-widest text-right cursor-pointer hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+                  aria-sort={getSortIndicator("seedCount", sort).ariaSort}
                   onClick={() => toggleSort("seedCount")}
                 >
-                  Vectors{" "}
-                  {sortField === "seedCount" &&
-                    (sortOrder === "asc" ? "↑" : "↓")}
+                  Vectors {renderSortGlyph("seedCount")}
                 </th>
               )}
               {visibleColumns.includes("cpu") && (
@@ -240,9 +286,10 @@ export default function EnhancedRunHistoryTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-50 dark:divide-zinc-900/50">
-            {sortedRuns.map((run) => (
+            {sortedRuns.map((run, index) => (
               <tr
                 key={run.id}
+                {...getRowProps(index)}
                 className={`group transition-all cursor-pointer ${
                   selectedRunIds.has(run.id) 
                     ? "bg-blue-50/80 dark:bg-blue-900/20" 
@@ -253,6 +300,7 @@ export default function EnhancedRunHistoryTable({
                      onSelectRun(run.id);
                   }
                 }}
+                aria-label={`Fuzzing run ${run.id}, status ${run.status}`}
               >
                 {onToggleRunSelection && (
                   <td className="px-6 py-5" onClick={(e) => e.stopPropagation()}>
@@ -266,13 +314,13 @@ export default function EnhancedRunHistoryTable({
                     </div>
                   </td>
                 )}
-                {visibleColumns.includes("id") && (
-                  <td className="px-6 py-5">
-                    <div className="flex flex-col">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100 font-mono group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                          #{run.id.split("-").pop()}
-                        </span>
+{visibleColumns.includes("id") && (
+                   <td className="px-6 py-5">
+                     <div className="flex flex-col">
+                       <div className="flex items-center gap-1.5">
+                         <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100 font-mono group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" title={run.id}>
+                           #{run.id.split("-").pop()}
+                         </span>
                         {run.annotations && run.annotations.length > 0 && (
                           <svg
                             className="w-3.5 h-3.5 text-indigo-500"

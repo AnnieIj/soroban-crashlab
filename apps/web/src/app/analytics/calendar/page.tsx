@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { FuzzingRun } from '../../types';
+import { fetchRuns } from '../../../lib/api-client';
 
 type DayData = {
   date: string;
@@ -182,8 +183,7 @@ export default function CalendarPage() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/runs')
-      .then((res) => res.json())
+    fetchRuns()
       .then((data) => {
         if (!cancelled) {
           const apiRuns: FuzzingRun[] = data.runs ?? [];
@@ -254,7 +254,7 @@ export default function CalendarPage() {
         </div>
 
         {dataState === 'loading' && (
-          <div className="card card-padding flex items-center justify-center py-16">
+          <div role="status" aria-live="polite" className="card card-padding flex items-center justify-center py-16">
             <div className="flex items-center gap-3">
               <div className="w-5 h-5 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#0A66C2', borderTopColor: 'transparent' }} />
               <span className="text-meta">Loading run data...</span>
@@ -264,22 +264,22 @@ export default function CalendarPage() {
 
         {dataState === 'success' && (
           <>
-            <div className="mb-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="card card-padding">
-                <p className="stat-value text-xl">{stats.totalRuns}</p>
-                <p className="text-meta">Total runs</p>
+            <div className="mb-6 grid grid-cols-1 min-[360px]:grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="card card-padding min-w-0 overflow-hidden">
+                <p className="stat-value text-lg sm:text-xl leading-tight break-all">{stats.totalRuns}</p>
+                <p className="text-meta wrap-break-word leading-snug">Total runs</p>
               </div>
-              <div className="card card-padding">
-                <p className="stat-value text-xl">{stats.totalDays}</p>
-                <p className="text-meta">Active days</p>
+              <div className="card card-padding min-w-0 overflow-hidden">
+                <p className="stat-value text-lg sm:text-xl leading-tight break-all">{stats.totalDays}</p>
+                <p className="text-meta wrap-break-word leading-snug">Active days</p>
               </div>
-              <div className="card card-padding">
-                <p className="stat-value text-xl">{stats.totalFailed}</p>
-                <p className="text-meta">Failed runs</p>
+              <div className="card card-padding min-w-0 overflow-hidden">
+                <p className="stat-value text-lg sm:text-xl leading-tight break-all">{stats.totalFailed}</p>
+                <p className="text-meta wrap-break-word leading-snug">Failed runs</p>
               </div>
-              <div className="card card-padding">
-                <p className="stat-value text-xl">{stats.avgPerDay}</p>
-                <p className="text-meta">Avg runs / day</p>
+              <div className="card card-padding min-w-0 overflow-hidden">
+                <p className="stat-value text-lg sm:text-xl leading-tight break-all">{stats.avgPerDay}</p>
+                <p className="text-meta wrap-break-word leading-snug">Avg runs / day</p>
               </div>
             </div>
 

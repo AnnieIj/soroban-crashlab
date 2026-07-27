@@ -3,12 +3,11 @@
 import { useEffect, useState } from 'react';
 import type { FuzzingRun } from '../../types';
 import ImplementRunWorkflowBoardPage58 from '../../implement-run-workflow-board-page-58';
+import { fetchRuns as fetchRunsFromApi } from '../../../lib/api-client';
 
 async function fetchRuns(): Promise<FuzzingRun[]> {
-  const res = await fetch('/api/runs');
-  if (!res.ok) throw new Error('Failed to fetch runs');
-  const data = await res.json();
-  return data.runs as FuzzingRun[];
+  const data = await fetchRunsFromApi();
+  return data.runs ?? [];
 }
 
 type PageDataState = 'loading' | 'success' | 'error';
