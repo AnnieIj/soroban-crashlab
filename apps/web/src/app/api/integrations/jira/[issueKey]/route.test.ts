@@ -3,10 +3,60 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { GET } from './route';
+import { GET, POST } from './route';
 import * as jiraIssues from '@/lib/integrations/jira-issues';
 
 vi.mock('@/lib/integrations/jira-issues');
+
+describe('POST /api/integrations/jira', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('returns 400 for missing summary', async () => {
+    const request = new Request('http://localhost/api/integrations/jira', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description: 'Body only' }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.error).toContain('summary');
+  });
+
+  it('returns 200 with created issue data', async () => {
+    const mockIssue = {
+      key: 'CRASH-123',
+      summary: 'Crash report issue',
+      status: 'To Do',
+      assignee: null,
+      url: 'https://jira.example.com/browse/CRASH-123',
+    };
+
+    vi.mocked(jiraIssues.createJiraIssue).mockResolvedValue(mockIssue);
+
+    const request = new Request('http://localhost/api/integrations/jira', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ summary: 'Crash report issue', description: 'details' }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.issue).toEqual(mockIssue);
+    expect(jiraIssues.createJiraIssue).toHaveBeenCalledWith({
+      summary: 'Crash report issue',
+      description: 'details',
+      projectKey: undefined,
+      issueType: undefined,
+    });
+  });
+});
 
 describe('GET /api/integrations/jira/[issueKey]', () => {
   beforeEach(() => {
