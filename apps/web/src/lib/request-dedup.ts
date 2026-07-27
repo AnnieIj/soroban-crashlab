@@ -11,6 +11,21 @@
 const inFlightRequests = new Map<string, Promise<unknown>>();
 const DEFAULT_TIMEOUT_MS = 10_000;
 
+/**
+ * Thrown when a deduped request completes with a non-ok status. Callers that
+ * branch on the status code (for example `fetchRun`, which maps 404 to `null`)
+ * need it structurally rather than having to parse the message.
+ */
+export class HttpError extends Error {
+  readonly status: number;
+
+  constructor(status: number) {
+    super(`HTTP ${status}`);
+    this.name = 'HttpError';
+    this.status = status;
+  }
+}
+
 export function dedupedFetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   const existing = inFlightRequests.get(url);
   if (existing) return existing as Promise<T>;
@@ -20,7 +35,7 @@ export function dedupedFetchJson<T>(url: string, signal?: AbortSignal): Promise<
 
   const request = fetch(url, { signal: combinedSignal })
     .then((res) => {
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) throw new HttpError(res.status);
       return res.json() as Promise<T>;
     })
     .finally(() => {
