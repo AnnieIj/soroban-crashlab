@@ -15,6 +15,13 @@ describe('GET /api/runs', () => {
     return new NextRequest(url, { method: 'GET' });
   }
 
+  /** Successful routes reply with the `{ data, total? }` envelope from `successResponse`. */
+  async function readEnvelope(
+    response: Response,
+  ): Promise<{ data: { runs?: unknown }; total?: number }> {
+    return (await response.json()) as { data: { runs?: unknown }; total?: number };
+  }
+
   it('returns mock data when backend is not configured', async () => {
     vi.stubEnv('NEXT_PUBLIC_API_URL', '');
     vi.stubEnv('NEXT_PUBLIC_ENABLE_MOCK_DATA', 'true');
@@ -23,9 +30,9 @@ describe('GET /api/runs', () => {
     const response = await GET(request);
 
     expect(response.status).toBe(200);
-    const json = await response.json() as Record<string, unknown>;
-    expect(json).toHaveProperty('runs');
-    expect(Array.isArray(json.runs)).toBe(true);
+    const json = await readEnvelope(response);
+    expect(json.data).toHaveProperty('runs');
+    expect(Array.isArray(json.data.runs)).toBe(true);
     expect(json).toHaveProperty('total');
   });
 
@@ -35,9 +42,9 @@ describe('GET /api/runs', () => {
     const response = await GET(request);
 
     expect(response.status).toBe(200);
-    const json = await response.json() as Record<string, unknown>;
-    expect(Array.isArray(json.runs)).toBe(true);
-    expect((json.total as number) > 0).toBe(true);
+    const json = await readEnvelope(response);
+    expect(Array.isArray(json.data.runs)).toBe(true);
+    expect(json.total as number).toBeGreaterThan(0);
   });
 
   it('returns error when mock data is disabled and no backend configured', async () => {
@@ -107,7 +114,7 @@ describe('GET /api/runs', () => {
     const response = await GET(request);
 
     expect(response.status).toBe(200);
-    const json = await response.json() as Record<string, unknown>;
-    expect(Array.isArray(json.runs)).toBe(true);
+    const json = await readEnvelope(response);
+    expect(Array.isArray(json.data.runs)).toBe(true);
   });
 });
