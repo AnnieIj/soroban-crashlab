@@ -68,7 +68,7 @@ function generateCalendarWeeks(data: DayData[], months: number = 4) {
   const weeks: CalendarCell[][] = [];
   const monthMarkers: { index: number; label: string }[] = [];
 
-  let current = new Date(startDate);
+  const current = new Date(startDate);
   let week: CalendarCell[] = [];
   let cellIndex = 0;
   let lastMonth = -1;

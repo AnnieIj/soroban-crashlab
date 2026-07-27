@@ -1,9 +1,7 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, useSyncExternalStore } from 'react';
-
-type Theme = 'light' | 'dark';
-const STORAGE_KEY = 'crashlab:theme';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { STORAGE_KEY, parseTheme, resolveEffectiveTheme, nextToggledTheme, type Theme } from './theme-utils';
 
 interface ThemeContextType {
   theme: Theme;
@@ -17,14 +15,18 @@ const ThemeContext = createContext<ThemeContextType>({
   mounted: false,
 });
 
-function getInitialTheme(): Theme {
-  if (typeof window === 'undefined') return 'light';
+function getStoredTheme(): Theme | null {
+  if (typeof window === 'undefined') return null;
   try {
-    const saved = localStorage.getItem(STORAGE_KEY) as Theme | null;
-    if (saved === 'light' || saved === 'dark') return saved;
-    if (window.matchMedia('(prefers-color-scheme: dark)').matches) return 'dark';
-  } catch { /* ignore */ }
-  return 'light';
+    return parseTheme(localStorage.getItem(STORAGE_KEY));
+  } catch {
+    return null;
+  }
+}
+
+function getSystemPrefersDark(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.matchMedia('(prefers-color-scheme: dark)').matches;
 }
 
 function subscribeToMount(cb: () => void): () => void {
@@ -47,19 +49,53 @@ export function useTheme() {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(getInitialTheme);
+  const [userTheme, setUserTheme] = useState<Theme | null>(getStoredTheme);
+  const [systemPrefersDark, setSystemPrefersDark] = useState<boolean>(getSystemPrefersDark);
   const mounted = useSyncExternalStore(subscribeToMount, getMountSnapshot, getMountServerSnapshot);
 
+  const theme = useMemo<Theme>(
+    () => resolveEffectiveTheme(userTheme, systemPrefersDark),
+    [userTheme, systemPrefersDark],
+  );
+
+  // Keep the effective theme in sync when the OS-level color scheme changes.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = (event: MediaQueryListEvent) => {
+      setSystemPrefersDark(event.matches);
+    };
+    mediaQuery.addEventListener('change', onChange);
+    return () => mediaQuery.removeEventListener('change', onChange);
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+  }, [theme]);
+
+  // Keep multiple tabs in sync when the user changes their override elsewhere.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== STORAGE_KEY) return;
+      setUserTheme(parseTheme(event.newValue));
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
   const toggle = useCallback(() => {
-    setTheme(prev => {
-      const next = prev === 'light' ? 'dark' : 'light';
+    setUserTheme((prev) => {
+      const next = nextToggledTheme(prev, systemPrefersDark);
       try {
         localStorage.setItem(STORAGE_KEY, next);
-        document.documentElement.classList.toggle('dark', next === 'dark');
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       return next;
     });
-  }, []);
+  }, [systemPrefersDark]);
 
   return (
     <ThemeContext.Provider value={{ theme, toggle, mounted }}>
