@@ -6,7 +6,7 @@ import {
   RunIssueLink,
   CampaignConfig,
 } from '../app/types';
-import { dedupedFetchJson } from './request-dedup';
+import { dedupedFetchJson, HttpError } from './request-dedup';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -162,11 +162,21 @@ export async function fetchRuns(signal?: AbortSignal): Promise<{ runs: FuzzingRu
   return api.runs.list(signal);
 }
 
+/**
+ * Status code of a failed request, if the error carries one. `apiFetch` rejects
+ * with `ApiError` while the deduped GET path rejects with `HttpError`, so
+ * matching on the shared `status` field covers both.
+ */
+function statusOf(err: unknown): number | undefined {
+  if (err instanceof ApiError || err instanceof HttpError) return err.status;
+  return undefined;
+}
+
 export async function fetchRun(id: string, signal?: AbortSignal): Promise<FuzzingRun | null> {
   try {
     return await api.runs.get(id, signal);
   } catch (err) {
-    if (err instanceof ApiError && err.status === 404) {
+    if (statusOf(err) === 404) {
       return null;
     }
     throw err;
