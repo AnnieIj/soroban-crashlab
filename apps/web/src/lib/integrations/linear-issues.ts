@@ -12,6 +12,11 @@ export interface ResolvedLinearLink {
   id: string;
 }
 
+export interface ParsedLinearIssueUrl {
+  team: string;
+  issueId: string;
+}
+
 export interface LinearIssue {
   identifier: string;
   title: string;
@@ -21,10 +26,45 @@ export interface LinearIssue {
 }
 
 /**
+ * Parses a Linear issue URL into its team and issue ID parts.
+ * Returns null if the URL isn't a recognizable Linear issue link.
+ */
+export function parseLinearIssueUrl(url: string): ParsedLinearIssueUrl | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+
+  if (parsed.hostname !== 'linear.app' && parsed.hostname !== 'www.linear.app') {
+    return null;
+  }
+
+  const match = parsed.pathname.match(/^\/([^/]+)\/issue\/([^/]+)\/?$/);
+  if (!match) return null;
+
+  const [, team, issueId] = match;
+  if (!team || !issueId) return null;
+
+  return { team, issueId };
+}
+
+/**
  * Builds a canonical Linear issue link without calling the API
  */
 export async function resolveLinearIssueLink(team: string, issueId: string): Promise<ResolvedLinearLink> {
   return { url: `https://linear.app/${team}/issue/${issueId}`, id: issueId };
+}
+
+/**
+ * Resolves a Linear issue URL to its metadata via the GraphQL API.
+ * Returns null if the URL isn't a Linear issue link or resolution fails.
+ */
+export async function resolveLinearIssueFromUrl(url: string): Promise<ResolvedLinearLink | null> {
+  const parsed = parseLinearIssueUrl(url);
+  if (!parsed) return null;
+  return resolveLinearIssueLink(parsed.team, parsed.issueId);
 }
 
 /**

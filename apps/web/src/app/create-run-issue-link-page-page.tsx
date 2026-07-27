@@ -4,6 +4,7 @@ import * as React from 'react';
 import { useState, useCallback } from 'react';
 import { FuzzingRun, RunIssueLink } from './types';
 import { validateIssueUrl, getIssueTypeFromUrl, getIssueFaviconUrl, addIssueLink, removeIssueLink } from './run-issue-utils';
+import { parseLinearIssueUrl } from '@/lib/integrations/linear-issues';
 
 interface RunIssueLinkPageProps {
   runs: FuzzingRun[];
@@ -166,7 +167,12 @@ const RunIssueLinkPage: React.FC<RunIssueLinkPageProps> = ({
 
   const handleIssueUrlBlur = useCallback(async () => {
     const href = formData.href.trim();
-    if (!href || !validateIssueUrl(href) || getIssueTypeFromUrl(href) !== 'GitHub Issue') {
+    if (!href || !validateIssueUrl(href)) {
+      return;
+    }
+    const issueType = getIssueTypeFromUrl(href);
+
+    if (issueType !== 'GitHub Issue' && issueType !== 'Linear Issue') {
       return;
     }
     // Don't overwrite a label the user already typed.
@@ -177,23 +183,40 @@ const RunIssueLinkPage: React.FC<RunIssueLinkPageProps> = ({
     setResolveError(null);
 
     try {
-      const res = await fetch(`/api/integrations/github-issue?url=${encodeURIComponent(href)}`);
-      const json = await res.json();
+      let res;
+      let issue;
 
-      if (!res.ok) {
-        setResolveError(json?.error ?? 'Could not look up this issue automatically.');
-        return;
+      if (issueType === 'GitHub Issue') {
+        res = await fetch(`/api/integrations/github-issue?url=${encodeURIComponent(href)}`);
+        const json = await res.json();
+        if (!res.ok) {
+          setResolveError(json?.error ?? 'Could not look up this issue automatically.');
+          return;
+        }
+        issue = json?.data?.issue as { title?: string; resolved?: boolean } | undefined;
+      } else {
+        const parsed = parseLinearIssueUrl(href);
+        if (!parsed) {
+          setResolveError('Could not parse this Linear issue URL.');
+          return;
+        }
+        res = await fetch(`/api/integrations/linear/${encodeURIComponent(parsed.issueId)}`);
+        const json = await res.json();
+        if (!res.ok) {
+          setResolveError(json?.error ?? 'Could not look up this Linear issue automatically.');
+          return;
+        }
+        issue = json?.issue as { title?: string } | undefined;
       }
 
-      const issue = json?.data?.issue as { title?: string; resolved?: boolean } | undefined;
-      if (issue?.resolved && issue.title) {
+      if (issue?.title) {
         setFormData(prev => (prev.href === href && !prev.label.trim() ? { ...prev, label: issue.title as string } : prev));
-        setResolveNotice('Title filled in automatically from GitHub.');
+        setResolveNotice('Title filled in automatically.');
       } else {
         setResolveError('Could not fetch a title automatically – enter one manually.');
       }
     } catch {
-      setResolveError('Could not reach GitHub to look up this issue – enter a title manually.');
+      setResolveError('Could not reach the issue tracker – enter a title manually.');
     } finally {
       setIsResolvingTitle(false);
     }
@@ -337,7 +360,7 @@ const RunIssueLinkPage: React.FC<RunIssueLinkPageProps> = ({
                     )}
                     {isResolvingTitle && (
                       <p className="text-xs text-gray-500 mt-1" role="status">
-                        Looking up issue title from GitHub…
+                        Looking up issue title…
                       </p>
                     )}
                     {!isResolvingTitle && resolveNotice && (
