@@ -51,6 +51,12 @@ export default async function RunDetailPage({ params }: RunDetailPageProps) {
                     <div className="flex flex-wrap gap-2">
                         <DownloadArtifactsButton run={run} ledgerChanges={ledgerChanges} />
                         <Link
+                            href={`/runs/${run.id}/sequence`}
+                            className="inline-flex items-center justify-center h-10 px-4 rounded-full border border-zinc-300 dark:border-zinc-700 font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
+                        >
+                            Sequence diagram
+                        </Link>
+                        <Link
                             href="/"
                             className="inline-flex items-center justify-center h-10 px-4 rounded-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 transition"
                         >
