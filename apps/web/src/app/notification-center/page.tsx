@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { DEFAULT_CHANNELS, loadPreferences, savePreferences, mockNotifications, type NotificationPreference } from '../notification-preferences-utils';
+import { DEFAULT_CHANNELS, loadChannelPreferences, saveChannelPreferences, mockNotifications, type NotificationPreference } from '../notification-preferences-utils';
 
 export default function NotificationCenterPage() {
   const [notifications, setNotifications] = useState(mockNotifications);
@@ -11,7 +11,7 @@ export default function NotificationCenterPage() {
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate notification preferences once
-    setPreferences(loadPreferences());
+    setPreferences(loadChannelPreferences());
     setLoading(false);
   }, []);
 
@@ -30,7 +30,7 @@ export default function NotificationCenterPage() {
       p.channelId === channelId ? { ...p, enabled: !p.enabled } : p
     );
     setPreferences(updated);
-    savePreferences(updated);
+    saveChannelPreferences(updated);
   };
 
   const handleToggleNotificationType = (channelId: string, type: keyof typeof preferences[0]['notificationTypes']) => {
@@ -40,7 +40,7 @@ export default function NotificationCenterPage() {
         : p
     );
     setPreferences(updated);
-    savePreferences(updated);
+    saveChannelPreferences(updated);
   };
 
   const handleToggleQuietHours = (channelId: string) => {
@@ -50,7 +50,7 @@ export default function NotificationCenterPage() {
         : p
     );
     setPreferences(updated);
-    savePreferences(updated);
+    saveChannelPreferences(updated);
   };
 
   const unreadCount = notifications.filter(n => !n.read).length;
