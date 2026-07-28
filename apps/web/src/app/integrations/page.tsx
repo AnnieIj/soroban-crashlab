@@ -172,6 +172,19 @@ const INTEGRATIONS: Integration[] = [
     category: 'Monitoring'
   },
   {
+    id: 'sentry',
+    title: 'Sentry Integration',
+    description: 'Automatically send crash reports and error traces from fuzzing runs to Sentry for centralized monitoring, alerting, and debugging workflows.',
+    icon: (
+      <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z" />
+      </svg>
+    ),
+    href: '/integrations/sentry',
+    status: 'available',
+    category: 'Error Tracking'
+  },
+  {
     id: 'auth',
     title: 'External Authentication',
     description: 'Integrate with external authentication providers to manage user access and security.',
