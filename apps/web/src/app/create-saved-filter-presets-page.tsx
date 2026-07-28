@@ -12,8 +12,8 @@ import {
 } from './saved-filter-presets-utils';
 
 export default function CreateSavedFilterPresetsPage() {
-  const [presets, setPresets] = useState<FilterPreset[]>([]);
-  const [hydrated, setHydrated] = useState(false);
+  const [presets, setPresets] = useState<FilterPreset[]>(() => (typeof window === 'undefined' ? [] : readPresets()));
+  const hydrated = true;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newName, setNewName] = useState('');
@@ -25,13 +25,8 @@ export default function CreateSavedFilterPresetsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setPresets(readPresets());
-    setHydrated(true);
-  }, []);
-
-  useEffect(() => {
-    if (hydrated) savePresets(presets);
-  }, [hydrated, presets]);
+    savePresets(presets);
+  }, [presets]);
 
   const selectedPreset = useMemo(
     () => presets.find((p) => p.id === selectedId) ?? null,

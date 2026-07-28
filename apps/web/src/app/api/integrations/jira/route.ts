@@ -1,17 +1,6 @@
-/**
- * GET /api/integrations/jira/:issueKey
- *
- * Fetches Jira issue metadata for the specified issue key.
- * Returns 404 if the issue is not found or credentials are not configured.
- */
-
 import { NextResponse } from 'next/server';
 import { withRouteErrorHandling, jsonError, readJsonBody } from '@/lib/route-handler';
-import { createJiraIssue, fetchJiraIssue } from '@/lib/integrations/jira-issues';
-
-interface RouteContext {
-  params: Promise<{ issueKey: string }>;
-}
+import { createJiraIssue } from '@/lib/integrations/jira-issues';
 
 export const POST = withRouteErrorHandling(
   'POST /api/integrations/jira',
@@ -46,24 +35,4 @@ export const POST = withRouteErrorHandling(
     return NextResponse.json({ issue });
   },
   'Failed to create Jira issue',
-);
-
-export const GET = withRouteErrorHandling(
-  'GET /api/integrations/jira/[issueKey]',
-  async (_request: Request, context: RouteContext) => {
-    const { issueKey } = await context.params;
-
-    if (!issueKey || issueKey.trim() === '') {
-      return jsonError('Issue key is required', 400);
-    }
-
-    const issue = await fetchJiraIssue(issueKey);
-
-    if (!issue) {
-      return jsonError('Issue not found or Jira not configured', 404);
-    }
-
-    return NextResponse.json({ issue });
-  },
-  'Failed to fetch Jira issue',
 );
