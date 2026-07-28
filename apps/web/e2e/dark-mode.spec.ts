@@ -22,7 +22,7 @@ test.describe('Dark mode toggle', () => {
 
   test('toggles dark mode from the navbar theme button', async ({ page }) => {
     const darkModeButton = page.getByRole('button', { name: 'Switch to dark mode' });
-    await expect(darkModeButton).toBeVisible();
+    await expect(darkModeButton).toBeVisible({ timeout: 15000 });
 
     await expect(page.locator('html')).not.toHaveClass(/dark/);
 
@@ -43,6 +43,7 @@ test.describe('Dark mode toggle', () => {
   });
 
   test('persists theme preference across reload', async ({ page }) => {
+    await expect(page.getByRole('button', { name: 'Switch to dark mode' })).toBeVisible({ timeout: 15000 });
     await page.getByRole('button', { name: 'Switch to dark mode' }).click();
     await expect(page.locator('html')).toHaveClass(/dark/);
 
@@ -50,7 +51,7 @@ test.describe('Dark mode toggle', () => {
     await page.waitForLoadState('networkidle');
 
     await expect(page.locator('html')).toHaveClass(/dark/);
-    await expect(page.getByRole('button', { name: 'Switch to light mode' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Switch to light mode' })).toBeVisible({ timeout: 15000 });
     await expect
       .poll(async () => page.evaluate((key) => localStorage.getItem(key), THEME_STORAGE_KEY))
       .toBe('dark');

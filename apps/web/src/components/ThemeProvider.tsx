@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 type Theme = 'light' | 'dark';
 const STORAGE_KEY = 'crashlab:theme';
@@ -32,29 +32,22 @@ function getSystemPrefersDark(): boolean {
   return window.matchMedia('(prefers-color-scheme: dark)').matches;
 }
 
-function subscribeToMount(cb: () => void): () => void {
-  if (typeof window === 'undefined') return () => {};
-  // Trigger once on subscribe (post-hydration)
-  const id = requestAnimationFrame(() => cb());
-  return () => cancelAnimationFrame(id);
-}
-
-function getMountSnapshot(): boolean {
-  return typeof document !== 'undefined';
-}
-
-function getMountServerSnapshot(): boolean {
-  return false;
-}
-
 export function useTheme() {
   return useContext(ThemeContext);
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [userTheme, setUserTheme] = useState<Theme | null>(getStoredTheme);
-  const [systemPrefersDark, setSystemPrefersDark] = useState<boolean>(getSystemPrefersDark);
-  const mounted = useSyncExternalStore(subscribeToMount, getMountSnapshot, getMountServerSnapshot);
+  const [userTheme, setUserTheme] = useState<Theme | null>(null);
+  const [systemPrefersDark, setSystemPrefersDark] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    // Hydrate theme from localStorage / system preference after mount.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- client-only theme hydration
+    setUserTheme(getStoredTheme());
+    setSystemPrefersDark(getSystemPrefersDark());
+    setMounted(true);
+  }, []);
 
   const theme = useMemo<Theme>(() => {
     if (userTheme) return userTheme;
