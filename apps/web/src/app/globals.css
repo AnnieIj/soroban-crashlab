@@ -48,6 +48,20 @@
   --chip-bg: #E8E8E8;
   --hover-bg: #F4F2EE;
   --highlight-bg: #E7F0F9;
+
+  /* Status badge tokens — used by .status-badge-* utility classes */
+  --status-running-bg: #E7F0F9;
+  --status-running-fg: #0A66C2;
+  --status-running-border: #BADCF7;
+  --status-completed-bg: rgba(5, 118, 50, 0.10);
+  --status-completed-fg: #057642;
+  --status-completed-border: rgba(5, 118, 50, 0.25);
+  --status-failed-bg: rgba(204, 16, 22, 0.10);
+  --status-failed-fg: #CC1016;
+  --status-failed-border: rgba(204, 16, 22, 0.25);
+  --status-cancelled-bg: #E8E8E8;
+  --status-cancelled-fg: #666666;
+  --status-cancelled-border: #D0D0D0;
 }
 
 .dark {
@@ -66,6 +80,20 @@
   --chip-bg: #1a1a1a;
   --hover-bg: rgba(255, 255, 255, 0.03);
   --highlight-bg: rgba(10, 102, 194, 0.1);
+
+  /* Status badge tokens — dark mode overrides */
+  --status-running-bg: rgba(10, 102, 194, 0.15);
+  --status-running-fg: #5AA7F0;
+  --status-running-border: rgba(10, 102, 194, 0.35);
+  --status-completed-bg: rgba(5, 118, 50, 0.15);
+  --status-completed-fg: #229B6B;
+  --status-completed-border: rgba(5, 118, 50, 0.30);
+  --status-failed-bg: rgba(239, 68, 68, 0.15);
+  --status-failed-fg: #EF4444;
+  --status-failed-border: rgba(239, 68, 68, 0.30);
+  --status-cancelled-bg: #1a1a1a;
+  --status-cancelled-fg: #808080;
+  --status-cancelled-border: #2a2a2a;
 }
 
 html {
@@ -322,6 +350,7 @@ html.theme-ready body {
 .badge-running {
   background: var(--highlight-bg);
   color: #0A66C2;
+  animation: status-pill-pulse 2s ease-in-out infinite;
 }
 
 .badge-completed {
@@ -512,6 +541,16 @@ html.theme-ready body {
   0% { transform: translateY(0); }
   50% { transform: translateY(-4px); }
   100% { transform: translateY(0); }
+}
+
+/**
+ * status-pill-pulse — subtle opacity/scale loop for live "running" state pills.
+ * Timing (2 s, ease-in-out) matches the parallax-drift convention in this file.
+ * Deliberately gentle: scale stays within ±2% so text remains legible.
+ */
+@keyframes status-pill-pulse {
+  0%, 100% { opacity: 1;    box-shadow: 0 0 0 0   rgba(10, 102, 194, 0);    }
+  50%       { opacity: 0.85; box-shadow: 0 0 0 3px rgba(10, 102, 194, 0.18); }
 }
 
 .parallax-slow {
@@ -847,6 +886,13 @@ nav, header, .nav-bar {
     box-shadow: none !important;
   }
 
+  /* Status pill animations — disable the running-state pulse/glow */
+  .badge-running,
+  .status-badge-running {
+    animation: none !important;
+    box-shadow: none !important;
+  }
+
   .drawer.open {
     transform: translateX(0) !important;
     opacity: 1 !important;
@@ -945,6 +991,7 @@ nav, header, .nav-bar {
     --status-badge-bg: var(--status-running-bg);
     --status-badge-fg: var(--status-running-fg);
     --status-badge-border: var(--status-running-border);
+    animation: status-pill-pulse 2s ease-in-out infinite;
   }
 
   .status-badge-completed {
