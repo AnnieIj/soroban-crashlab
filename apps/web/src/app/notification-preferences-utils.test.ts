@@ -1,8 +1,6 @@
 import {
   DEFAULT_CHANNELS,
   DEFAULT_PREFERENCES,
-  loadPreferences,
-  savePreferences,
   mockNotifications,
 } from './notification-preferences-utils';
 

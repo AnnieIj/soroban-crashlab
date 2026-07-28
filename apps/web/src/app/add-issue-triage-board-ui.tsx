@@ -58,12 +58,15 @@ export default function IssueTriageBoard({ runs }: IssueTriageBoardProps) {
         const order = JSON.parse(saved);
         const reordered = order.map((id: string) => defaultColumns.find(c => c.id === id)).filter(Boolean);
         if (reordered.length === defaultColumns.length) {
+          // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate column order from localStorage
           setColumns(reordered);
         }
       } catch {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- fallback to defaults on parse failure
         setColumns(defaultColumns);
       }
     } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- initialize defaults when nothing saved
       setColumns(defaultColumns);
     }
   }, []);
