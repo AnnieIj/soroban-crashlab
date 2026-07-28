@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 
 const GITHUB_AUTH_URL = 'https://github.com/login/oauth/authorize';
