@@ -22,8 +22,11 @@ export const GET = withRouteErrorHandling(
     if (runsApiUrl) {
       const upstream = await fetch(
         `${runsApiUrl}/runs/${encodeURIComponent(id)}`,
-        { headers: { Accept: 'application/json' }, cache: 'no-store' },
-        { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(10_000) },
+        {
+          headers: { Accept: 'application/json' },
+          cache: 'no-store',
+          signal: AbortSignal.timeout(10_000),
+        },
       );
       if (upstream.status === 404) {
         return errorResponse('Run not found', status.notFound);
