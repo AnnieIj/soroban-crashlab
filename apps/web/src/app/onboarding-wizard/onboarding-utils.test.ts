@@ -1,6 +1,5 @@
 import {
   ONBOARDING_STEPS,
-  completeStep,
   getProgressPercentage,
 } from './onboarding-utils';
 
