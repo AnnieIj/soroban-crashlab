@@ -90,9 +90,9 @@ describe('POST /api/artifacts', () => {
     const response = await POST(request);
 
     expect(response.status).toBe(201);
-    const json = (await response.json()) as Record<string, unknown>;
-    expect(json).toHaveProperty('name', 'test-bundle.json');
-    expect(json).toHaveProperty('id', 'test-bundle.json');
+    const json = (await response.json()) as { data: { artifact: Record<string, unknown> } };
+    expect(json.data.artifact).toHaveProperty('name', 'test-bundle.json');
+    expect(json.data.artifact).toHaveProperty('id', 'test-bundle.json');
   });
 
   it('returns 400 when file is missing', async () => {
