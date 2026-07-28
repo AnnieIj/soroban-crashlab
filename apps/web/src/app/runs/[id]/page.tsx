@@ -9,6 +9,7 @@ import DownloadArtifactsButton from './DownloadArtifactsButton';
 import ContractStateDiffView from '../../components/ContractStateDiffView';
 import { summarizeStateChanges } from '../../components/state-diff-utils';
 import AddRunReplayHistoryWithTimestamps from '../../add-run-replay-history-with-timestamps';
+import RunMetadataEditorWrapper from './RunMetadataEditorWrapper';
 
 export const dynamic = 'force-dynamic';
 
@@ -67,6 +68,8 @@ export default async function RunDetailPage({ params }: RunDetailPageProps) {
                         finishedAt={formatDate(run.finishedAt)}
                     />
                 </div>
+
+                <RunMetadataEditorWrapper run={run} />
 
                 <RunIssueLinkPage53 issues={run.associatedIssues ?? []} />
 

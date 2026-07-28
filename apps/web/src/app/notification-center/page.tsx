@@ -1,18 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { DEFAULT_CHANNELS, loadPreferences, savePreferences, mockNotifications, type NotificationPreference } from '../notification-preferences-utils';
 
 export default function NotificationCenterPage() {
   const [notifications, setNotifications] = useState(mockNotifications);
-  const [preferences, setPreferences] = useState<NotificationPreference[]>([]);
+  const [preferences, setPreferences] = useState<NotificationPreference[]>(() => (typeof window === 'undefined' ? [] : loadPreferences()));
   const [activeTab, setActiveTab] = useState<'inbox' | 'preferences'>('inbox');
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    setPreferences(loadPreferences());
-    setLoading(false);
-  }, []);
+  const [loading] = useState(false);
 
   const handleMarkAsRead = (id: string) => {
     setNotifications(notifications.map(n =>
