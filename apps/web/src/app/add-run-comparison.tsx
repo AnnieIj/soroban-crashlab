@@ -159,7 +159,7 @@ export default function AddRunComparison({ runs }: RunComparisonProps) {
                     {metric.delta > 0 ? '+' : ''}{metric.delta.toFixed(1)}%
                   </span>
                 </div>
-                <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                   <div>
                     <div className="text-zinc-600 dark:text-zinc-400 mb-1">Run A</div>
                     <div className="font-mono text-zinc-900 dark:text-zinc-100">{metric.format(metric.valueA)}</div>

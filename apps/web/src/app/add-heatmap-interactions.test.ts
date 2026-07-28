@@ -9,9 +9,7 @@ import {
   METRICS,
   LEGEND_ITEMS,
   ContractHeatmapRow,
-  SelectedCell,
   MetricKey,
-  SeverityFilter,
 } from "./add-heatmap-interactions";
 
 // ---------------------------------------------------------------------------

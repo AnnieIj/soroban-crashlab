@@ -13,6 +13,15 @@ export interface CrashDetail {
     failureCategory: string;
     /** Stable signature for de-duplicating failures */
     signature: string;
+    /**
+     * Stable numeric hash derived from category + payload bytes.
+     * Mirrors the Rust `CrashGroupRecord.signature_hash` (u64) produced by the
+     * crash de-dup index.  Two failures with equal `signatureHash` values are
+     * considered equivalent regardless of which seed produced them.
+     *
+     * Stored as a JavaScript `number` (safe for hashes up to 2^53 – 1).
+     */
+    signatureHash?: number;
     /** Payload associated with the failing input */
     payload: string;
     /** Command or action used to replay locally */
@@ -60,6 +69,8 @@ export interface FuzzingRun {
     associatedIssues?: RunIssueLink[];
     /** Custom annotations and notes for the run */
     annotations?: string[];
+    /** User-defined tags for triage and filtering */
+    tags?: string[];
 }
 
 /**
@@ -108,4 +119,32 @@ export interface LedgerStateChange {
     changeType: LedgerChangeType;
     before?: string;
     after?: string;
+}
+
+export type CampaignSeedSource = 'random' | 'corpus' | 'replay';
+export type CampaignAuthMode = 'none' | 'mock' | 'keypair';
+
+export interface CampaignConfig {
+    seedSource: CampaignSeedSource;
+    authMode: CampaignAuthMode;
+    parallelism: number;
+    timeoutSeconds: number;
+}
+
+export type ArtifactType = 'seed' | 'log' | 'trace' | 'coverage' | 'bundle';
+
+/**
+ * A stored fuzzing artifact as displayed in the artifact explorer and
+ * preview modal.
+ */
+export interface Artifact {
+    id: string;
+    name: string;
+    type: ArtifactType;
+    /** Size in bytes */
+    size: number;
+    /** ISO 8601 timestamp */
+    updatedAt: string;
+    runId?: string;
+    content_hash?: string;
 }

@@ -1,8 +1,11 @@
 "use client";
-
-import { useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import type { FuzzingRun } from "./types";
 import { simulateSeedReplay } from "./replay";
+import AddRunReplayHistoryWithTimestamps, {
+  buildReplayHistoryEntryFromReplay,
+  recordRunReplayHistoryEntry,
+} from "./add-run-replay-history-with-timestamps";
 
 /**
  * Issue #275: Add Run replay UI
@@ -34,6 +37,8 @@ interface ReplayResult {
   seedsFailed: number;
   duration: number;
   traces: string[];
+  startedAt: string;
+  completedAt: string;
 }
 
 const DEFAULT_CONFIG: ReplayConfig = {
@@ -44,25 +49,11 @@ const DEFAULT_CONFIG: ReplayConfig = {
   timeoutMs: 30000,
 };
 
-const MOCK_RUNS: FuzzingRun[] = Array.from({ length: 5 }, (_, i) => ({
-  id: `run-${1000 + i}`,
-  status: "failed",
-  area: ["auth", "state", "budget", "xdr"][i % 4] as FuzzingRun["area"],
-  severity: ["high", "critical"][i % 2] as FuzzingRun["severity"],
-  duration: 120000 + Math.random() * 3600000,
-  seedCount: Math.floor(100 + Math.random() * 900),
-  cpuInstructions: Math.floor(400000 + Math.random() * 900000),
-  memoryBytes: Math.floor(1_500_000 + Math.random() * 8_000_000),
-  minResourceFee: Math.floor(500 + Math.random() * 5000),
-  crashDetail: {
-    failureCategory: "Panic",
-    signature: `sig:${1000 + i}:contract::transfer:assert_balance_nonnegative`,
-    payload: JSON.stringify({ contract: "token", method: "transfer" }),
-    replayAction: `cargo run --bin crash-replay -- --run-id run-${1000 + i}`,
-  },
-}));
+interface AddRunReplayUiProps {
+  runs: FuzzingRun[];
+}
 
-export default function AddRunReplayUi() {
+export default function AddRunReplayUi({ runs = [] }: AddRunReplayUiProps) {
   const [selectedRun, setSelectedRun] = useState<FuzzingRun | null>(null);
   const [config, setConfig] = useState<ReplayConfig>(DEFAULT_CONFIG);
   const [progress, setProgress] = useState<ReplayProgress>({
@@ -71,10 +62,10 @@ export default function AddRunReplayUi() {
     total: 0,
   });
   const [result, setResult] = useState<ReplayResult | null>(null);
-  const [replayHistory, setReplayHistory] = useState<ReplayResult[]>([]);
+  const [now, setNow] = useState(() => new Date());
 
   const handleSelectRun = (runId: string) => {
-    const run = MOCK_RUNS.find((r) => r.id === runId);
+    const run = runs.find((r) => r.id === runId);
     setSelectedRun(run ?? null);
     setResult(null);
     setProgress({ status: "idle", current: 0, total: 0 });
@@ -90,11 +81,13 @@ export default function AddRunReplayUi() {
           ? Math.floor(selectedRun.seedCount * 0.1)
           : config.customSeeds.split(",").filter((s) => s.trim()).length;
 
+    const startedAt = Date.now();
+
     setProgress({
       status: "running",
       current: 0,
       total: totalSeeds,
-      startTime: Date.now(),
+      startTime: startedAt,
     });
     setResult(null);
 
@@ -110,13 +103,17 @@ export default function AddRunReplayUi() {
 
       const { newRunId } = await simulateSeedReplay(selectedRun.id);
       const endTime = Date.now();
-      const duration = endTime - (progress.startTime ?? endTime);
+      const duration = endTime - startedAt;
+      const startedAtIso = new Date(startedAt).toISOString();
+      const completedAtIso = new Date(endTime).toISOString();
 
       const replayResult: ReplayResult = {
         runId: newRunId,
         seedsReplayed: totalSeeds,
         seedsFailed: Math.floor(totalSeeds * 0.05),
         duration,
+        startedAt: startedAtIso,
+        completedAt: completedAtIso,
         traces: [
           "Trace 1: contract::transfer -> assert_balance_nonnegative",
           "Trace 2: contract::mint -> overflow_check",
@@ -124,8 +121,18 @@ export default function AddRunReplayUi() {
         ],
       };
 
+      const historyEntry = buildReplayHistoryEntryFromReplay({
+        id: `replay-history-${newRunId}`,
+        sourceRunId: selectedRun.id,
+        replayRunId: newRunId,
+        startedAt: startedAtIso,
+        completedAt: completedAtIso,
+        seedsReplayed: replayResult.seedsReplayed,
+        seedsFailed: replayResult.seedsFailed,
+      });
+
       setResult(replayResult);
-      setReplayHistory((prev) => [replayResult, ...prev].slice(0, 5));
+      recordRunReplayHistoryEntry(historyEntry);
       setProgress((prev) => ({
         ...prev,
         status: "completed",
@@ -138,7 +145,17 @@ export default function AddRunReplayUi() {
         endTime: Date.now(),
       }));
     }
-  }, [selectedRun, config, progress.startTime]);
+  }, [selectedRun, config]);
+
+  useEffect(() => {
+    if (progress.status !== "running" || !progress.startTime) return;
+
+    const interval = window.setInterval(() => {
+      setNow(new Date());
+    }, 1000);
+
+    return () => window.clearInterval(interval);
+  }, [progress.startTime, progress.status]);
 
   const handleStopReplay = () => {
     setProgress((prev) => ({
@@ -153,6 +170,8 @@ export default function AddRunReplayUi() {
 
   const isReplaying = progress.status === "running";
   const canStartReplay = selectedRun && !isReplaying;
+
+  const failedRuns = runs.filter(r => r.status === 'failed');
 
   return (
     <section className="w-full rounded-[2.5rem] border border-black/[.08] bg-white p-8 dark:border-white/[.145] dark:bg-zinc-950">
@@ -186,8 +205,8 @@ export default function AddRunReplayUi() {
                 disabled={isReplaying}
                 className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 focus:ring-2 focus:ring-indigo-500 outline-none transition disabled:opacity-50"
               >
-                <option value="">Choose a run...</option>
-                {MOCK_RUNS.map((run) => (
+                <option value="">Choose a failed run...</option>
+                {failedRuns.map((run) => (
                   <option key={run.id} value={run.id}>
                     {run.id} - {run.area} ({run.seedCount} seeds)
                   </option>
@@ -394,7 +413,7 @@ export default function AddRunReplayUi() {
               {progress.startTime && (
                 <div className="text-xs text-zinc-500">
                   Elapsed:{" "}
-                  {Math.floor((Date.now() - progress.startTime) / 1000)}s
+                  {Math.floor((now.getTime() - progress.startTime) / 1000)}s
                 </div>
               )}
             </div>
@@ -454,35 +473,10 @@ export default function AddRunReplayUi() {
             </div>
           )}
 
-          {/* Replay History */}
-          {replayHistory.length > 0 && (
-            <div className="p-6 rounded-[2rem] border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900">
-              <h3 className="text-lg font-bold mb-4">Recent Replays</h3>
-              <div className="space-y-3">
-                {replayHistory.map((item, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center justify-between p-4 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800"
-                  >
-                    <div>
-                      <div className="font-mono text-sm font-bold text-zinc-900 dark:text-zinc-100">
-                        {item.runId}
-                      </div>
-                      <div className="text-xs text-zinc-500">
-                        {item.seedsReplayed} seeds ·{" "}
-                        {(item.duration / 1000).toFixed(1)}s
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-sm font-bold text-rose-600 dark:text-rose-400">
-                        {item.seedsFailed} failed
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          <AddRunReplayHistoryWithTimestamps
+            sourceRunId={selectedRun?.id}
+            title="Recent Replays"
+          />
 
           {!selectedRun && (
             <div className="p-12 border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl text-center text-zinc-500">

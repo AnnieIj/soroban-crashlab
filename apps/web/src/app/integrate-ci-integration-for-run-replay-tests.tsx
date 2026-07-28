@@ -302,7 +302,7 @@ export default function CIIntegrationForRunReplayTests() {
       </div>
 
       {/* Summary */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
           { label: 'Passed', value: passed, color: 'emerald' },
           { label: 'Failed', value: failed, color: 'rose' },

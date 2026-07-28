@@ -1,9 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -20,21 +18,14 @@ import {
  * the export of Soroban CrashLab metrics to a Prometheus instance.
  */
 
-// ---------------------------------------------------------------------------
-// Types & Mock Data
-// ---------------------------------------------------------------------------
-
-interface MetricPoint {
-  time: string;
-  value: number;
-}
-
-interface ExportConfig {
-  endpoint: string;
-  interval: number;
-  enabled: boolean;
-  labels: Record<string, string>;
-}
+import {
+  MetricPoint,
+  ExportConfig,
+  generateInitialData,
+  analyzeTrend,
+  runMetricsExportIntegrationFlow,
+  MetricsExportDependencies
+} from './integrate-metrics-export-to-prometheus-utils';
 
 const DEFAULT_CONFIG: ExportConfig = {
   endpoint: 'https://prometheus.internal.crashlab.io/metrics',
@@ -45,14 +36,6 @@ const DEFAULT_CONFIG: ExportConfig = {
     service: 'soroban-fuzzer',
     region: 'us-east-1'
   }
-};
-
-// Generate some initial sparkline data
-const generateInitialData = (points: number): MetricPoint[] => {
-  return Array.from({ length: points }, (_, i) => ({
-    time: `${i}:00`,
-    value: Math.floor(Math.random() * 40) + 10
-  }));
 };
 
 // ---------------------------------------------------------------------------
@@ -108,7 +91,11 @@ export default function MetricsExportToPrometheus() {
   useEffect(() => {
     if (!config.enabled) return;
 
-    const interval = setInterval(() => {
+    // Use configured interval for polling (seconds). This replaces a hardcoded mock timer.
+    let cancelled = false;
+
+    const tick = async () => {
+      if (cancelled) return;
       setLatencyData(prev => {
         const newData = [...prev.slice(1), {
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
@@ -116,24 +103,61 @@ export default function MetricsExportToPrometheus() {
         }];
         return newData;
       });
-    }, 3000);
+      // schedule next tick according to configured interval
+      setTimeout(tick, config.interval * 1000);
+    };
 
-    return () => clearInterval(interval);
-  }, [config.enabled]);
+    // start polling
+    setTimeout(tick, config.interval * 1000);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [config.enabled, config.interval]);
 
   const handleTestConnection = async () => {
     setIsTesting(true);
     setTestResult(null);
-    await new Promise(r => setTimeout(r, 1500));
-    const success = Math.random() > 0.1;
-    setTestResult(success ? 'success' : 'error');
-    setIsTesting(false);
+    try {
+      const deps: MetricsExportDependencies = {
+        resolveConfig: async () => ({ ...config }),
+        pushMetrics: async (cfg) => {
+          try {
+            const res = await fetch(cfg.endpoint, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ timestamp: Date.now(), labels: cfg.labels })
+            });
+            return { accepted: res.ok, pushedSeries: res.ok ? 1 : 0 };
+          } catch {
+            return { accepted: false, pushedSeries: 0 };
+          }
+        },
+        queryExporterHealth: async (endpoint) => {
+          try {
+            // Try a lightweight GET to the endpoint to infer reachability
+            const res = await fetch(endpoint, { method: 'GET' });
+            return { healthy: res.ok, statusCode: res.status };
+          } catch {
+            return { healthy: false, statusCode: 0 };
+          }
+        }
+      };
 
-    // Clear result after 3s
-    setTimeout(() => setTestResult(null), 3000);
+      const result = await runMetricsExportIntegrationFlow(deps);
+      setTestResult(result.success ? 'success' : 'error');
+    } catch {
+      setTestResult('error');
+    } finally {
+      setIsTesting(false);
+      // Clear result after 3s
+      setTimeout(() => setTestResult(null), 3000);
+    }
   };
 
-  const currentLatency = latencyData[latencyData.length - 1].value.toFixed(1);
+  const currentLatency = latencyData[latencyData.length - 1].value;
+  const currentLatencyStr = currentLatency.toFixed(1);
+  const latencyTrend = analyzeTrend(latencyData);
 
   return (
     <section className="w-full space-y-8 p-1">
@@ -169,7 +193,7 @@ export default function MetricsExportToPrometheus() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard label="Active Exporters" value={1} trend="stable" />
         <MetricCard label="Metrics Scraped" value="1.2k" unit="per min" trend="up" />
-        <MetricCard label="Avg Latency" value={currentLatency} unit="ms" trend={parseFloat(currentLatency) > 80 ? 'down' : 'up'} />
+        <MetricCard label="Avg Latency" value={currentLatencyStr} unit="ms" trend={latencyTrend} />
         <MetricCard label="Export Uptime" value="99.98" unit="%" trend="stable" />
       </div>
 
@@ -177,7 +201,7 @@ export default function MetricsExportToPrometheus() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Latency Chart */}
-        <div className="lg:col-span-2 rounded-[2rem] border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-6 shadow-sm overflow-hidden">
+        <div className="lg:col-span-2 rounded-4xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-6 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Push Latency</h3>
@@ -189,7 +213,7 @@ export default function MetricsExportToPrometheus() {
             </div>
           </div>
           
-          <div className="h-[240px] w-full">
+          <div className="h-60 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={latencyData}>
                 <defs>
@@ -232,7 +256,7 @@ export default function MetricsExportToPrometheus() {
         </div>
 
         {/* Configuration Panel */}
-        <div className="rounded-[2rem] border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/30 p-6 flex flex-col">
+        <div className="rounded-4xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/30 p-6 flex flex-col">
           <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-4">Export Config</h3>
           
           <div className="flex-1 space-y-4">
@@ -317,8 +341,8 @@ export default function MetricsExportToPrometheus() {
       </div>
 
       {/* Observability Guide */}
-      <div className="flex items-start gap-4 p-6 rounded-[2rem] border border-blue-100 dark:border-blue-900/40 bg-blue-50/50 dark:bg-blue-950/10">
-        <div className="flex-shrink-0 p-3 rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-200 dark:shadow-none">
+      <div className="flex items-start gap-4 p-6 rounded-4xl border border-blue-100 dark:border-blue-900/40 bg-blue-50/50 dark:bg-blue-950/10">
+        <div className="shrink-0 p-3 rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-200 dark:shadow-none">
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>

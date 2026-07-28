@@ -3,21 +3,49 @@ pub mod health;
 pub mod prng;
 pub mod reproducer;
 pub mod retry;
+pub mod signature_hash;
 pub mod taxonomy;
+pub mod regression_group;
+pub mod fixture;
+pub mod fixture_classifier;
+pub mod suite_runner;
+pub mod runner;
 
-pub use auth_matrix::{AuthMode, MatrixReport, ModeResult, collect_mismatched, run_matrix};
+pub use runner::{ContractRunner, RunnerError, RunnerCreationError, create_runner, MockRunner};
+
+#[cfg(feature = "host-runner")]
+pub mod host_runner;
+
+pub mod rpc_runner;
+
+pub use auth_matrix::{
+
+    AuthMode, MatrixReport, ModeResult, collect_mismatched, format_mismatch_summary, run_matrix,
+    run_matrix_for_seeds,
+};
 pub use health::{
     FailureMetrics, HealthMonitor, HealthStatus, HealthSummary, QueueMetrics, ThroughputMetrics,
 };
-pub use prng::SeededPrng;
+pub use prng::{PrngMutator, SeededPrng};
 pub use reproducer::{
     FlakyDetector, ReproReport, filter_ci_pack, shrink_bundle_payload,
     shrink_seed_preserving_signature,
 };
 pub use retry::{RetryConfig, SimulationError, execute_with_retry};
+pub use signature_hash::{SignatureHasher, hash_category_payload};
 pub use taxonomy::{
     FailureClass, classify_failure, group_by_class, stable_failure_class_for_bundle,
 };
+pub use taxonomy::crash_signature_from_seed;
+pub use regression_group::RegressionGroup;
+pub use fixture::RegressionFixture;
+pub use fixture_classifier::{classify_fixture, classify_and_wrap_fixture};
+pub use suite_runner::{GroupSummary, GroupStats, SuiteRunnerConfig};
+
+#[cfg(feature = "host-runner")]
+pub use host_runner::HostContractRunner;
+
+pub use rpc_runner::{RpcContractRunner, RpcConfigError};
 
 pub mod seed_validator;
 pub use seed_validator::{SeedSchema, SeedValidationError, Validate};
@@ -53,14 +81,24 @@ pub use decimal_precision::{
 pub mod bundle_persist;
 pub use bundle_persist::{
     BundlePersistError, CASE_BUNDLE_SCHEMA_VERSION, CaseBundleDocument, SUPPORTED_BUNDLE_SCHEMAS,
-    read_case_bundle_json, save_case_bundle_json, write_case_bundle_json,
+    load_case_bundle_json, read_case_bundle_json, save_case_bundle_json, write_case_bundle_json,
 };
 
+pub mod run_metadata;
+pub use run_metadata::{RunMetadata, MetadataPersistError, RUN_METADATA_SCHEMA_VERSION, SUPPORTED_METADATA_SCHEMAS};
 pub mod artifact_compress;
 pub use artifact_compress::{compress_artifact, decompress_artifact};
 
+pub mod artifact_storage;
+pub use artifact_storage::{
+    ArtifactMetadata, ArtifactStore, LocalArtifactStore, StorageConfig, StorageError,
+};
+
 pub mod fixture_compat;
-pub use fixture_compat::{CompatReport, CompatWarning, check_bundle_fixtures, check_seed_fixtures};
+pub use fixture_compat::{
+    CompatReport, CompatWarning, check_bundle_fixtures, check_bundle_signature_hashes,
+    check_manifest_engine_schema, check_seed_fixtures, check_seed_sanitization,
+};
 
 pub mod fixture_manifest;
 pub use fixture_manifest::{
@@ -80,9 +118,13 @@ pub use signature_comparison::{
 
 pub mod fixture_sanitize;
 pub use fixture_sanitize::{
-    export_sanitized_scenario_json, sanitize_bundle_document_for_sharing,
-    sanitize_bundle_for_sharing, sanitize_payload_fragments, sanitize_seed_for_sharing,
+    export_sanitized_scenario_json, export_sanitized_suite_json,
+    sanitize_and_validate_bundle, sanitize_bundle_document_for_sharing,
+    sanitize_bundle_for_sharing, sanitize_bundle_with_context, sanitize_payload_fragments,
+    sanitize_payload_with_context, sanitize_seed_for_sharing, sanitize_seed_with_context,
     sanitized_failure_scenario, save_sanitized_case_bundle_json,
+    RedactionStrategy, SanitizationContext, SanitizationError, SanitizationReport,
+    SanitizationRule,
 };
 
 pub mod checkpoint;
@@ -97,13 +139,19 @@ pub use corpus::{
     export_corpus_json, import_corpus_json,
 };
 
+pub mod corpus_import;
+pub use corpus_import::{
+    CorpusImportError, CorpusImportResult, import_seeds, import_seeds_with_schema,
+};
+
 pub mod retention;
 pub use retention::{RetentionPolicy, RetentionRecord};
 
 pub mod scenario_export;
 pub use scenario_export::{
-    FailureScenario, export_crash_report_markdown, export_rust_regression_fixture,
-    export_scenario_json, export_suite_json,
+    FailureScenario, derive_test_name, export_crash_report_markdown, export_failing_seed_json,
+    export_rust_regression_fixture, export_scenario_json, export_suite_json,
+    write_rust_regression_snippet,
 };
 
 pub mod regression_suite;
@@ -120,7 +168,7 @@ pub use regression_grouping::{
 
 pub mod simulation;
 pub use simulation::{
-    RUN_METADATA_SCHEMA_VERSION, RunMetadata, RunMetadataError, SUPPORTED_RUN_METADATA_SCHEMAS,
+    RunMetadataError, SUPPORTED_RUN_METADATA_SCHEMAS,
     SimulationTimeoutConfig, load_run_metadata_json, run_simulation_with_timeout,
     save_run_metadata_json, timeout_crash_signature,
 };
@@ -148,8 +196,10 @@ pub use worker_partition::{WorkerPartition, WorkerPartitionError, worker_for_see
 
 pub mod run_control;
 pub use run_control::{
-    CancelSignal, RunId, RunSummary, RunTerminalState, cancel_marker_path, cancel_requested,
-    clear_cancel_request, default_state_dir, drive_run, drive_run_partitioned, request_cancel_run,
+    CancelSignal, RunId, RunResumeError, RunSummary, RunTerminalState, cancel_marker_path,
+    cancel_requested, clear_cancel_request, default_state_dir, drive_run,
+    drive_run_from_checkpoint, drive_run_partitioned, drive_run_partitioned_from_checkpoint,
+    request_cancel_run,
 };
 
 pub mod rpc_envelope;
@@ -157,6 +207,8 @@ pub use rpc_envelope::{RpcEnvelopeCapture, RpcRequestEnvelope, RpcResponseEnvelo
 
 pub mod stellar_address;
 
+// Re-enable threat model tests (compile-only pass). Obsolete cases can be
+// ignored or updated as follow-ups (see ROADMAP-004).
 #[cfg(test)]
 mod threat_model_tests;
 pub use stellar_address::{
@@ -198,15 +250,9 @@ pub struct CrashSignature {
 /// The hash is deterministic and independent of any seed ID, so equivalent
 /// failures always produce the same value.
 pub fn compute_signature_hash(category: &str, payload: &[u8]) -> u64 {
-    const FNV_OFFSET: u64 = 14695981039346656037;
-    const FNV_PRIME: u64 = 1099511628211;
-
-    let mut hash = FNV_OFFSET;
-    for byte in category.as_bytes().iter().chain(payload.iter()) {
-        hash ^= *byte as u64;
-        hash = hash.wrapping_mul(FNV_PRIME);
-    }
-    hash
+    // Delegate to the centralized signature hashing implementation so the
+    // hashing format remains stable and consistent across callers.
+    signature_hash::hash_category_payload(category, payload)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -242,27 +288,10 @@ pub fn mutate_seed(seed: &CaseSeed) -> CaseSeed {
 }
 
 pub fn classify(seed: &CaseSeed) -> CrashSignature {
-    let digest = seed.payload.iter().fold(seed.id, |acc, b| {
-        acc.wrapping_mul(1099511628211).wrapping_add(*b as u64)
-    });
-
-    let category = if seed.payload.is_empty() {
-        "empty-input"
-    } else if seed.payload.len() > 64 {
-        "oversized-input"
-    } else if is_invalid_enum_tag_payload(&seed.payload) {
-        "invalid-enum-tag"
-    } else {
-        "runtime-failure"
-    };
-
-    let signature_hash = compute_signature_hash(category, &seed.payload);
-
-    CrashSignature {
-        category: category.to_string(),
-        digest,
-        signature_hash,
-    }
+    // Delegate signature construction to the taxonomy helper which produces
+    // category labels consistent with `classify_failure` and a centralized
+    // signature hashing strategy.
+    taxonomy::crash_signature_from_seed(seed)
 }
 
 pub fn to_bundle(seed: CaseSeed) -> CaseBundle {

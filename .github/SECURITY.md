@@ -71,7 +71,7 @@ This policy covers:
 - CI/CD configuration under `.github/workflows`
 - Scripts under `scripts/`
 
-Out of scope: third-party dependencies (report those upstream), and issues that require physical access to infrastructure.
+Out of scope: vulnerabilities in third-party dependencies themselves (report those upstream), and issues that require physical access to infrastructure. In scope for this repository: review, rollback, and validation requirements for dependency updates proposed here.
 
 ## Known Gaps and Accepted Risks
 

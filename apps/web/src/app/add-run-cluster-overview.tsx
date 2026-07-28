@@ -277,7 +277,7 @@ const RunClusterOverview: React.FC<RunClusterOverviewProps> = ({
 
   if (dataState === "error") {
     return (
-      <section className="w-full rounded-2xl border border-red-200 bg-red-50/60 p-6 shadow-sm dark:border-red-900/50 dark:bg-red-950/20">
+      <section role="alert" className="w-full rounded-2xl border border-red-200 bg-red-50/60 p-6 shadow-sm dark:border-red-900/50 dark:bg-red-950/20">
         <h2 className="text-xl font-bold text-red-900 dark:text-red-100">
           Cluster Health Overview
         </h2>
@@ -408,7 +408,7 @@ const RunClusterOverview: React.FC<RunClusterOverviewProps> = ({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-100 dark:border-zinc-800/50">
                       <p className="text-[10px] uppercase font-bold text-zinc-500 mb-1">
                         Avg CPU

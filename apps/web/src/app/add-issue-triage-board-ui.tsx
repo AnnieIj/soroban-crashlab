@@ -1,9 +1,19 @@
 'use client';
 
 import { FuzzingRun } from './types';
+import { useState } from 'react';
 
 interface IssueTriageBoardProps {
   runs: FuzzingRun[];
+}
+
+interface TriageColumn {
+  id: string;
+  title: string;
+  runs: FuzzingRun[];
+  color: string;
+  borderColor: string;
+  labelColor: string;
 }
 
 export default function IssueTriageBoard({ runs }: IssueTriageBoardProps) {
@@ -11,29 +21,88 @@ export default function IssueTriageBoard({ runs }: IssueTriageBoardProps) {
   const runningRuns = runs.filter(r => r.status === 'running');
   const cancelledRuns = runs.filter(r => r.status === 'cancelled');
 
-  const columns = [
-    { 
-      title: 'Failed', 
-      runs: failedRuns, 
-      color: 'bg-rose-50/50 dark:bg-rose-950/10', 
+  const defaultColumns: TriageColumn[] = [
+    {
+      id: 'failed',
+      title: 'Failed',
+      runs: failedRuns,
+      color: 'bg-rose-50/50 dark:bg-rose-950/10',
       borderColor: 'border-rose-100 dark:border-rose-900/30',
       labelColor: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'
     },
-    { 
-      title: 'Active', 
-      runs: runningRuns, 
-      color: 'bg-blue-50/50 dark:bg-blue-950/10', 
+    {
+      id: 'active',
+      title: 'Active',
+      runs: runningRuns,
+      color: 'bg-blue-50/50 dark:bg-blue-950/10',
       borderColor: 'border-blue-100 dark:border-blue-900/30',
       labelColor: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
     },
-    { 
-      title: 'Cancelled', 
-      runs: cancelledRuns, 
-      color: 'bg-zinc-50/50 dark:bg-zinc-950/10', 
+    {
+      id: 'cancelled',
+      title: 'Cancelled',
+      runs: cancelledRuns,
+      color: 'bg-zinc-50/50 dark:bg-zinc-950/10',
       borderColor: 'border-zinc-200 dark:border-zinc-800',
       labelColor: 'bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
     },
   ];
+
+  const getInitialColumns = () => {
+    if (typeof window === 'undefined') {
+      return defaultColumns;
+    }
+
+    try {
+      const saved = window.localStorage.getItem('triageColumnOrder');
+      if (!saved) {
+        return defaultColumns;
+      }
+
+      const order = JSON.parse(saved) as string[];
+      const reordered = order
+        .map((id) => defaultColumns.find((column) => column.id === id))
+        .filter((column): column is TriageColumn => Boolean(column));
+
+      if (reordered.length === defaultColumns.length) {
+        return reordered;
+      }
+    } catch {
+      // Fall back to the default order.
+    }
+
+    return defaultColumns;
+  };
+
+  const [columns, setColumns] = useState<TriageColumn[]>(getInitialColumns);
+  const [draggedColumn, setDraggedColumn] = useState<string | null>(null);
+
+  const handleDragStart = (e: React.DragEvent, columnId: string) => {
+    setDraggedColumn(columnId);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    if (!draggedColumn || draggedColumn === targetId) {
+      setDraggedColumn(null);
+      return;
+    }
+
+    const draggedIdx = columns.findIndex(c => c.id === draggedColumn);
+    const targetIdx = columns.findIndex(c => c.id === targetId);
+    const newColumns = [...columns];
+    [newColumns[draggedIdx], newColumns[targetIdx]] = [newColumns[targetIdx], newColumns[draggedIdx]];
+
+    setColumns(newColumns);
+    localStorage.setItem('triageColumnOrder', JSON.stringify(newColumns.map(c => c.id)));
+    setDraggedColumn(null);
+  };
 
   return (
     <div className="w-full mt-16 p-8 rounded-[2.5rem] bg-zinc-50 dark:bg-zinc-900/30 border border-zinc-200 dark:border-zinc-800">
@@ -44,7 +113,14 @@ export default function IssueTriageBoard({ runs }: IssueTriageBoardProps) {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         {columns.map((col) => (
-          <div key={col.title} className={`flex flex-col rounded-3xl border ${col.borderColor} ${col.color} p-5 min-h-[500px]`}>
+          <div
+            key={col.id}
+            draggable
+            onDragStart={(e) => handleDragStart(e, col.id)}
+            onDragOver={handleDragOver}
+            onDrop={(e) => handleDrop(e, col.id)}
+            className={`flex flex-col rounded-3xl border ${col.borderColor} ${col.color} p-5 min-h-[500px] cursor-move transition-opacity ${draggedColumn === col.id ? 'opacity-50' : ''}`}
+          >
             <div className="flex items-center justify-between mb-6 px-1">
               <h3 className="font-bold text-xl">{col.title}</h3>
               <span className={`text-xs font-bold px-3 py-1 rounded-full ${col.labelColor}`}>

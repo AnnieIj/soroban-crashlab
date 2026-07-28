@@ -1,6 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { triggerBrowserDownload } from './utils/browser-download';
+import { useDebounce } from '../lib/useDebounce';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -166,6 +168,7 @@ export default function ReportingTemplatesManager() {
     const [templates, setTemplates] = useState<ManagedTemplate[]>(DEFAULT_TEMPLATES);
     const [selectedId, setSelectedId] = useState<string>(DEFAULT_TEMPLATES[0]!.id);
     const [search, setSearch] = useState('');
+    const debouncedSearch = useDebounce(search, 300);
     const [kindFilter, setKindFilter] = useState<'all' | TemplateKind>('all');
     const [tagFilter, setTagFilter] = useState<string>('');
     const [copyState, setCopyState] = useState<'idle' | 'copied'>('idle');
@@ -218,7 +221,7 @@ export default function ReportingTemplatesManager() {
 
     /** Filtered + re-ordered list (pinned first). */
     const filteredTemplates = useMemo(() => {
-        const q = search.trim().toLowerCase();
+        const q = debouncedSearch.trim().toLowerCase();
         return templates
             .filter((t) => {
                 if (kindFilter !== 'all' && t.kind !== kindFilter) return false;
@@ -233,7 +236,7 @@ export default function ReportingTemplatesManager() {
                 return true;
             })
             .sort((a, b) => Number(b.pinned) - Number(a.pinned));
-    }, [templates, search, kindFilter, tagFilter]);
+    }, [templates, debouncedSearch, kindFilter, tagFilter]);
 
     const selectedTemplate = useMemo(
         () => templates.find((t) => t.id === selectedId) ?? filteredTemplates[0] ?? null,
@@ -345,13 +348,10 @@ export default function ReportingTemplatesManager() {
 
     /** Export all templates as a JSON file download. */
     const handleExport = useCallback(() => {
-        const blob = new Blob([JSON.stringify(templates, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `crashlab-templates-${Date.now()}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
+        triggerBrowserDownload(
+            new Blob([JSON.stringify(templates, null, 2)], { type: 'application/json' }),
+            `crashlab-templates-${Date.now()}.json`,
+        );
     }, [templates]);
 
     /** Import templates from a JSON file, merging by id. */

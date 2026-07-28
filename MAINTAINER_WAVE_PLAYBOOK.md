@@ -1,8 +1,8 @@
 # Maintainer Wave Playbook
 
-This document defines how Soroban CrashLab is operated during Drips Wave cycles.
+This document defines how Soroban CrashLab is operated during Drips Wave cycles. For new maintainers joining the project, follow the [Maintainer Onboarding Checklist](docs/MAINTAINER_ONBOARDING.md) to verify your local setup and understand core operational responsibilities.
 
-## 🌊 Wave 3 Specific Context
+## 🌊 Wave 4 Specific Context
 - **Contributor Limit**: Each contributor can resolve a maximum of **4 issues** across this entire org (down from 7 last wave). Keep an eye on assigning too many issues to a single applicant.
 - **Application Rejections**: Explicitly and quickly **reject** applicants who are not a fit or if we are waiting for a specific profile. Do not leave them pending; rejecting them immediately returns their application quota.
 - **24-Hour Review SLA Alert**: AI point appeals explicitly drop in when maintainers are unresponsive for >24 hours. Given our strict "Definition of Done", we risk automated points bypassing our review if we dawdle. Review inside 24h!
@@ -16,7 +16,7 @@ Use the following saved search queries to filter the issue board during triage.
 Issues with open PRs awaiting maintainer review:
 
 ```
-is:open is:issue label:wave3 linked:pr
+is:open is:issue label:wave4 linked:pr
 ```
 
 ### Stale
@@ -24,7 +24,7 @@ is:open is:issue label:wave3 linked:pr
 Issues assigned but with no activity in the last 3 days:
 
 ```
-is:open is:issue label:wave3 assignee:* updated:<YYYY-MM-DD>
+is:open is:issue label:wave4 assignee:* updated:<YYYY-MM-DD>
 ```
 
 Replace `<YYYY-MM-DD>` with a date 3 days before today. For example, if today is 2026-03-25, use `updated:<2026-03-22`.
@@ -34,7 +34,7 @@ Replace `<YYYY-MM-DD>` with a date 3 days before today. For example, if today is
 Issues explicitly marked as blocked on dependencies or external factors:
 
 ```
-is:open is:issue label:wave3 label:blocked
+is:open is:issue label:wave4 label:blocked
 ```
 
 If the `blocked` label does not exist, create it with color `d93f0b` and description "Blocked on dependency or external factor".
@@ -51,9 +51,9 @@ Purpose: retire stale work items and refine active scope so the Wave board stays
 
 **Stale criteria (operational)**
 
-1. **Assigned `wave3` issues** — Has assignee and `updatedAt` before **00:00 UTC** on the calendar day **N days ago**, where **N = 3** (`ASSIGNED_STALE_DAYS`). Aligns with the triage “Stale” board query. Ping the contributor, then follow the Contributor SLA targets table if there is no response.
-2. **Unassigned `wave3` issues** — No assignee and last update older than **14 days** (`UNASSIGNED_STALE_DAYS`). Re-scope, split into smaller issues, close as not planned with a short note, or re-label so the backlog does not accumulate abandoned scope.
-3. **`wave3` + `stale` still open** — Last update older than **7 days** (`STALE_LABEL_QUIET_DAYS`) while the `stale` label remains. Un-assign and return the issue to the pool per the escalation path in Contributor SLA targets, unless a maintainer has posted a documented exception.
+1. **Assigned `wave4` issues** — Has assignee and `updatedAt` before **00:00 UTC** on the calendar day **N days ago**, where **N = 3** (`ASSIGNED_STALE_DAYS`). Aligns with the triage “Stale” board query. Ping the contributor, then follow the Contributor SLA targets table if there is no response.
+2. **Unassigned `wave4` issues** — No assignee and last update older than **14 days** (`UNASSIGNED_STALE_DAYS`). Re-scope, split into smaller issues, close as not planned with a short note, or re-label so the backlog does not accumulate abandoned scope.
+3. **`wave4` + `stale` still open** — Last update older than **7 days** (`STALE_LABEL_QUIET_DAYS`) while the `stale` label remains. Un-assign and return the issue to the pool per the escalation path in Contributor SLA targets, unless a maintainer has posted a documented exception.
 4. **Duplicates / out of scope** — Maintainer discretion during the same review window; close with a pointer to the canonical issue when applicable.
 
 **Checklist each cycle**
@@ -66,7 +66,7 @@ Purpose: retire stale work items and refine active scope so the Wave board stays
 
 1. Validate that each candidate issue has scope, acceptance criteria, and complexity.
 2. Ensure issue labels are consistent:
-   - `wave3`
+   - `wave4`
    - `complexity:trivial|medium|high`
    - area labels such as `area:fuzzer`, `area:web`, `area:dx`
 3. Confirm issue dependencies are explicit.
@@ -104,6 +104,19 @@ Review inside 24 hours to prevent unnecessary automated appeals. Review in this 
 3. Deterministic reproducibility of behavior
 4. Test coverage
 5. Clarity and maintainability
+
+## Secret scanning expectation for reviews
+
+Use the [Security Policy pre-commit secret scanning path](.github/SECURITY.md#pre-commit-secret-scanning-expectations) when a PR touches config files, environment examples, logs, fixtures, copied command output, or any material that could contain credentials.
+
+### Review requirements
+
+1. Confirm the contributor ran at least one recommended scanner (`gitleaks` or `trufflehog`) before opening or updating the PR.
+2. If a scanner finding was a false positive, confirm the PR or maintainer discussion names the scanner and file path without pasting the full matched value.
+3. If a real secret was found after push, move the response into a private channel immediately and require credential rotation or revocation before normal public review continues.
+4. Confirm the contributor removed any exposed value from the branch diff and local history before approving follow-up changes.
+
+Known boundary: this repository documents secret scanning expectations but does not yet ship an enforced pre-commit hook or CI secret scanner. Reviewer follow-through is still required.
 
 ## Release management
 
@@ -172,7 +185,7 @@ When reviewing changes to artifact storage:
 ### CI security checks
 - **Existing checks**:
   - Rust: `cargo test --all-targets` (compilation and unit tests)
-  - Web: `npm run lint` and `npm run build`
+  - Web: `npm run test`, `npm run lint`, and `npm run build`
 - **Missing checks** (gaps):
   - Dependency vulnerability scanning for Rust (`cargo audit`) and npm (`npm audit`).
   - Security-focused linter rules (e.g., `cargo clippy` with `--deny=unsafe_code` or similar).

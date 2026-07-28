@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FuzzingRun, RunStatus } from './types';
+import { formatDuration } from './utils/format';
+import { useDataTableKeyboardNav } from './use-data-table-keyboard-nav';
+import type { DataTableRowKeyboardProps } from './use-data-table-keyboard-nav';
 
 /** Height of a single data row in pixels — must match the rendered row height. */
 const ROW_HEIGHT = 57;
@@ -20,39 +23,17 @@ interface VirtualizedRunTableProps {
     onViewReport: (run: FuzzingRun) => void;
     /** List of column IDs to show. */
     visibleColumns?: string[];
+    /** Set of selected run IDs for bulk actions */
+    selectedRunIds?: Set<string>;
+    /** Called to toggle selection of a run */
+    onToggleRunSelection?: (runId: string) => void;
+    /** Called to toggle selection of all runs */
+    onToggleAllRunsSelection?: (runIds: string[]) => void;
 }
 
-/**
- * Formats milliseconds into a human-readable duration string (e.g., "5m 23s").
- * Mirrors the helper in RunHistoryTable to stay consistent.
- */
-const formatDuration = (ms: number): string => {
-    if (ms < 1000) return `${ms}ms`;
-    const seconds = Math.floor((ms / 1000) % 60);
-    const minutes = Math.floor((ms / (1000 * 60)) % 60);
-    const hours = Math.floor(ms / (1000 * 60 * 60));
-
-    const parts: string[] = [];
-    if (hours > 0) parts.push(`${hours}h`);
-    if (minutes > 0) parts.push(`${minutes}m`);
-    if (seconds > 0 || parts.length === 0) parts.push(`${seconds}s`);
-
-    return parts.join(' ');
-};
-
-/**
- * Renders a color-coded status badge driven by CSS custom properties
- * (--status-*) defined in globals.css — identical to the one used in
- * RunHistoryTable so the two tables look identical row-for-row.
- */
 const StatusBadge = ({ status }: { status: RunStatus }) => (
     <span
-        className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border"
-        style={{
-            backgroundColor: `var(--status-${status}-bg)`,
-            color: `var(--status-${status}-fg)`,
-            borderColor: `var(--status-${status}-border)`,
-        }}
+        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border status-badge status-badge-${status}`}
     >
         {status.charAt(0).toUpperCase() + status.slice(1)}
     </span>
@@ -70,32 +51,43 @@ const VirtualRow = ({
     onSelectRun,
     onViewReport,
     visibleColumns,
+    selectedRunIds = new Set(),
+    onToggleRunSelection,
+    rowKeyboardProps,
 }: {
     run: FuzzingRun;
     top: number;
     onSelectRun: (id: string) => void;
     onViewReport: (run: FuzzingRun) => void;
     visibleColumns: string[];
+    selectedRunIds?: Set<string>;
+    onToggleRunSelection?: (id: string) => void;
+    rowKeyboardProps: DataTableRowKeyboardProps;
 }) => {
-    const handleKeyDown = useCallback(
-        (e: React.KeyboardEvent<HTMLTableRowElement>) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                onSelectRun(run.id);
-            }
-        },
-        [run.id, onSelectRun],
-    );
-
     return (
         <tr
             style={{ position: 'absolute', top, left: 0, right: 0, height: ROW_HEIGHT, display: 'flex', alignItems: 'center' }}
-            tabIndex={0}
-            className="group hover:bg-zinc-50 dark:hover:bg-zinc-900/30 transition-colors cursor-pointer border-b border-zinc-100 dark:border-zinc-800 w-full"
+            {...rowKeyboardProps}
+            className={`group transition-colors cursor-pointer border-b border-zinc-100 dark:border-zinc-800 w-full ${
+                selectedRunIds.has(run.id)
+                    ? "bg-blue-50/80 dark:bg-blue-900/20"
+                    : "hover:bg-zinc-50 dark:hover:bg-zinc-900/30"
+            }`}
             onClick={() => onSelectRun(run.id)}
-            onKeyDown={handleKeyDown}
             aria-label={`Fuzzing run ${run.id}, status ${run.status}`}
         >
+            {onToggleRunSelection && (
+                <td className="px-6 w-12 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-center">
+                        <input
+                            type="checkbox"
+                            checked={selectedRunIds.has(run.id)}
+                            onChange={() => onToggleRunSelection(run.id)}
+                            className="w-4 h-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
+                        />
+                    </div>
+                </td>
+            )}
             {visibleColumns.includes('id') && (
                 <td className="px-6 flex-1 min-w-0">
                     <button
@@ -113,6 +105,19 @@ const VirtualRow = ({
             {visibleColumns.includes('status') && (
                 <td className="px-6 w-36 shrink-0">
                     <StatusBadge status={run.status} />
+                </td>
+            )}
+            {visibleColumns.includes('area') && (
+                <td className="px-6 w-28 shrink-0 text-sm text-zinc-600 dark:text-zinc-400 truncate">
+                    {run.area}
+                </td>
+            )}
+            {visibleColumns.includes('severity') && (
+                <td
+                    className="px-6 w-28 shrink-0 text-sm truncate"
+                    style={{ color: run.severity === 'critical' ? '#C37D16' : run.severity === 'high' ? '#CC1016' : undefined }}
+                >
+                    {run.severity}
                 </td>
             )}
             {visibleColumns.includes('duration') && (
@@ -165,9 +170,30 @@ export default function VirtualizedRunTable({
     onSelectRun,
     onViewReport,
     visibleColumns = ['id', 'status', 'duration', 'seedCount', 'report'],
+    selectedRunIds = new Set(),
+    onToggleRunSelection,
+    onToggleAllRunsSelection,
 }: VirtualizedRunTableProps) {
     const scrollRef = useRef<HTMLDivElement>(null);
     const [scrollTop, setScrollTop] = useState(0);
+
+    const { getRowProps } = useDataTableKeyboardNav({
+        rowCount: runs.length,
+        onActivate: (index) => {
+            const run = runs[index];
+            if (run) {
+                onSelectRun(run.id);
+            }
+        },
+        onFocusRow: (index) => {
+            const el = scrollRef.current;
+            if (!el) {
+                return;
+            }
+            el.scrollTop = index * ROW_HEIGHT;
+            setScrollTop(index * ROW_HEIGHT);
+        },
+    });
 
     /** Recalculate on scroll — wrapped in useCallback for stable identity. */
     const handleScroll = useCallback(() => {
@@ -225,6 +251,27 @@ export default function VirtualizedRunTable({
                 <table className="w-full text-left border-collapse" role="presentation">
                     <thead>
                         <tr className="bg-zinc-50 dark:bg-zinc-900/50 border-b border-zinc-200 dark:border-zinc-800 flex">
+                            {onToggleRunSelection && (
+                                <th className="px-6 py-4 text-[10px] font-bold text-zinc-400 w-12">
+                                    <div className="flex items-center justify-center">
+                                        <input
+                                            type="checkbox"
+                                            checked={runs.length > 0 && selectedRunIds.size === runs.length}
+                                            ref={(input) => {
+                                                if (input) {
+                                                    input.indeterminate = selectedRunIds.size > 0 && selectedRunIds.size < runs.length;
+                                                }
+                                            }}
+                                            onChange={() => {
+                                                if (onToggleAllRunsSelection) {
+                                                    onToggleAllRunsSelection(runs.map(r => r.id));
+                                                }
+                                            }}
+                                            className="w-4 h-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
+                                        />
+                                    </div>
+                                </th>
+                            )}
                             {visibleColumns.includes('id') && (
                                 <th scope="col" className="px-6 py-4 text-sm font-semibold text-zinc-900 dark:text-zinc-100 flex-1 min-w-0">
                                     Run ID
@@ -233,6 +280,16 @@ export default function VirtualizedRunTable({
                             {visibleColumns.includes('status') && (
                                 <th scope="col" className="px-6 py-4 text-sm font-semibold text-zinc-900 dark:text-zinc-100 w-36 shrink-0">
                                     Status
+                                </th>
+                            )}
+                            {visibleColumns.includes('area') && (
+                                <th scope="col" className="px-6 py-4 text-sm font-semibold text-zinc-900 dark:text-zinc-100 w-28 shrink-0">
+                                    Area
+                                </th>
+                            )}
+                            {visibleColumns.includes('severity') && (
+                                <th scope="col" className="px-6 py-4 text-sm font-semibold text-zinc-900 dark:text-zinc-100 w-28 shrink-0">
+                                    Severity
                                 </th>
                             )}
                             {visibleColumns.includes('duration') && (
@@ -268,16 +325,22 @@ export default function VirtualizedRunTable({
                         <tbody
                             style={{ position: 'relative', display: 'block', height: totalHeight }}
                         >
-                            {visibleRuns.map((run, i) => (
+                            {visibleRuns.map((run, i) => {
+                                const rowIndex = firstVisible + i;
+                                return (
                                 <VirtualRow
                                     key={run.id}
                                     run={run}
-                                    top={(firstVisible + i) * ROW_HEIGHT}
+                                    top={rowIndex * ROW_HEIGHT}
                                     onSelectRun={onSelectRun}
                                     onViewReport={onViewReport}
                                     visibleColumns={visibleColumns}
+                                    selectedRunIds={selectedRunIds}
+                                    onToggleRunSelection={onToggleRunSelection}
+                                    rowKeyboardProps={getRowProps(rowIndex)}
                                 />
-                            ))}
+                            );
+                            })}
                         </tbody>
                     </table>
                 </div>

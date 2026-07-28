@@ -1,6 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+
+import { createSentryAdapter } from "@/lib/integrations/sentry-adapter";
+import type { SentryConfig, CrashReport } from "./integrate-sentry-integration-for-crash-reporting-utils";
 
 /**
  * Issue #248: Integrate Sentry integration for crash reporting
@@ -9,22 +12,6 @@ import { useState, useEffect } from "react";
  * Sentry integration to automatically report crashes and errors from
  * fuzzing runs to Sentry for centralized error tracking.
  */
-
-interface SentryConfig {
-  dsn: string;
-  environment: string;
-  enabled: boolean;
-  sampleRate: number;
-  tracesSampleRate: number;
-}
-
-interface CrashReport {
-  id: string;
-  timestamp: string;
-  signature: string;
-  sentryEventId: string;
-  status: "sent" | "pending" | "failed";
-}
 
 const DEFAULT_CONFIG: SentryConfig = {
   dsn: "",
@@ -42,64 +29,135 @@ export default function IntegrateSentryIntegrationForCrashReporting() {
     null,
   );
   const [showDsnInput, setShowDsnInput] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [creatingIssueId, setCreatingIssueId] = useState<string | null>(null);
+  const [createdIssues, setCreatedIssues] = useState<Record<string, { key: string; url: string }>>({});
+  const [, setIssueCreationError] = useState<string | null>(null);
+
+  const sentryAdapter = useMemo(() => createSentryAdapter(), []);
 
   useEffect(() => {
-    // Simulate loading saved configuration
-    const savedConfig = localStorage.getItem("sentry-config");
-    if (savedConfig) {
+    let cancelled = false;
+
+    (async () => {
+      setIsLoading(true);
+      setError(null);
       try {
-        const parsed = JSON.parse(savedConfig);
-        setConfig(parsed);
+        const savedConfig = await sentryAdapter.loadConfig();
+        if (!cancelled && savedConfig) {
+          setConfig(savedConfig);
+        }
       } catch {
-        // Ignore parse errors
+        if (!cancelled) {
+          setError("Failed to load Sentry configuration.");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
       }
-    }
-  }, []);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sentryAdapter]);
 
   useEffect(() => {
-    // Simulate loading recent reports
-    setRecentReports([
-      {
-        id: "crash-001",
-        timestamp: new Date(Date.now() - 3600000).toISOString(),
-        signature: "sig:1001:contract::transfer:assert_balance_nonnegative",
-        sentryEventId: "7f3a9b2c1d4e5f6a",
-        status: "sent",
-      },
-      {
-        id: "crash-002",
-        timestamp: new Date(Date.now() - 7200000).toISOString(),
-        signature: "sig:1002:contract::mint:overflow_detected",
-        sentryEventId: "8e4b0c3d2e5f6g7b",
-        status: "sent",
-      },
-    ]);
-  }, []);
+    let cancelled = false;
 
-  const handleSaveConfig = () => {
-    localStorage.setItem("sentry-config", JSON.stringify(config));
-    setTestResult("success");
-    setTimeout(() => setTestResult(null), 3000);
+    (async () => {
+      setError(null);
+      try {
+        const reports = await sentryAdapter.fetchRecentReports();
+        if (!cancelled) {
+          setRecentReports(reports);
+        }
+      } catch {
+        if (!cancelled) {
+          setError("Failed to load recent crash reports.");
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sentryAdapter]);
+
+  const handleSaveConfig = async () => {
+    setError(null);
+    setSaveSuccess(false);
+    try {
+      await sentryAdapter.saveConfig(config);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch {
+      setError("Failed to save Sentry configuration.");
+    }
   };
 
   const handleTestConnection = async () => {
     setIsTesting(true);
     setTestResult(null);
+    setError(null);
 
-    // Simulate API test
-    await new Promise<void>((r) => setTimeout(r, 1500));
-
-    const success =
-      config.dsn.includes("sentry.io") || config.dsn.includes("ingest");
-    setTestResult(success ? "success" : "error");
-    setIsTesting(false);
-
-    setTimeout(() => setTestResult(null), 3000);
+    try {
+      const result = await sentryAdapter.testConnection(config.dsn);
+      setTestResult(result.success ? "success" : "error");
+      if (!result.success && result.error) {
+        setError(result.error);
+      }
+    } catch {
+      setTestResult("error");
+      setError("Connection test failed.");
+    } finally {
+      setIsTesting(false);
+    }
   };
 
   const formatTimestamp = (iso: string) => {
     const date = new Date(iso);
     return date.toLocaleString();
+  };
+
+  const handleCreateJiraIssue = async (report: CrashReport) => {
+    setCreatingIssueId(report.id);
+    setIssueCreationError(null);
+
+    try {
+      const response = await fetch('/api/integrations/jira', {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          summary: `Crash report: ${report.signature}`,
+          description: `Crash report created from SorobanCrashLab for ${report.id}.\n\nSignature: ${report.signature}\nEvent ID: ${report.sentryEventId}\nTimestamp: ${report.timestamp}`,
+        }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok || !payload.issue) {
+        throw new Error(payload.error || 'Could not create a Jira issue right now.');
+      }
+
+      setCreatedIssues((prev) => ({
+        ...prev,
+        [report.id]: {
+          key: payload.issue.key,
+          url: payload.issue.url,
+        },
+      }));
+    } catch (error) {
+      setIssueCreationError(error instanceof Error ? error.message : 'Could not create a Jira issue right now.');
+    } finally {
+      setCreatingIssueId(null);
+    }
   };
 
   return (
@@ -118,6 +176,26 @@ export default function IntegrateSentryIntegrationForCrashReporting() {
             to Sentry for centralized monitoring, alerting, and debugging
             workflows.
           </p>
+
+          {error && (
+            <div className="mb-6 p-4 bg-rose-50 dark:bg-rose-900/20 rounded-xl border border-rose-200 dark:border-rose-900/40">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-rose-700 dark:text-rose-300">{error}</p>
+                <button
+                  onClick={() => setError(null)}
+                  className="ml-4 text-rose-500 hover:text-rose-700 dark:text-rose-400 dark:hover:text-rose-200"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          )}
+
+          {isLoading && (
+            <div className="mb-6 p-4 bg-zinc-50 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">Loading configuration...</p>
+            </div>
+          )}
 
           <div className="space-y-6 bg-zinc-50 dark:bg-zinc-900 p-6 rounded-[2rem] border border-zinc-200 dark:border-zinc-800">
             {/* Enable Toggle */}
@@ -266,9 +344,14 @@ export default function IntegrateSentryIntegrationForCrashReporting() {
               </button>
               <button
                 onClick={handleSaveConfig}
-                className="flex-1 py-3 rounded-xl bg-orange-600 text-white font-bold hover:bg-orange-700 shadow-lg shadow-orange-500/20 transition"
+                disabled={isLoading}
+                className={`flex-1 py-3 rounded-xl font-bold shadow-lg shadow-orange-500/20 transition ${
+                  saveSuccess
+                    ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                    : "bg-orange-600 text-white hover:bg-orange-700"
+                }`}
               >
-                Save Configuration
+                {saveSuccess ? "✓ Saved" : "Save Configuration"}
               </button>
             </div>
           </div>
@@ -298,7 +381,8 @@ export default function IntegrateSentryIntegrationForCrashReporting() {
               recentReports.map((report) => (
                 <div
                   key={report.id}
-                  className="p-6 rounded-[2rem] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:border-orange-300 transition shadow-sm"
+                  className="p-6 rounded-[2rem] border border-[var(--border-color)] bg-[var(--surface)] shadow-[var(--card-shadow)] transition hover:shadow-[var(--card-shadow-hover)]"
+                  style={{ color: 'var(--text-primary)' }}
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div>
@@ -331,21 +415,45 @@ export default function IntegrateSentryIntegrationForCrashReporting() {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between">
-                    <div className="text-xs text-zinc-500">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
                       Event ID:{" "}
-                      <span className="font-mono text-zinc-700 dark:text-zinc-300">
+                      <span className="font-mono" style={{ color: 'var(--text-primary)' }}>
                         {report.sentryEventId}
                       </span>
                     </div>
-                    <a
-                      href={`https://sentry.io/events/${report.sentryEventId}/`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs font-bold text-orange-600 hover:text-orange-700 transition"
-                    >
-                      View in Sentry →
-                    </a>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {createdIssues[report.id] ? (
+                        <a
+                          href={createdIssues[report.id].url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs font-semibold rounded-full border border-[var(--border-color)] px-3 py-1 transition"
+                          style={{ color: 'var(--text-primary)', background: 'var(--highlight-bg)' }}
+                        >
+                          Jira • {createdIssues[report.id].key}
+                        </a>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => void handleCreateJiraIssue(report)}
+                          disabled={creatingIssueId === report.id}
+                          className="rounded-full border border-[var(--border-color)] px-3 py-1 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
+                          style={{ color: 'var(--text-primary)', background: 'var(--surface)' }}
+                        >
+                          {creatingIssueId === report.id ? 'Creating…' : 'Create Jira issue'}
+                        </button>
+                      )}
+                      <a
+                        href={`https://sentry.io/events/${report.sentryEventId}/`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-bold transition"
+                        style={{ color: 'var(--color-primary)' }}
+                      >
+                        View in Sentry →
+                      </a>
+                    </div>
                   </div>
                 </div>
               ))

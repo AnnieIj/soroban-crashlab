@@ -3,7 +3,8 @@
 import * as React from 'react';
 import { useState, useCallback } from 'react';
 import { FuzzingRun, RunIssueLink } from './types';
-import { validateIssueUrl, getIssueTypeFromUrl, addIssueLink, removeIssueLink } from './run-issue-utils';
+import { validateIssueUrl, getIssueTypeFromUrl, getIssueFaviconUrl, addIssueLink, removeIssueLink } from './run-issue-utils';
+import { parseLinearIssueUrl } from '@/lib/integrations/linear-issues';
 
 interface RunIssueLinkPageProps {
   runs: FuzzingRun[];
@@ -14,6 +15,56 @@ interface RunIssueLinkPageProps {
 interface IssueFormData {
   label: string;
   href: string;
+}
+
+function ExternalLinkFallbackIcon() {
+  return (
+    <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+    </svg>
+  );
+}
+
+function IssueLinkCard({ issue }: { issue: RunIssueLink }) {
+  const faviconUrl = getIssueFaviconUrl(issue.href);
+  const [faviconFailed, setFaviconFailed] = useState(false);
+
+  return (
+    <div role="listitem" className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="inline-flex items-center justify-center w-4 h-4 rounded bg-white border border-gray-200 overflow-hidden" aria-hidden="true">
+            {faviconUrl && !faviconFailed ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={faviconUrl}
+                alt=""
+                className="w-4 h-4"
+                loading="lazy"
+                referrerPolicy="no-referrer"
+                onError={() => setFaviconFailed(true)}
+              />
+            ) : (
+              <ExternalLinkFallbackIcon />
+            )}
+          </span>
+          <span className="text-xs bg-gray-200 text-gray-700 px-2 py-1 rounded">
+            {getIssueTypeFromUrl(issue.href)}
+          </span>
+        </div>
+        <div className="text-sm font-medium text-gray-900 truncate">{issue.label}</div>
+        <a
+          href={issue.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs text-blue-600 hover:text-blue-800 truncate block"
+          aria-label={`Open link to ${issue.label}`}
+        >
+          {issue.href}
+        </a>
+      </div>
+    </div>
+  );
 }
 
 const RunIssueLinkPage: React.FC<RunIssueLinkPageProps> = ({
@@ -28,7 +79,11 @@ const RunIssueLinkPage: React.FC<RunIssueLinkPageProps> = ({
     href: ''
   });
   const [isAddingIssue, setIsAddingIssue] = useState(false);
-  
+
+  const [isResolvingTitle, setIsResolvingTitle] = useState(false);
+  const [resolveNotice, setResolveNotice] = useState<string | null>(null);
+  const [resolveError, setResolveError] = useState<string | null>(null);
+
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -43,6 +98,8 @@ const RunIssueLinkPage: React.FC<RunIssueLinkPageProps> = ({
     setIsAddingIssue(false);
     setError(null);
     setSaveSuccess(false);
+    setResolveNotice(null);
+    setResolveError(null);
   }, [runs]);
 
   const handleAddIssue = useCallback(() => {
@@ -63,6 +120,8 @@ const RunIssueLinkPage: React.FC<RunIssueLinkPageProps> = ({
     setFormData({ label: '', href: '' });
     setIsAddingIssue(false);
     setError(null);
+    setResolveNotice(null);
+    setResolveError(null);
   }, [formData, issueLinks]);
 
   const handleRemoveIssue = useCallback((index: number) => {
@@ -100,7 +159,68 @@ const RunIssueLinkPage: React.FC<RunIssueLinkPageProps> = ({
     if (field === 'href' && error === 'Invalid URL format') {
       setError(null);
     }
+    if (field === 'href') {
+      setResolveNotice(null);
+      setResolveError(null);
+    }
   }, [error]);
+
+  const handleIssueUrlBlur = useCallback(async () => {
+    const href = formData.href.trim();
+    if (!href || !validateIssueUrl(href)) {
+      return;
+    }
+    const issueType = getIssueTypeFromUrl(href);
+
+    if (issueType !== 'GitHub Issue' && issueType !== 'Linear Issue') {
+      return;
+    }
+    // Don't overwrite a label the user already typed.
+    if (formData.label.trim()) return;
+
+    setIsResolvingTitle(true);
+    setResolveNotice(null);
+    setResolveError(null);
+
+    try {
+      let res;
+      let issue;
+
+      if (issueType === 'GitHub Issue') {
+        res = await fetch(`/api/integrations/github-issue?url=${encodeURIComponent(href)}`);
+        const json = await res.json();
+        if (!res.ok) {
+          setResolveError(json?.error ?? 'Could not look up this issue automatically.');
+          return;
+        }
+        issue = json?.data?.issue as { title?: string; resolved?: boolean } | undefined;
+      } else {
+        const parsed = parseLinearIssueUrl(href);
+        if (!parsed) {
+          setResolveError('Could not parse this Linear issue URL.');
+          return;
+        }
+        res = await fetch(`/api/integrations/linear/${encodeURIComponent(parsed.issueId)}`);
+        const json = await res.json();
+        if (!res.ok) {
+          setResolveError(json?.error ?? 'Could not look up this Linear issue automatically.');
+          return;
+        }
+        issue = json?.issue as { title?: string } | undefined;
+      }
+
+      if (issue?.title) {
+        setFormData(prev => (prev.href === href && !prev.label.trim() ? { ...prev, label: issue.title as string } : prev));
+        setResolveNotice('Title filled in automatically.');
+      } else {
+        setResolveError('Could not fetch a title automatically – enter one manually.');
+      }
+    } catch {
+      setResolveError('Could not reach the issue tracker – enter a title manually.');
+    } finally {
+      setIsResolvingTitle(false);
+    }
+  }, [formData.href, formData.label]);
 
   const isFormValid = formData.label.trim() && formData.href.trim() && validateIssueUrl(formData.href);
 
@@ -156,7 +276,7 @@ const RunIssueLinkPage: React.FC<RunIssueLinkPageProps> = ({
           {selectedRun && (
             <div className="bg-gray-50 p-4 rounded-lg">
               <h4 className="text-sm font-semibold text-gray-900 mb-2">Run Details</h4>
-              <dl className="grid grid-cols-2 gap-2 text-sm">
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
                 <div>
                   <dt className="text-gray-600">ID:</dt>
                   <dd className="font-medium">{selectedRun.id}</dd>
@@ -223,6 +343,9 @@ const RunIssueLinkPage: React.FC<RunIssueLinkPageProps> = ({
                       type="url"
                       value={formData.href}
                       onChange={(e) => handleFormChange('href', e.target.value)}
+                      onBlur={() => {
+                        void handleIssueUrlBlur();
+                      }}
                       placeholder="https://github.com/user/repo/issues/123"
                       className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                         formData.href && !validateIssueUrl(formData.href)
@@ -234,6 +357,21 @@ const RunIssueLinkPage: React.FC<RunIssueLinkPageProps> = ({
                     />
                     {formData.href && !validateIssueUrl(formData.href) && (
                       <p className="text-xs text-red-600 mt-1">Please enter a valid URL (http/https)</p>
+                    )}
+                    {isResolvingTitle && (
+                      <p className="text-xs text-gray-500 mt-1" role="status">
+                        Looking up issue title…
+                      </p>
+                    )}
+                    {!isResolvingTitle && resolveNotice && (
+                      <p className="text-xs text-green-700 mt-1" role="status">
+                        {resolveNotice}
+                      </p>
+                    )}
+                    {!isResolvingTitle && resolveError && (
+                      <p className="text-xs text-yellow-700 mt-1" role="status">
+                        {resolveError}
+                      </p>
                     )}
                   </div>
                   <div className="flex gap-2">
@@ -249,6 +387,8 @@ const RunIssueLinkPage: React.FC<RunIssueLinkPageProps> = ({
                         setIsAddingIssue(false);
                         setFormData({ label: '', href: '' });
                         setError(null);
+                        setResolveNotice(null);
+                        setResolveError(null);
                       }}
                       className="px-3 py-1 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-1"
                     >
@@ -263,24 +403,8 @@ const RunIssueLinkPage: React.FC<RunIssueLinkPageProps> = ({
                   <p className="text-sm text-gray-500 italic">No issues linked yet</p>
                 )}
                 {issueLinks.map((issue, index) => (
-                  <div key={index} role="listitem" className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs bg-gray-200 text-gray-700 px-2 py-1 rounded">
-                          {getIssueTypeFromUrl(issue.href)}
-                        </span>
-                      </div>
-                      <div className="text-sm font-medium text-gray-900 truncate">{issue.label}</div>
-                      <a
-                        href={issue.href}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-blue-600 hover:text-blue-800 truncate block"
-                        aria-label={`Open link to ${issue.label}`}
-                      >
-                        {issue.href}
-                      </a>
-                    </div>
+                  <div key={issue.href} className="flex items-center justify-between gap-3">
+                    <IssueLinkCard issue={issue} />
                     <button
                       onClick={() => handleRemoveIssue(index)}
                       className="ml-2 text-red-600 hover:text-red-800 p-1 rounded hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500"

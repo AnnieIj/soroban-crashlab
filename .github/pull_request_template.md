@@ -1,17 +1,25 @@
 ## Summary
 
-Describe what changed and why.
-
-## Linked Issue
+<!-- One sentence summary. Include ROADMAP-XXX or GitHub issue number. -->
 
 Closes #
 
-## Validation
+## Checklist
 
-- [ ] frontend checks pass (`npm run lint`, `npm run build`)
-- [ ] core checks pass (`cargo test`)
-- [ ] behavior is reproducible with included steps
+- [ ] CI is green (all checks pass)
+- [ ] Branch name follows `issue/<number>-<slug>`
+- [ ] Scope limited to files listed in the issue
+- [ ] Tests added or updated
+- [ ] Docs updated (if user-facing behavior changed)
+- [ ] `pnpm-lock.yaml` / `package-lock.json` **not** modified
+- [ ] If `package.json` changed: maintainer approval requested below
 
-## Notes for Maintainers
+## Maintainer approval (package.json only)
 
-Any migration, risk, or rollout notes.
+<!-- Delete this section if package.json unchanged -->
+
+- Required dependency change explained:
+
+## Test plan
+
+<!-- Steps to verify. Paste output of relevant verification commands. -->

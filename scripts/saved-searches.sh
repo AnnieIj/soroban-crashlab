@@ -66,3 +66,14 @@ echo "Issues explicitly marked as blocked."
 echo "- **gh command**: \`gh issue list -R ${REPO} --search \"${QUERY_BLOCKED}\"\`"
 echo "- **Web URL**: https://github.com/${REPO}/issues?q=${ENCODED_BLOCKED}"
 echo ""
+
+# 4. Maintainer Response-Time (SLA Tracking)
+# Track issues awaiting first response or review turnaround metrics.
+# Issues without labels/assignees or waiting on reviewer.
+QUERY_RESPONSE="is:open is:issue label:${WAVE_LABEL} no:assignee"
+ENCODED_RESPONSE="is%3Aopen+is%3Aissue+label%3A${WAVE_LABEL}+no%3Aassignee"
+echo "#### 🔍 Needs First Response / Review Turnaround"
+echo "Issues that need initial triage or are awaiting maintainer review turnaround."
+echo "- **gh command**: \`gh issue list -R ${REPO} --search \"${QUERY_RESPONSE}\"\`"
+echo "- **Web URL**: https://github.com/${REPO}/issues?q=${ENCODED_RESPONSE}"
+echo ""

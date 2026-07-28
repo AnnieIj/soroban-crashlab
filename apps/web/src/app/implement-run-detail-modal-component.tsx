@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { FuzzingRun, RunStatus, RunArea, RunSeverity } from './types';
 import { simulateSeedReplay } from './replay';
 import { generateMarkdownReport } from './report-utils';
@@ -114,6 +114,7 @@ export default function RunDetailModal({ isOpen, onClose, run, onReplayComplete 
     if (!isOpen || !run) return null;
 
     return (
+        <>
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 md:p-8 overflow-hidden">
             {/* Backdrop */}
             <div
@@ -358,5 +359,6 @@ export default function RunDetailModal({ isOpen, onClose, run, onReplayComplete 
             markdown={run ? generateMarkdownReport(run) : ''}
             runId={run?.id || ''}
         />
+        </>
     );
 }

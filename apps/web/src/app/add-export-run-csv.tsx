@@ -2,12 +2,14 @@
 
 import React, { useState } from 'react';
 import type { FuzzingRun } from './types';
+import { buildRunsCsv } from './export-run-csv-utils';
 
 type ExportRunCsvProps = {
   runs: FuzzingRun[];
+  visibleColumns?: string[];
 };
 
-export default function AddExportRunCsv({ runs }: ExportRunCsvProps) {
+export default function AddExportRunCsv({ runs, visibleColumns }: ExportRunCsvProps) {
   const [isExporting, setIsExporting] = useState(false);
 
   const handleExport = () => {
@@ -15,23 +17,7 @@ export default function AddExportRunCsv({ runs }: ExportRunCsvProps) {
     
     setTimeout(() => {
       try {
-        const headers = ['ID', 'Status', 'Area', 'Severity', 'Duration (ms)', 'Seed Count', 'CPU Instructions', 'Memory (Bytes)', 'Min Fee'];
-        const csvRows = [
-          headers.join(','),
-          ...runs.map(run => [
-            run.id,
-            run.status,
-            run.area,
-            run.severity,
-            run.duration.toFixed(0),
-            run.seedCount,
-            run.cpuInstructions,
-            run.memoryBytes,
-            run.minResourceFee
-          ].join(','))
-        ];
-        
-        const csvString = csvRows.join('\n');
+        const csvString = buildRunsCsv(runs, visibleColumns);
         const blob = new Blob([csvString], { type: 'text/csv' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');

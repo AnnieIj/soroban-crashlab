@@ -13,7 +13,7 @@
  *  - User interaction patterns (e.g., filtering, sorting) produce expected states
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 
 export type TestStatus = 'idle' | 'running' | 'passed' | 'failed';
 
