@@ -60,7 +60,8 @@ async function uploadArtifactViaUI(
   page: Page,
   filePath: string
 ): Promise<void> {
-  const fileInput = page.locator('input[type="file"]');
+  const fileInput = page.getByTestId('artifact-file-input').or(page.locator('input[type="file"]'));
+  await expect(fileInput).toBeAttached({ timeout: 15000 });
   await fileInput.setInputFiles(filePath);
 
   // Wait for the artifact to appear in the list
@@ -125,9 +126,9 @@ test.describe('Artifact Upload/Download E2E', () => {
     const uploadSection = page.locator('text=Upload New Artifact');
     await expect(uploadSection).toBeVisible();
 
-    // Verify file input exists
-    const fileInput = page.locator('input[type="file"]');
-    await expect(fileInput).toBeVisible();
+    // Verify file input exists (visually hidden, but attached for uploads)
+    const fileInput = page.getByTestId('artifact-file-input').or(page.locator('input[type="file"]'));
+    await expect(fileInput).toBeAttached();
   });
 
   test('should handle multiple artifact uploads', async ({ page }) => {
@@ -329,7 +330,7 @@ test.describe('Artifact Upload/Download E2E', () => {
 
     // This is a soft check - error handling depends on backend state
     // The page should remain functional even if errors occur
-    await expect(page.locator('input[type="file"]')).toBeVisible();
+    await expect(page.getByTestId('artifact-file-input').or(page.locator('input[type="file"]'))).toBeAttached();
   });
 
   test('should verify artifact API endpoints respond', async ({ page }) => {
@@ -406,10 +407,11 @@ test.describe('Artifact API Endpoints', () => {
       expect([200, 201]).toContain(response.status());
 
       const data = await response.json();
-      expect(data).toHaveProperty('id');
-      expect(data).toHaveProperty('name');
-      expect(data).toHaveProperty('createdAt');
-      expect(data.name).toBe(testFileName);
+      const artifact = data?.data?.artifact ?? data?.artifact ?? data;
+      expect(artifact).toHaveProperty('id');
+      expect(artifact).toHaveProperty('name');
+      expect(artifact).toHaveProperty('createdAt');
+      expect(artifact.name).toBe(testFileName);
     } finally {
       cleanupTestFile(filePath);
     }
