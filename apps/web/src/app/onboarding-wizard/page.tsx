@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import {
   loadOnboardingProgress,
@@ -10,14 +10,9 @@ import {
 } from './onboarding-utils';
 
 export default function OnboardingWizardPage() {
-  const [steps, setSteps] = useState<OnboardingStep[]>([]);
+  const [steps, setSteps] = useState<OnboardingStep[]>(() => (typeof window === 'undefined' ? [] : loadOnboardingProgress()));
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    setSteps(loadOnboardingProgress());
-    setLoading(false);
-  }, []);
+  const [loading] = useState(false);
 
   if (loading) {
     return (
@@ -163,7 +158,7 @@ export default function OnboardingWizardPage() {
               🎉 Welcome to CrashLab!
             </h3>
             <p className="text-green-800 dark:text-green-200 mb-4">
-              You've completed the onboarding. Now explore the dashboard and start fuzzing!
+              You have completed the onboarding. Now explore the dashboard and start fuzzing!
             </p>
             <Link
               href="/"

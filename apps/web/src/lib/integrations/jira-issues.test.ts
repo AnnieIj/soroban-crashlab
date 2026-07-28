@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
-import { resolveJiraIssueLink, fetchJiraIssue } from './jira-issues';
+import { resolveJiraIssueLink, fetchJiraIssue, createJiraIssue } from './jira-issues';
 import { logger } from '../logger';
 
 // Mock the logger
@@ -27,6 +27,74 @@ describe('resolveJiraIssueLink', () => {
     const result = await resolveJiraIssueLink('https://jira.example.com/', 'PROJ-123');
 
     expect(result.url).toBe('https://jira.example.com/browse/PROJ-123');
+  });
+});
+
+describe('createJiraIssue', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    process.env = { ...originalEnv };
+  });
+
+  afterAll(() => {
+    process.env = originalEnv;
+  });
+
+  it('creates a Jira issue when credentials are configured', async () => {
+    process.env.JIRA_BASE_URL = 'https://jira.example.com';
+    process.env.JIRA_EMAIL = 'test@example.com';
+    process.env.JIRA_API_TOKEN = 'token123';
+    process.env.JIRA_PROJECT_KEY = 'CRASH';
+
+    global.fetch = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        status: 201,
+        json: () => Promise.resolve({
+          key: 'CRASH-123',
+          fields: {
+            summary: 'Crash report for contract execution',
+            status: { name: 'To Do' },
+            assignee: null,
+          },
+        }),
+      } as Response),
+    );
+
+    const result = await createJiraIssue({
+      summary: 'Crash report for contract execution',
+      description: 'This issue was created from a crash report.',
+    });
+
+    expect(result).toEqual({
+      key: 'CRASH-123',
+      summary: 'Crash report for contract execution',
+      status: 'To Do',
+      assignee: null,
+      url: 'https://jira.example.com/browse/CRASH-123',
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      'https://jira.example.com/rest/api/3/issue',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          Authorization: expect.stringMatching(/^Basic /),
+        }),
+      }),
+    );
+  });
+
+  it('returns null when Jira credentials are not configured', async () => {
+    delete process.env.JIRA_BASE_URL;
+    delete process.env.JIRA_EMAIL;
+    delete process.env.JIRA_API_TOKEN;
+
+    const result = await createJiraIssue({ summary: 'Crash report' });
+
+    expect(result).toBeNull();
+    expect(logger.warn).toHaveBeenCalledWith('Jira credentials not configured', { issueKey: undefined });
   });
 });
 

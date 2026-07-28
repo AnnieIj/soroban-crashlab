@@ -1,7 +1,7 @@
 'use client';
 
 import { FuzzingRun } from './types';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 interface IssueTriageBoardProps {
   runs: FuzzingRun[];
@@ -48,25 +48,34 @@ export default function IssueTriageBoard({ runs }: IssueTriageBoardProps) {
     },
   ];
 
-  const [columns, setColumns] = useState<TriageColumn[]>(defaultColumns);
-  const [draggedColumn, setDraggedColumn] = useState<string | null>(null);
-
-  useEffect(() => {
-    const saved = localStorage.getItem('triageColumnOrder');
-    if (saved) {
-      try {
-        const order = JSON.parse(saved);
-        const reordered = order.map((id: string) => defaultColumns.find(c => c.id === id)).filter(Boolean);
-        if (reordered.length === defaultColumns.length) {
-          setColumns(reordered);
-        }
-      } catch {
-        setColumns(defaultColumns);
-      }
-    } else {
-      setColumns(defaultColumns);
+  const getInitialColumns = () => {
+    if (typeof window === 'undefined') {
+      return defaultColumns;
     }
-  }, []);
+
+    try {
+      const saved = window.localStorage.getItem('triageColumnOrder');
+      if (!saved) {
+        return defaultColumns;
+      }
+
+      const order = JSON.parse(saved) as string[];
+      const reordered = order
+        .map((id) => defaultColumns.find((column) => column.id === id))
+        .filter((column): column is TriageColumn => Boolean(column));
+
+      if (reordered.length === defaultColumns.length) {
+        return reordered;
+      }
+    } catch {
+      // Fall back to the default order.
+    }
+
+    return defaultColumns;
+  };
+
+  const [columns, setColumns] = useState<TriageColumn[]>(getInitialColumns);
+  const [draggedColumn, setDraggedColumn] = useState<string | null>(null);
 
   const handleDragStart = (e: React.DragEvent, columnId: string) => {
     setDraggedColumn(columnId);

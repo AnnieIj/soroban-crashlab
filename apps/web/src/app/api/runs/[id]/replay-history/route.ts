@@ -1,15 +1,13 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { buildMockRuns } from '@/app/mockRuns';
-import type { FuzzingRun } from '@/app/types';
+import { NextRequest } from 'next/server';
 import { withRouteErrorHandling } from '@/lib/route-handler';
-import { errorResponse, status } from '@/lib/api-response-utils';
+import { successResponse, errorResponse, status } from '@/lib/api-response-utils';
+import { getMockReplayHistoryForRun } from '@/fixtures/replay-history';
+import { sortReplayHistoryByTimestamp } from '@/app/run-replay-history-utils';
 
-export function findRunById(id: string): FuzzingRun | undefined {
-  return buildMockRuns().find((r) => r.id === id);
-}
+export const runtime = 'nodejs';
 
 export const GET = withRouteErrorHandling(
-  'GET /api/runs/[id]',
+  'GET /api/runs/[id]/replay-history',
   async (_request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
     const { id } = await params;
 
@@ -21,27 +19,27 @@ export const GET = withRouteErrorHandling(
 
     if (runsApiUrl) {
       const upstream = await fetch(
-        `${runsApiUrl}/runs/${encodeURIComponent(id)}`,
+        `${runsApiUrl}/runs/${encodeURIComponent(id)}/replay-history`,
         {
           headers: { Accept: 'application/json' },
           cache: 'no-store',
           signal: AbortSignal.timeout(10_000),
         },
       );
+
       if (upstream.status === 404) {
         return errorResponse('Run not found', status.notFound);
       }
+
       if (!upstream.ok) {
         return errorResponse('Upstream error', status.badGateway);
       }
+
       const data = (await upstream.json()) as unknown;
-      return NextResponse.json(data, { headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' } });
+      return successResponse(data);
     }
 
-    const run = findRunById(id);
-    if (!run) {
-      return errorResponse('Run not found', status.notFound);
-    }
-    return NextResponse.json(run, { headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' } });
+    const entries = sortReplayHistoryByTimestamp(getMockReplayHistoryForRun(id), 'desc');
+    return successResponse({ entries }, { total: entries.length });
   },
 );
