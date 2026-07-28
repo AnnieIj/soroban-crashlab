@@ -5,7 +5,7 @@
  * Follows the pattern established by pagerduty-adapter.ts and sentry-adapter.ts.
  */
 
-import type { SmtpConfig } from './smtp-email';
+import type { SmtpConfig } from './smtp-validation';
 import type { EmailLogEntry } from '../../app/integrate-smtp-email-integration-utils';
 
 export interface SmtpAdapterOptions {

@@ -21,6 +21,17 @@ export default function QueryBuilderPage() {
   const [queryGroup, setQueryGroup] = useState<FilterGroup>(createGroup('root'));
   const [queryOutput, setQueryOutput] = useState('');
 
+  const updateGroupRecursive = useCallback(
+    function recurse(group: FilterGroup, targetId: string, update: (g: FilterGroup) => FilterGroup): FilterGroup {
+      if (group.id === targetId) return update(group);
+      return {
+        ...group,
+        groups: group.groups.map(g => recurse(g, targetId, update)),
+      };
+    },
+    [],
+  );
+
   const handleAddCondition = useCallback((groupId: string) => {
     const id = `cond-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const condition = createCondition(id, 'status');
@@ -29,7 +40,7 @@ export default function QueryBuilderPage() {
       setQueryOutput(generateQueryString(next));
       return next;
     });
-  }, []);
+  }, [updateGroupRecursive]);
 
   const handleRemoveCondition = useCallback((groupId: string, conditionId: string) => {
     setQueryGroup(prev => {
@@ -37,7 +48,7 @@ export default function QueryBuilderPage() {
       setQueryOutput(generateQueryString(next));
       return next;
     });
-  }, []);
+  }, [updateGroupRecursive]);
 
   const handleUpdateCondition = useCallback((groupId: string, updatedCondition: FilterCondition) => {
     setQueryGroup(prev => {
@@ -45,7 +56,7 @@ export default function QueryBuilderPage() {
       setQueryOutput(generateQueryString(next));
       return next;
     });
-  }, []);
+  }, [updateGroupRecursive]);
 
   const handleAddGroup = useCallback((parentGroupId: string) => {
     const id = `group-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -55,7 +66,7 @@ export default function QueryBuilderPage() {
       setQueryOutput(generateQueryString(next));
       return next;
     });
-  }, []);
+  }, [updateGroupRecursive]);
 
   const handleRemoveGroup = useCallback((parentGroupId: string, groupId: string) => {
     setQueryGroup(prev => {
@@ -63,15 +74,7 @@ export default function QueryBuilderPage() {
       setQueryOutput(generateQueryString(next));
       return next;
     });
-  }, []);
-
-  const updateGroupRecursive = (group: FilterGroup, targetId: string, update: (g: FilterGroup) => FilterGroup): FilterGroup => {
-    if (group.id === targetId) return update(group);
-    return {
-      ...group,
-      groups: group.groups.map(g => updateGroupRecursive(g, targetId, update)),
-    };
-  };
+  }, [updateGroupRecursive]);
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 py-8 px-4">

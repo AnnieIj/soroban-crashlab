@@ -15,6 +15,7 @@ export default function OnboardingWizardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSteps(loadOnboardingProgress());
     setLoading(false);
   }, []);
@@ -163,7 +164,7 @@ export default function OnboardingWizardPage() {
               🎉 Welcome to CrashLab!
             </h3>
             <p className="text-green-800 dark:text-green-200 mb-4">
-              You've completed the onboarding. Now explore the dashboard and start fuzzing!
+              You&apos;ve completed the onboarding. Now explore the dashboard and start fuzzing!
             </p>
             <Link
               href="/"

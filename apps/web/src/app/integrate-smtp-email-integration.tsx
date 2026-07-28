@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react";
 
 import { createSmtpAdapter } from "@/lib/integrations/smtp-adapter";
-import type { SmtpConfig } from "@/lib/integrations/smtp-email";
-import { validateSmtpConfig, validateEmail } from "@/lib/integrations/smtp-email";
+import type { SmtpConfig } from "@/lib/integrations/smtp-validation";
+import { validateSmtpConfig, validateEmail } from "@/lib/integrations/smtp-validation";
 import type { EmailLogEntry } from "./integrate-smtp-email-integration-utils";
 import {
   summariseEmailLog,

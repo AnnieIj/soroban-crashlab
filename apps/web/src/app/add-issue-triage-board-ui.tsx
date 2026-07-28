@@ -58,6 +58,9 @@ export default function IssueTriageBoard({ runs }: IssueTriageBoardProps) {
         const order = JSON.parse(saved);
         const reordered = order.map((id: string) => defaultColumns.find(c => c.id === id)).filter(Boolean);
         if (reordered.length === defaultColumns.length) {
+          // Restoring the user's saved column order once, right after mount,
+          // so the initial (server-matching) render stays the default order.
+          // eslint-disable-next-line react-hooks/set-state-in-effect
           setColumns(reordered);
         }
       } catch {
@@ -66,6 +69,7 @@ export default function IssueTriageBoard({ runs }: IssueTriageBoardProps) {
     } else {
       setColumns(defaultColumns);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleDragStart = (e: React.DragEvent, columnId: string) => {
