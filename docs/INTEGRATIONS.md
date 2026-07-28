@@ -56,10 +56,17 @@ Slack provides team messaging and notifications.
 **What this integration does**
 - Sends formatted notifications to Slack channels when crashes are detected
 - Includes run details, failure signatures, and direct links to the dashboard
-- Supports threaded messages with additional context
+- Supports threaded messages with additional context: later events for the
+  same run (e.g. completed/failed after started) reply into the first
+  message's thread instead of posting a new top-level message
+- Requires a Slack bot token with the `chat:write` scope and a channel ID
+  (`SLACK_BOT_TOKEN`, `SLACK_CHANNEL_ID`) — incoming webhooks can't return the
+  `ts` needed to thread replies, so this uses `chat.postMessage` instead
 
 **Files involved**
 - `apps/web/src/lib/integrations/slack-webhook.ts`
+- `apps/web/src/lib/integrations/slack-thread-store.ts`
+- `apps/web/src/app/api/integrations/slack/route.ts`
 
 ---
 
