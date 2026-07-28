@@ -78,9 +78,14 @@ export default defineConfig({
 
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: 'npm run dev -- -p 3077',
+    // CI already runs `pnpm run build`; start the production server there.
+    // Locally prefer `next dev` for faster iteration.
+    command: process.env.CI
+      ? 'pnpm exec next start -p 3077'
+      : 'pnpm exec next dev -p 3077',
     url: 'http://localhost:3077',
     reuseExistingServer: !process.env.CI,
+    timeout: 180_000,
     env: {
       NEXT_PUBLIC_APP_URL: 'http://localhost:3077',
     },
