@@ -129,6 +129,9 @@ export default function RunStatusTimeline({
                 {steps.map((step) => {
                     const isCompleted = step.isComplete;
                     const isActive = step.isActive;
+                    const hoverDetail = `${step.label} — ${step.description}. Timestamp: ${step.time}. State: ${
+                        isCompleted ? 'complete' : isActive ? 'active' : 'pending'
+                    }.`;
                     
                     return (
                         <div 
@@ -137,6 +140,7 @@ export default function RunStatusTimeline({
                             tabIndex={0}
                             role="listitem"
                             aria-label={`${step.label}: ${step.description}. ${step.time}`}
+                            title={hoverDetail}
                         >
                             <div className="relative z-10 shrink-0">
                                 {isCompleted ? (
@@ -177,6 +181,18 @@ export default function RunStatusTimeline({
                                 <span className="text-[10px] uppercase font-mono font-bold tracking-widest text-blue-600/60 dark:text-blue-400/60 mt-3">
                                     {step.time}
                                 </span>
+                            </div>
+
+                            <div
+                                role="tooltip"
+                                className="pointer-events-none absolute left-1/2 top-full z-20 mt-3 w-56 -translate-x-1/2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-3 text-left opacity-0 shadow-xl transition-opacity duration-200 group-hover/step:opacity-100 group-focus-within/step:opacity-100"
+                            >
+                                <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">{step.label}</p>
+                                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1">{step.description}</p>
+                                <p className="text-[10px] font-mono uppercase tracking-wider text-blue-600 dark:text-blue-400 mt-2">{step.time}</p>
+                                <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-1">
+                                    {isCompleted ? 'Complete' : isActive ? 'In progress' : 'Pending'}
+                                </p>
                             </div>
                         </div>
                     );
