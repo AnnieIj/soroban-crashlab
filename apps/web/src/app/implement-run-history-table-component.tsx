@@ -228,7 +228,6 @@ export default function EnhancedRunHistoryTable({
                       ? "text-blue-600 dark:text-blue-400"
                       : "text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
                   }`}
-                  className="px-6 py-5 text-[10px] font-bold text-zinc-400 uppercase tracking-widest cursor-pointer hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
                   aria-sort={getSortIndicator("id", sort).ariaSort}
                   onClick={() => toggleSort("id")}
                 >
@@ -252,7 +251,6 @@ export default function EnhancedRunHistoryTable({
                       ? "text-blue-600 dark:text-blue-400"
                       : "text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
                   }`}
-                  className="px-6 py-5 text-[10px] font-bold text-zinc-400 uppercase tracking-widest text-right cursor-pointer hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
                   aria-sort={getSortIndicator("duration", sort).ariaSort}
                   onClick={() => toggleSort("duration")}
                 >
@@ -266,7 +264,6 @@ export default function EnhancedRunHistoryTable({
                       ? "text-blue-600 dark:text-blue-400"
                       : "text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
                   }`}
-                  className="px-6 py-5 text-[10px] font-bold text-zinc-400 uppercase tracking-widest text-right cursor-pointer hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
                   aria-sort={getSortIndicator("seedCount", sort).ariaSort}
                   onClick={() => toggleSort("seedCount")}
                 >
