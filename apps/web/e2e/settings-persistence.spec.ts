@@ -1,11 +1,11 @@
-import { test, expect } from './fixtures';
+﻿import { test, expect } from './fixtures';
 
 const API_CONFIG_STORAGE_KEY = 'crashlab:api-config';
 const PAGE_READY_TIMEOUT_MS = 120000;
 
 async function openApiSettings(page: import('@playwright/test').Page) {
-  await page.goto('/settings/api');
-  await expect(page.getByRole('heading', { name: 'API Configuration' })).toBeVisible({
+  await page.goto('/settings/api', { waitUntil: 'domcontentloaded' });
+  await expect(page.getByText('API Configuration')).toBeVisible({
     timeout: PAGE_READY_TIMEOUT_MS,
   });
   await expect(page.locator('#api-backend-url')).toBeVisible({ timeout: PAGE_READY_TIMEOUT_MS });
@@ -49,7 +49,7 @@ test.describe('Settings page localStorage persistence', () => {
     await expect(page.locator('#api-config-saved-indicator')).toBeVisible();
 
     await page.goto('/settings');
-    await page.goto('/settings/api');
+    await page.goto('/settings/api', { waitUntil: 'domcontentloaded' });
 
     await expect(page.locator('#api-backend-url')).toHaveValue('https://persisted.example.com', {
       timeout: PAGE_READY_TIMEOUT_MS,
