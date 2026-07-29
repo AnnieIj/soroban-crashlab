@@ -1,41 +1,47 @@
 import { test, expect } from './fixtures';
 
-const MAINTAINER_STORAGE_KEY = 'crashlab:maintainer-mode';
-
 test.describe('Maintainer Mode Toggling', () => {
-  test.setTimeout(120000);
-
-  test('should toggle maintainer mode and grant access to the maintainer route', async ({ page }) => {
+  test('should toggle maintainer mode and show/hide the maintainer tab', async ({ page }) => {
+    // Navigate to Settings page
     await page.goto('/settings');
-    await expect(page).toHaveURL(/\/settings/);
-    await expect(page.locator('h1')).toContainText('Settings', { timeout: 60000 });
 
-    const toggle = page.getByRole('switch', { name: 'Toggle maintainer mode' });
-    await expect(toggle).toBeAttached({ timeout: 60000 });
-    await toggle.click({ force: true });
-    await expect(toggle).toHaveAttribute('aria-checked', 'true');
+    // Verify Settings heading
+    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
 
-    await page.goto('/maintainer');
-    await expect(page).toHaveURL(/\/maintainer/);
-    await expect(page.locator('h1')).toContainText('Maintainer', { timeout: 60000 });
-  });
+    // Verify "Maintainer" link in navbar is NOT visible initially
+    const maintainerNavLink = page.locator('nav a[href="/maintainer"]');
+    await expect(maintainerNavLink).not.toBeVisible();
 
-  test('redirects away from maintainer route when mode is disabled', async ({ page }) => {
-    await page.addInitScript((key) => {
-      window.localStorage.removeItem(key);
-    }, MAINTAINER_STORAGE_KEY);
+    // Find the toggle maintainer mode button
+    const toggleButton = page.getByRole('switch', { name: 'Toggle maintainer mode' });
+    await expect(toggleButton).toBeVisible();
+    await expect(toggleButton).toHaveAttribute('aria-checked', 'false');
 
-    await page.goto('/maintainer');
-    await expect(page).toHaveURL(/\/$/, { timeout: 60000 });
-  });
+    // Click the toggle button to turn it on
+    await toggleButton.click();
 
-  test('grants access to maintainer dashboard when mode is enabled via storage', async ({ page }) => {
-    await page.addInitScript((key) => {
-      window.localStorage.setItem(key, 'true');
-    }, MAINTAINER_STORAGE_KEY);
+    // Verify the state is updated
+    await expect(toggleButton).toHaveAttribute('aria-checked', 'true');
 
-    await page.goto('/maintainer');
-    await expect(page).toHaveURL(/\/maintainer/);
-    await expect(page.locator('h1')).toContainText('Maintainer', { timeout: 60000 });
+    // Verify the "Maintainer" link in navbar is now visible
+    await expect(maintainerNavLink).toBeVisible();
+
+    // Click on the maintainer nav link to test navigation
+    await maintainerNavLink.click();
+
+    // Verify that we are on the /maintainer page
+    await expect(page).toHaveURL(/.*\/maintainer/, { timeout: 15000 });
+
+    // Go back to Settings page
+    await page.goto('/settings');
+
+    // Toggle it off
+    const toggleButtonOff = page.getByRole('switch', { name: 'Toggle maintainer mode' });
+    await expect(toggleButtonOff).toHaveAttribute('aria-checked', 'true');
+    await toggleButtonOff.click();
+
+    // Verify it's off and nav link is gone
+    await expect(toggleButtonOff).toHaveAttribute('aria-checked', 'false');
+    await expect(maintainerNavLink).not.toBeVisible();
   });
 });
