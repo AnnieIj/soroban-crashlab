@@ -207,7 +207,7 @@ function assertTrue(condition: boolean, message?: string): void {
     { id: 'widget-editor', visible: true, order: 2 },
   ]);
   const result = parseDashboardLayout(input);
-  assertTrue(!result.some((s) => s.id === 'invalid-section'));
+  assertTrue(!result.some((s) => s.id === ('invalid-section' as _DashboardSectionId)));
 }
 
 // parseDashboardLayout: adds missing sections from default

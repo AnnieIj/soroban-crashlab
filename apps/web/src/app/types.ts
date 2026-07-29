@@ -134,6 +134,12 @@ export interface CampaignConfig {
 export type ArtifactType = 'seed' | 'log' | 'trace' | 'coverage' | 'bundle';
 
 /**
+ * Content type for artifact file preview.
+ * Determines how the artifact content is rendered in the preview modal.
+ */
+export type ContentType = 'json' | 'text' | 'hex' | 'unknown';
+
+/**
  * A stored fuzzing artifact as displayed in the artifact explorer and
  * preview modal.
  */
@@ -147,4 +153,9 @@ export interface Artifact {
     updatedAt: string;
     runId?: string;
     content_hash?: string;
+    /**
+     * Detected content type for file preview (json, text, hex).
+     * When absent, the preview falls back to the artifact type.
+     */
+    contentType?: ContentType;
 }

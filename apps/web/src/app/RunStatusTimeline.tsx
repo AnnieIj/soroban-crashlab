@@ -99,12 +99,18 @@ export default function RunStatusTimeline({
                     </div>
                     Execution History
                 </h2>
-                <div className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border transition-colors ${
-                    status === 'running' ? 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800' :
+                <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border transition-colors ${
+                    status === 'running' ? 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800 badge-running' :
                     status === 'failed' ? 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800' :
                     status === 'completed' ? 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800' :
                     'bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-900/30 dark:text-zinc-300 dark:border-zinc-800'
                 }`}>
+                    {status === 'running' && (
+                        <span className="relative inline-flex h-1.5 w-1.5 shrink-0" aria-hidden="true">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-current opacity-60" />
+                            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-current" />
+                        </span>
+                    )}
                     {status}
                 </div>
             </div>
