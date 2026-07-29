@@ -97,23 +97,22 @@ export default function SettingsPage() {
                 {mounted && isMaintainer ? 'Currently active' : 'Currently disabled'}
               </p>
             </div>
-            {mounted && (
-              <button
-                onClick={toggleMaintainer}
-                className="relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:ring-offset-2"
-                style={{
-                  background: isMaintainer ? '#0A66C2' : '#E0DFDC',
-                }}
-                role="switch"
-                aria-checked={isMaintainer}
-                aria-label="Toggle maintainer mode"
-              >
-                <span
-                  className="inline-block h-5 w-5 transform rounded-full bg-white transition-transform shadow-sm"
-                  style={{ transform: isMaintainer ? 'translateX(24px)' : 'translateX(3px)' }}
-                />
-              </button>
-            )}
+            <button
+              onClick={toggleMaintainer}
+              className="relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:ring-offset-2"
+              style={{
+                background: isMaintainer ? '#0A66C2' : '#E0DFDC',
+              }}
+              role="switch"
+              aria-checked={isMaintainer}
+              aria-label="Toggle maintainer mode"
+              data-testid="maintainer-mode-toggle"
+            >
+              <span
+                className="inline-block h-5 w-5 transform rounded-full bg-white transition-transform shadow-sm"
+                style={{ transform: isMaintainer ? 'translateX(24px)' : 'translateX(3px)' }}
+              />
+            </button>
           </div>
         </div>
       </div>
