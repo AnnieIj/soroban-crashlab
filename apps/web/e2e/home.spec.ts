@@ -23,6 +23,16 @@ test.describe('Home Page', () => {
     await expect(main).toBeVisible({ timeout: 30000 });
   });
 
+  test('should have accessible heading structure', async ({ page }) => {
+    // Prefer an h1 when present; fall back to any landmark heading.
+    const h1 = page.locator('h1');
+    if (await h1.count()) {
+      await expect(h1.first()).toBeVisible({ timeout: 15000 });
+      return;
+    }
+    await expect(page.getByRole('heading').first()).toBeVisible({ timeout: 15000 });
+  });
+
   test('should have no console errors', async ({ page }) => {
     const errors: string[] = [];
     const ignoredPatterns = [

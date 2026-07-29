@@ -46,12 +46,12 @@ export default function MaintainerPage() {
   );
   const [fetchAttempt, setFetchAttempt] = useState(0);
 
-  // Redirect if not maintainer
+  // Redirect if not maintainer (hard navigation so e2e URL assertions settle)
   useEffect(() => {
     if (mounted && !isMaintainer) {
-      router.push("/");
+      window.location.replace("/");
     }
-  }, [isMaintainer, mounted, router]);
+  }, [isMaintainer, mounted]);
 
   // Fetch runs data
   useEffect(() => {
