@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMaintainerMode } from '../useMaintainerMode';
 import { loadFromStorage } from './api/api-config-utils';
 
@@ -10,21 +10,17 @@ function readActiveUrl(): string {
   return config.backendUrl || process.env.NEXT_PUBLIC_API_URL || '';
 }
 
-function getInitialApiUrl(): string {
-  if (typeof window === 'undefined') return '';
-  const activeUrl = readActiveUrl();
-  return activeUrl || 'Not configured (using mock data)';
-}
-
-function getInitialIsMockData(): boolean {
-  if (typeof window === 'undefined') return true;
-  return !readActiveUrl();
-}
-
 export default function SettingsPage() {
   const { isMaintainer, toggle: toggleMaintainer, mounted, storageError } = useMaintainerMode();
-  const [apiUrl] = useState<string>(getInitialApiUrl);
-  const [isMockData] = useState<boolean>(getInitialIsMockData);
+  // Defer localStorage reads until after mount so SSR HTML matches the first client render.
+  const [apiUrl, setApiUrl] = useState('');
+  const [isMockData, setIsMockData] = useState(true);
+
+  useEffect(() => {
+    const activeUrl = readActiveUrl();
+    setApiUrl(activeUrl || 'Not configured (using mock data)');
+    setIsMockData(!activeUrl);
+  }, []);
   return (
     <div className="container-full page-padding fade-in">
       <div className="mb-4 sm:mb-6">
