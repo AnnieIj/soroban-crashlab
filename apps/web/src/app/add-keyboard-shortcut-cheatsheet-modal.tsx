@@ -132,7 +132,7 @@ export default function AddKeyboardShortcutCheatsheetModal() {
         aria-expanded={isOpen}
         aria-haspopup="dialog"
         className="fixed bottom-6 right-6 z-40 flex h-11 w-11 items-center justify-center rounded-full bg-zinc-900 text-lg font-bold text-white shadow-lg transition hover:scale-110 hover:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700 dark:focus:ring-offset-black"
-        title="Press ? for keyboard shortcuts"
+        title="Press ? or Ctrl+/ for keyboard shortcuts"
       >
         <span aria-hidden="true">?</span>
       </button>
@@ -161,7 +161,8 @@ export default function AddKeyboardShortcutCheatsheetModal() {
                   Keyboard Shortcuts
                 </h2>
                 <p id="keyboard-cheatsheet-description" className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                  Press <kbd className="rounded border border-zinc-300 px-1 font-mono dark:border-zinc-600">?</kbd> anywhere to toggle this cheatsheet.
+                  Press <kbd className="rounded border border-zinc-300 px-1 font-mono dark:border-zinc-600">?</kbd> or{" "}
+                  <kbd className="rounded border border-zinc-300 px-1 font-mono dark:border-zinc-600">Ctrl+/</kbd> anywhere to toggle this cheatsheet.
                 </p>
               </div>
               <button
