@@ -7,6 +7,7 @@ import {
   buildReplayHistoryEntryFromReplay,
   recordRunReplayHistoryEntry,
 } from "./add-run-replay-history-with-timestamps";
+import OperationProgressIndicator from "../components/OperationProgressIndicator";
 
 interface AddReplayFromUiActionProps {
   /** Run ID to replay */
@@ -69,6 +70,16 @@ export default function AddReplayFromUiAction({
     }
   };
 
+  // Map ReplayButtonStatus → OperationStatus for the progress indicator
+  const progressStatus =
+    status === "loading"
+      ? "running"
+      : status === "success"
+        ? "done"
+        : status === "error"
+          ? "failed"
+          : "idle";
+
   return (
     <div
       className="flex min-w-[10rem] flex-col items-end gap-1"
@@ -129,17 +140,26 @@ export default function AddReplayFromUiAction({
         )}
         {getReplayButtonLabel(status)}
       </button>
+
+      {/* Progress indicator — compact, shown when not idle */}
+      {progressStatus !== "idle" && (
+        <div className="w-full max-w-[14rem]">
+          <OperationProgressIndicator
+            status={progressStatus}
+            runningLabel="Replaying…"
+            doneLabel="Queued"
+            failedLabel="Failed"
+            errorMessage={errorMessage ?? undefined}
+          />
+        </div>
+      )}
+
       {status === "success" && replayedRunId && (
         <span
           className="max-w-[14rem] truncate text-right text-[11px] text-emerald-700 dark:text-emerald-300"
           aria-label={`Replay queued as ${replayedRunId}`}
         >
           Queued: {replayedRunId}
-        </span>
-      )}
-      {status === "error" && errorMessage && (
-        <span className="max-w-[14rem] text-right text-[11px] text-rose-700 dark:text-rose-300">
-          {errorMessage}
         </span>
       )}
     </div>
