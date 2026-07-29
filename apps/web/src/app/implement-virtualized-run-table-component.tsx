@@ -5,6 +5,7 @@ import { FuzzingRun, RunStatus } from './types';
 import { formatDuration } from './utils/format';
 import { useDataTableKeyboardNav } from './use-data-table-keyboard-nav';
 import type { DataTableRowKeyboardProps } from './use-data-table-keyboard-nav';
+import TruncatedCell from '@/components/TruncatedCell';
 
 /** Height of a single data row in pixels — must match the rendered row height. */
 const ROW_HEIGHT = 57;
@@ -96,9 +97,9 @@ const VirtualRow = ({
                             e.stopPropagation();
                             onSelectRun(run.id);
                         }}
-                        className="text-sm font-mono text-blue-600 dark:text-blue-400 hover:underline decoration-blue-500/30 underline-offset-4 text-left truncate"
+                        className="text-sm font-mono text-blue-600 dark:text-blue-400 hover:underline decoration-blue-500/30 underline-offset-4 text-left w-full min-w-0"
                     >
-                        {run.id}
+                        <TruncatedCell>{run.id}</TruncatedCell>
                     </button>
                 </td>
             )}
@@ -108,16 +109,16 @@ const VirtualRow = ({
                 </td>
             )}
             {visibleColumns.includes('area') && (
-                <td className="px-6 w-28 shrink-0 text-sm text-zinc-600 dark:text-zinc-400 truncate">
-                    {run.area}
+                <td className="px-6 w-28 shrink-0 text-sm text-zinc-600 dark:text-zinc-400">
+                    <TruncatedCell>{run.area}</TruncatedCell>
                 </td>
             )}
             {visibleColumns.includes('severity') && (
                 <td
-                    className="px-6 w-28 shrink-0 text-sm truncate"
+                    className="px-6 w-28 shrink-0 text-sm"
                     style={{ color: run.severity === 'critical' ? '#C37D16' : run.severity === 'high' ? '#CC1016' : undefined }}
                 >
-                    {run.severity}
+                    <TruncatedCell>{run.severity}</TruncatedCell>
                 </td>
             )}
             {visibleColumns.includes('duration') && (

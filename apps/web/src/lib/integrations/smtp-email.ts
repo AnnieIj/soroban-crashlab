@@ -94,19 +94,60 @@ export async function verifySmtpConnection(
   }
 }
 
-/**
- * Batch send emails to multiple recipients
- */
-export async function sendBatchEmails(
-  config: SmtpConfig,
-  messages: EmailMessage[],
-): Promise<EmailNotificationResult[]> {
-  const results: EmailNotificationResult[] = [];
+export interface SmtpAdapterOptions {
+  fetchImpl?: typeof fetch;
+  timeoutMs?: number;
+}
 
-  for (const message of messages) {
-    const result = await sendEmail(config, message);
-    results.push(result);
+async function sendEmailImpl(
+  config: SmtpConfig,
+  message: EmailMessage,
+): Promise<EmailNotificationResult> {
+  const configError = validateSmtpConfig(config);
+  if (configError) {
+    return { success: false, error: configError };
   }
 
-  return results;
+  const messageError = validateEmailMessage(message);
+  if (messageError) {
+    return { success: false, error: messageError };
+  }
+
+  try {
+    const mockMessageId = `<${Date.now()}.${Math.random()}@crashlab.local>`;
+
+    if (config.port === 0 || !config.host) {
+      throw new Error("Invalid SMTP configuration");
+    }
+
+    return {
+      success: true,
+      messageId: mockMessageId,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: `Failed to send email: ${error instanceof Error ? error.message : "Unknown error"}`,
+    };
+  }
+}
+
+export function createSmtpAdapter(_options: SmtpAdapterOptions = {}) {
+  return {
+    sendEmail: sendEmailImpl,
+
+    async sendBatchEmails(
+      config: SmtpConfig,
+      messages: EmailMessage[],
+    ): Promise<EmailNotificationResult[]> {
+      const results: EmailNotificationResult[] = [];
+
+      for (const message of messages) {
+        const result = await sendEmailImpl(config, message);
+        results.push(result);
+      }
+
+      return results;
+    },
+  };
 }

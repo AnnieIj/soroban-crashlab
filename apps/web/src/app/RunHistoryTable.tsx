@@ -3,6 +3,7 @@
 import { FuzzingRun, RunStatus } from './types';
 import AddReplayFromUiAction from './add-replay-from-ui-action';
 import { useDataTableKeyboardNav } from './use-data-table-keyboard-nav';
+import TruncatedCell from '@/components/TruncatedCell';
 
 interface RunHistoryTableProps {
     /** Array of fuzzing runs to display */
@@ -98,16 +99,16 @@ export default function RunHistoryTable({
                                 aria-label={`Fuzzing run ${run.id}, status ${run.status}`}
                             >
                                 {visibleColumns.includes('id') && (
-                                    <td className="px-6 py-4">
+                                    <td className="px-6 py-4 max-w-[200px]">
                                         <button
                                             type="button"
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 onSelectRun(run.id);
                                             }}
-                                            className="text-sm font-mono text-blue-600 dark:text-blue-400 hover:underline decoration-blue-500/30 underline-offset-4 text-left"
+                                            className="text-sm font-mono text-blue-600 dark:text-blue-400 hover:underline decoration-blue-500/30 underline-offset-4 text-left w-full min-w-0"
                                         >
-                                            {run.id}
+                                            <TruncatedCell>{run.id}</TruncatedCell>
                                         </button>
                                     </td>
                                 )}

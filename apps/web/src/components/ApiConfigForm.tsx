@@ -15,6 +15,8 @@ import {
   isSameConfig,
   resolveInitialConfig,
 } from '../app/settings/api/api-config-utils';
+import ConfirmDialog from './ConfirmDialog';
+import { getConfirmDialogConfig } from './confirm-dialog-utils';
 
 const numericFields = new Set<keyof ApiConfig>([
   'rateLimitMaxRequests',
@@ -85,6 +87,7 @@ export default function ApiConfigForm() {
   const [saved, setSaved] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [draftRestored, setDraftRestored] = useState(false);
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
 
   // Latest config, so the visibility/pagehide listeners can flush the final
   // keystrokes without being re-bound on every change.
@@ -187,12 +190,21 @@ export default function ApiConfigForm() {
   );
 
   const handleReset = useCallback(() => {
+    setResetConfirmOpen(true);
+  }, []);
+
+  const handleResetConfirm = useCallback(() => {
     resetStorage();
     clearDraft();
     setConfig(DEFAULT_CONFIG);
     setErrors({});
     setSaved(false);
     setDraftRestored(false);
+    setResetConfirmOpen(false);
+  }, []);
+
+  const handleResetCancel = useCallback(() => {
+    setResetConfirmOpen(false);
   }, []);
 
   const isConfigured = mounted && config.backendUrl.trim() !== '';
@@ -392,6 +404,23 @@ export default function ApiConfigForm() {
           </div>
         )}
       </div>
+
+      {/* Reset-to-defaults confirmation */}
+      {(() => {
+        const cfg = getConfirmDialogConfig('reset-config');
+        return (
+          <ConfirmDialog
+            isOpen={resetConfirmOpen}
+            title={cfg.title}
+            message={cfg.message}
+            confirmText={cfg.confirmText}
+            cancelText={cfg.cancelText}
+            variant={cfg.variant}
+            onConfirm={handleResetConfirm}
+            onCancel={handleResetCancel}
+          />
+        );
+      })()}
     </div>
   );
 }

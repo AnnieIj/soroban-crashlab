@@ -49,8 +49,13 @@ function cleanupTestFile(filePath: string): void {
  */
 async function navigateToArtifactPage(page: Page): Promise<void> {
   await page.goto('/integrations/artifacts');
-  // Wait for the page to fully load
-  await page.waitForLoadState('networkidle');
+  // Wait for the dynamically imported page content (avoid networkidle —
+  // the app polls APIs and that wait never settles under next start).
+  await expect(page.getByText('Artifact Storage Integration')).toBeVisible({
+    timeout: 60000,
+  });
+  await expect(page.getByText('Upload New Artifact')).toBeVisible({ timeout: 15000 });
+  await expect(page.locator('input[type="file"]')).toBeAttached({ timeout: 10000 });
 }
 
 /**
@@ -63,9 +68,8 @@ async function uploadArtifactViaUI(
   const fileInput = page.locator('input[type="file"]');
   await fileInput.setInputFiles(filePath);
 
-  // Wait for the artifact to appear in the list
-  await page.waitForTimeout(1000); // Allow upload processing
-  await page.waitForLoadState('networkidle');
+  // Wait briefly for upload processing without relying on networkidle.
+  await page.waitForTimeout(1000);
 }
 
 /**
@@ -80,6 +84,8 @@ async function waitForArtifactInList(
 }
 
 test.describe('Artifact Upload/Download E2E', () => {
+  test.setTimeout(90000);
+
   test.beforeEach(async ({ page }) => {
     await navigateToArtifactPage(page);
   });
@@ -112,12 +118,8 @@ test.describe('Artifact Upload/Download E2E', () => {
   });
 
   test('should display artifact list after page load', async ({ page }) => {
-    // Wait for artifacts to load
-    await page.waitForLoadState('networkidle');
-
-    // Check if artifact list section exists
-    const listSection = page.locator('text=Stored Artifacts');
-    await expect(listSection).toBeVisible();
+    const listSection = page.getByRole('heading', { name: 'Stored Artifacts' });
+    await expect(listSection).toBeVisible({ timeout: 15000 });
   });
 
   test('should display upload section with file input', async ({ page }) => {
@@ -217,7 +219,9 @@ test.describe('Artifact Upload/Download E2E', () => {
 
       // Reload page
       await page.reload();
-      await page.waitForLoadState('networkidle');
+      await expect(page.getByText('Artifact Storage Integration')).toBeVisible({
+        timeout: 60000,
+      });
 
       // Verify artifact still exists
       await expect(page.locator(`text="${testFileName}"`).first()).toBeVisible();
@@ -264,7 +268,6 @@ test.describe('Artifact Upload/Download E2E', () => {
 
       // Wait for upload to complete
       await page.waitForTimeout(1000);
-      await page.waitForLoadState('networkidle');
 
       // Verify artifact appears
       await waitForArtifactInList(page, testFileName);

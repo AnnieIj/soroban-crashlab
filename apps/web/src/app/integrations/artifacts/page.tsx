@@ -7,7 +7,6 @@ import IntegrationPageSkeleton from '../IntegrationPageSkeleton';
 const ArtifactStorageIntegration = dynamic(
   () => import('../../integrate-storage-backend-integration-for-artifacts'),
   {
-    ssr: false,
     loading: () => <IntegrationPageSkeleton />,
   }
 );
