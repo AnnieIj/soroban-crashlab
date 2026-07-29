@@ -120,7 +120,7 @@ test.describe('Mobile responsive layout', () => {
 
     await page.setViewportSize({ width: 320, height: 568 });
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     let hasHorizontalOverflow = await page.evaluate(() => {
       return document.documentElement.scrollWidth > document.documentElement.clientWidth;
@@ -129,7 +129,7 @@ test.describe('Mobile responsive layout', () => {
 
     await page.setViewportSize({ width: 768, height: 1024 });
     await page.reload();
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     hasHorizontalOverflow = await page.evaluate(() => {
       return document.documentElement.scrollWidth > document.documentElement.clientWidth;

@@ -34,7 +34,6 @@ function getSystemPrefersDark(): boolean {
 
 function subscribeToMount(cb: () => void): () => void {
   if (typeof window === 'undefined') return () => {};
-  // Trigger once on subscribe (post-hydration)
   const id = requestAnimationFrame(() => cb());
   return () => cancelAnimationFrame(id);
 }
@@ -52,9 +51,18 @@ export function useTheme() {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [userTheme, setUserTheme] = useState<Theme | null>(getStoredTheme);
-  const [systemPrefersDark, setSystemPrefersDark] = useState<boolean>(getSystemPrefersDark);
+  // Keep SSR and the first client render identical to avoid hydration bailout,
+  // which left whole routes stuck on client-only loading gates in e2e.
+  const [userTheme, setUserTheme] = useState<Theme | null>(null);
+  const [systemPrefersDark, setSystemPrefersDark] = useState(false);
   const mounted = useSyncExternalStore(subscribeToMount, getMountSnapshot, getMountServerSnapshot);
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      setUserTheme(getStoredTheme());
+      setSystemPrefersDark(getSystemPrefersDark());
+    });
+  }, []);
 
   const theme = useMemo<Theme>(() => {
     if (userTheme) return userTheme;
