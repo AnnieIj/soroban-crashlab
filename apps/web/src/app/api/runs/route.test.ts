@@ -105,6 +105,8 @@ describe('GET /api/runs', () => {
     it('returns 503 when backend times out', async () => {
       process.env.NEXT_PUBLIC_API_URL = 'http://localhost:3001';
 
+      vi.useFakeTimers();
+
       global.fetch = vi.fn().mockImplementation(() => {
         return new Promise((_, reject) => {
           setTimeout(() => reject(new Error('Timeout')), 11000);
@@ -112,7 +114,13 @@ describe('GET /api/runs', () => {
       });
 
       const request = new Request('http://localhost:3000/api/runs');
-      const response = await GET(request);
+      const responsePromise = GET(request);
+
+      // Advance past the route's 10 s internal timeout so it fires
+      await vi.advanceTimersByTimeAsync(10500);
+      const response = await responsePromise;
+
+      vi.useRealTimers();
 
       expect(response.status).toBe(503);
       const data = await response.json();

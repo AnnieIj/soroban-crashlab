@@ -1,9 +1,9 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import RunMetadataEditor from '../../components/RunMetadataEditor';
-import type { FuzzingRun } from '../../app/types';
-import type { RunMetadata } from '../../components/RunMetadataEditor';
+import RunMetadataEditor from '../../../components/RunMetadataEditor';
+import type { FuzzingRun } from '../../types';
+import type { RunMetadata } from '../../../components/RunMetadataEditor';
 
 export default function RunMetadataEditorWrapper({ run }: { run: FuzzingRun }) {
   const [isEditing, setIsEditing] = useState(false);

@@ -44,7 +44,10 @@ export default function GithubActionsIntegrationPage() {
     }
   }, [repository]);
 
-  useEffect(() => { void loadRuns(); }, [loadRuns]);
+  useEffect(() => {
+    const run = () => { void loadRuns(); };
+    run();
+  }, [loadRuns]);
 
   async function handleRepositorySubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

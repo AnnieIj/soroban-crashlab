@@ -117,6 +117,13 @@ export function shouldToggleCheatsheet(
   event: Pick<KeyboardEvent, "key" | "shiftKey" | "ctrlKey" | "metaKey" | "altKey">,
   isTyping: boolean,
 ): boolean {
+  // Ctrl+/ (or Cmd+/ on macOS) is a dedicated shortcuts-help chord used by
+  // several editors and dashboards (VS Code, Linear, Notion) and is safe to
+  // honor even while typing, since it doesn't insert a literal character.
+  if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key === "/") {
+    return true;
+  }
+
   if (isTyping || event.ctrlKey || event.metaKey || event.altKey) {
     return false;
   }
