@@ -140,3 +140,78 @@ export function CalendarSkeleton({ weeks = 20 }: { weeks?: number }) {
     </div>
   );
 }
+
+export function GenericPageSkeleton({
+  variant = "cards",
+  rows = 6,
+}: {
+  variant?: "cards" | "table" | "list" | "form";
+  rows?: number;
+}) {
+  return (
+    <div role="status" aria-live="polite" aria-label="Loading page content" className="space-y-6">
+      {/* Page header skeleton */}
+      <div className="flex items-center justify-between mb-2">
+        <div className="skeleton h-7 w-48" />
+        <div className="skeleton h-9 w-28" />
+      </div>
+
+      {variant === "cards" && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
+          {Array.from({ length: rows }).map((_, i) => (
+            <div key={i} className="card card-padding">
+              <div className="skeleton h-4 w-2/3 mb-3" />
+              <div className="skeleton h-3 w-full mb-2" />
+              <div className="skeleton h-3 w-4/5" />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {variant === "table" && (
+        <div className="card table-responsive">
+          <table className="data-table">
+            <thead>
+              <tr>
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <th key={i}><div className="skeleton h-4 w-16" /></th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from({ length: rows }).map((_, i) => (
+                <tr key={i}>
+                  {Array.from({ length: 4 }).map((_, j) => (
+                    <td key={j}><div className="skeleton h-4 w-20" /></td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {variant === "list" && (
+        <div className="card divide-y divide-zinc-100 dark:divide-zinc-900">
+          {Array.from({ length: rows }).map((_, i) => (
+            <div key={i} className="flex items-center justify-between p-4">
+              <div className="skeleton h-4 w-1/3" />
+              <div className="skeleton h-6 w-16 rounded-full" />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {variant === "form" && (
+        <div className="card card-padding space-y-4">
+          {Array.from({ length: rows }).map((_, i) => (
+            <div key={i}>
+              <div className="skeleton h-3 w-24 mb-2" />
+              <div className="skeleton h-9 w-full" />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
