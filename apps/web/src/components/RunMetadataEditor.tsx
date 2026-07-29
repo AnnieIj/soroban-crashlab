@@ -32,6 +32,7 @@ export default function RunMetadataEditor({
   const nameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setName(run.id);
     setTags(run.tags ?? []);
     setSaveState('idle');

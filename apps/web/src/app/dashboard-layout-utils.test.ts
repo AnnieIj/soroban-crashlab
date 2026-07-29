@@ -8,7 +8,6 @@ import {
   DEFAULT_DASHBOARD_LAYOUT,
   DASHBOARD_LAYOUT_STORAGE_KEY,
   type DashboardSectionConfig,
-  type DashboardSectionId,
 } from './dashboard-layout-utils';
 
 function assertEqual<T>(actual: T, expected: T, message?: string): void {
