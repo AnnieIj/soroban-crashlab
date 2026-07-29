@@ -76,9 +76,11 @@ export default defineConfig({
     // },
   ],
 
-  /* Run your local dev server before starting the tests */
+  /* Run your local dev server before starting the tests.
+   * CI already builds the app; use `next start` there so tests hit the
+   * production bundle instead of a cold `next dev` compile (which hangs). */
   webServer: {
-    command: 'npm run dev -- -p 3077',
+    command: process.env.CI ? 'npm run start -- -p 3077' : 'npm run dev -- -p 3077',
     url: 'http://localhost:3077',
     reuseExistingServer: !process.env.CI,
     env: {
