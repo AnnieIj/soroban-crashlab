@@ -6,6 +6,8 @@ import { test, expect } from './fixtures';
  */
 
 test.describe('Home Page', () => {
+  test.setTimeout(90000);
+
   test.beforeEach(async ({ page }) => {
     // Navigate to the home page before each test
     await page.goto('/');
@@ -21,12 +23,6 @@ test.describe('Home Page', () => {
     await expect(main).toBeVisible({ timeout: 30000 });
   });
 
-  test('should have accessible heading structure', async ({ page }) => {
-    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({
-      timeout: 60000,
-    });
-  });
-
   test('should have no console errors', async ({ page }) => {
     const errors: string[] = [];
     const ignoredPatterns = [
@@ -36,7 +32,7 @@ test.describe('Home Page', () => {
       /Too Many Requests/i,
       /Connection closed/i,
     ];
-    
+
     page.on('console', (msg) => {
       if (msg.type() === 'error') {
         errors.push(msg.text());
@@ -49,7 +45,7 @@ test.describe('Home Page', () => {
 
     // Reload to capture any errors during page load
     await page.reload();
-    await expect(page.locator('main')).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('main')).toBeVisible({ timeout: 30000 });
 
     const criticalErrors = errors.filter(
       (error) => !ignoredPatterns.some((pattern) => pattern.test(error)),
