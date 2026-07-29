@@ -17,9 +17,11 @@ export default function SettingsPage() {
   const [isMockData, setIsMockData] = useState(true);
 
   useEffect(() => {
-    const activeUrl = readActiveUrl();
-    setApiUrl(activeUrl || 'Not configured (using mock data)');
-    setIsMockData(!activeUrl);
+    queueMicrotask(() => {
+      const activeUrl = readActiveUrl();
+      setApiUrl(activeUrl || 'Not configured (using mock data)');
+      setIsMockData(!activeUrl);
+    });
   }, []);
   return (
     <div className="container-full page-padding fade-in">
