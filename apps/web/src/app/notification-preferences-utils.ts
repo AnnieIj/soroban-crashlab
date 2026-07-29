@@ -98,58 +98,6 @@ export const loadChannelPreferences = (): NotificationPreference[] => {
   }
 };
 
-export type NotificationType = 'info' | 'warning' | 'error' | 'success' | 'crashes' | 'alerts' | 'reports' | 'updates';
-export type NotificationPriority = 'low' | 'medium' | 'high' | 'critical';
-export type DigestFrequency = 'never' | 'daily' | 'weekly';
-
-export const validatePreferences = (prefs: NotificationPreference[]): NotificationPreference[] => {
-  return prefs.map((pref) => ({
-    ...pref,
-    notificationTypes: {
-      crashes: pref.notificationTypes?.crashes ?? true,
-      alerts: pref.notificationTypes?.alerts ?? true,
-      reports: pref.notificationTypes?.reports ?? true,
-      updates: pref.notificationTypes?.updates ?? true,
-    },
-  }));
-};
-
-export const toggleType = (prefs: NotificationPreference[], channelId: string, type: NotificationType): NotificationPreference[] => {
-  const normalizedType = type === 'crashes' || type === 'alerts' || type === 'reports' || type === 'updates'
-    ? type
-    : 'updates';
-
-  return prefs.map((pref) => pref.channelId === channelId
-    ? {
-        ...pref,
-        notificationTypes: {
-          ...pref.notificationTypes,
-          [normalizedType]: !pref.notificationTypes[normalizedType],
-        },
-      }
-    : pref);
-};
-
-export const setMinPriority = (prefs: NotificationPreference[], priority: NotificationPriority): NotificationPreference[] => {
-  return prefs.map((pref) => ({ ...pref, priority: priority as never }));
-};
-
-export const setDigestFrequency = (prefs: NotificationPreference[], frequency: DigestFrequency): NotificationPreference[] => {
-  return prefs.map((pref) => ({ ...pref, digestFrequency: frequency }));
-};
-
-export const filterByPreferences = (notification: Notification, prefs: NotificationPreference[]): boolean => {
-  const channel = notification.channel ?? 'in-app';
-  const pref = prefs.find((entry) => entry.channelId === channel);
-  if (!pref) {
-    return false;
-  }
-
-  const severity = notification.severity ?? notification.type ?? 'info';
-  const notificationType = severity === 'error' || severity === 'warning' ? 'alerts' : 'updates';
-  return pref.enabled && pref.notificationTypes[notificationType as keyof NotificationPreference['notificationTypes']] !== false;
-};
-
 export const mockNotifications: Notification[] = [
   {
     id: '1',

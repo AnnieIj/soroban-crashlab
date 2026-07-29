@@ -123,8 +123,6 @@ export default function EnhancedRunHistoryTable({
     field: "id",
     order: "desc",
   });
-  const activeSortField = sort.field;
-
   const sortedRuns = useMemo(() => {
     return [...runs].sort((a: FuzzingRun, b: FuzzingRun) => {
       const valA = a[sort.field] ?? "";

@@ -5,7 +5,7 @@ import { DEFAULT_CHANNELS, loadChannelPreferences, saveChannelPreferences, mockN
 
 export default function NotificationCenterPage() {
   const [notifications, setNotifications] = useState(mockNotifications);
-  const [preferences, setPreferences] = useState<NotificationPreference[]>(() => (typeof window === 'undefined' ? [] : loadPreferences()));
+  const [preferences, setPreferences] = useState<NotificationPreference[]>(() => (typeof window === 'undefined' ? [] : loadChannelPreferences()));
   const [activeTab, setActiveTab] = useState<'inbox' | 'preferences'>('inbox');
   const [loading, setLoading] = useState(true);
 

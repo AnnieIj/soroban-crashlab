@@ -17,18 +17,6 @@ import {
   type FilterOperator,
 } from './query-builder-utils';
 
-function updateGroupRecursive(
-  group: FilterGroup,
-  targetId: string,
-  update: (g: FilterGroup) => FilterGroup,
-): FilterGroup {
-  if (group.id === targetId) return update(group);
-  return {
-    ...group,
-    groups: group.groups.map((g) => updateGroupRecursive(g, targetId, update)),
-  };
-}
-
 export default function QueryBuilderPage() {
   const [queryGroup, setQueryGroup] = useState<FilterGroup>(createGroup('root'));
   const [queryOutput, setQueryOutput] = useState('');

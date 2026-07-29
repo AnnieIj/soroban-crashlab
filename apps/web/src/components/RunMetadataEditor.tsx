@@ -32,6 +32,9 @@ export default function RunMetadataEditor({
   const nameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    // Reset local edit state whenever the underlying run identity changes
+    // (the editor is reused across runs rather than remounted per-run).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setName(run.id);
     setTags(run.tags ?? []);
     setSaveState('idle');

@@ -44,7 +44,10 @@ export default function GithubActionsIntegrationPage() {
     }
   }, [repository]);
 
-  useEffect(() => { void loadRuns(); }, [loadRuns]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadRuns();
+  }, [loadRuns]);
 
   async function handleRepositorySubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

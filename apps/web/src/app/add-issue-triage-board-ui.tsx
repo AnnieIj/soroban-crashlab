@@ -64,26 +64,15 @@ export default function IssueTriageBoard({ runs }: IssueTriageBoardProps) {
         .map((id) => defaultColumns.find((column) => column.id === id))
         .filter((column): column is TriageColumn => Boolean(column));
 
-  useEffect(() => {
-    const saved = localStorage.getItem('triageColumnOrder');
-    if (saved) {
-      try {
-        const order = JSON.parse(saved);
-        const reordered = order.map((id: string) => defaultColumns.find(c => c.id === id)).filter(Boolean);
-        if (reordered.length === defaultColumns.length) {
-          // Restoring the user's saved column order once, right after mount,
-          // so the initial (server-matching) render stays the default order.
-          // eslint-disable-next-line react-hooks/set-state-in-effect
-          setColumns(reordered);
-        }
-      } catch {
-        setColumns(defaultColumns);
-      }
+      return reordered.length === defaultColumns.length ? reordered : defaultColumns;
     } catch {
       // Fall back to the default order.
+      return defaultColumns;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  };
+
+  const [columns, setColumns] = useState<TriageColumn[]>(getInitialColumns);
+  const [draggedColumn, setDraggedColumn] = useState<string | null>(null);
 
   const handleDragStart = (e: React.DragEvent, columnId: string) => {
     setDraggedColumn(columnId);
