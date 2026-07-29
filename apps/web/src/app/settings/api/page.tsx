@@ -1,5 +1,12 @@
-import React from 'react';
-import ApiConfigForm from '../../../components/ApiConfigForm';
+'use client';
+
+import dynamic from 'next/dynamic';
+import { LoadingSpinner } from '../../../components/LoadingSkeleton';
+
+const ApiConfigForm = dynamic(
+  () => import('../../../components/ApiConfigForm'),
+  { loading: () => <LoadingSpinner /> },
+);
 
 export default function ApiSettingsPage() {
   return (

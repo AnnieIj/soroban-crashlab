@@ -1,4 +1,12 @@
-import AddAccessibleKeyboardNavBlueprintPage49 from "../../add-accessible-keyboard-nav-blueprint-page-49";
+'use client';
+
+import dynamic from 'next/dynamic';
+import { LoadingSpinner } from '../../../components/LoadingSkeleton';
+
+const AddAccessibleKeyboardNavBlueprintPage49 = dynamic(
+  () => import('../../add-accessible-keyboard-nav-blueprint-page-49'),
+  { loading: () => <LoadingSpinner /> },
+);
 
 export default function AccessibilitySettingsPage() {
   return (
