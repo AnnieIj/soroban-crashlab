@@ -149,7 +149,7 @@ test.describe('Search / Query Builder functionality', () => {
     });
 
     await page.goto('/runs/query');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await expect(page.getByRole('heading', { name: 'Fuzzy Query Builder', level: 1 })).toBeVisible();
   });
 });
