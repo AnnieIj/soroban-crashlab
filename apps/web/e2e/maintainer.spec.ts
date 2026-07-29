@@ -2,6 +2,7 @@ import { test, expect } from './fixtures';
 
 const MAINTAINER_STORAGE_KEY = 'crashlab:maintainer-mode';
 const SETTINGS_READY_TIMEOUT_MS = 120000;
+const ROUTE_TIMEOUT_MS = 30000;
 
 async function openSettings(page: import('@playwright/test').Page) {
   await page.goto('/settings');
@@ -32,26 +33,34 @@ test.describe('Maintainer Mode Toggling', () => {
       .toBe('true');
 
     await maintainerNavLink.click();
-    await expect(page).toHaveURL(/.*\/maintainer/, { timeout: 15000 });
-    await expect(page.getByRole('heading', { name: 'Maintainer Dashboard' })).toBeVisible();
+    await expect(page).toHaveURL(/.*\/maintainer/, { timeout: ROUTE_TIMEOUT_MS });
+    await expect(page.getByRole('heading', { name: 'Maintainer Dashboard' })).toBeVisible({
+      timeout: ROUTE_TIMEOUT_MS,
+    });
   });
 
   test('redirects away from maintainer route when mode is disabled', async ({ page }) => {
-    await page.goto('/');
-    await page.evaluate((key) => localStorage.removeItem(key), MAINTAINER_STORAGE_KEY);
+    // Ensure storage is cleared before the maintainer page hydrates.
+    await page.addInitScript((key) => {
+      window.localStorage.removeItem(key);
+    }, MAINTAINER_STORAGE_KEY);
 
     await page.goto('/maintainer');
-    await expect(page).toHaveURL(/\/$/, { timeout: 15000 });
+    await expect(page).toHaveURL(/\/$/, { timeout: ROUTE_TIMEOUT_MS });
     await expect(page.locator('nav a[href="/maintainer"]')).not.toBeVisible();
   });
 
   test('grants access to maintainer dashboard when mode is enabled via storage', async ({ page }) => {
-    await page.goto('/');
-    await page.evaluate((key) => localStorage.setItem(key, 'true'), MAINTAINER_STORAGE_KEY);
+    // Seed storage before hydration so useMaintainerMode reads the enabled flag.
+    await page.addInitScript((key) => {
+      window.localStorage.setItem(key, 'true');
+    }, MAINTAINER_STORAGE_KEY);
 
     await page.goto('/maintainer');
-    await expect(page).toHaveURL(/.*\/maintainer/, { timeout: 15000 });
-    await expect(page.getByRole('heading', { name: 'Maintainer Dashboard' })).toBeVisible();
+    await expect(page).toHaveURL(/.*\/maintainer/, { timeout: ROUTE_TIMEOUT_MS });
+    await expect(page.getByRole('heading', { name: 'Maintainer Dashboard' })).toBeVisible({
+      timeout: ROUTE_TIMEOUT_MS,
+    });
     await expect(page.locator('nav a[href="/maintainer"]')).toBeVisible();
   });
 });

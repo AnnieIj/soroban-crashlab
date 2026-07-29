@@ -32,7 +32,7 @@ export default function MaintainerPage() {
   // Redirect if not maintainer
   useEffect(() => {
     if (mounted && !isMaintainer) {
-      router.push("/");
+      router.replace("/");
     }
   }, [isMaintainer, mounted, router]);
 
