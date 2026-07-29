@@ -21,6 +21,7 @@
     "test:e2e:search": "playwright test e2e/search.spec.ts",
     "test:e2e:dark-mode": "playwright test e2e/dark-mode.spec.ts",
     "test:e2e:mobile-responsive": "playwright test e2e/mobile-responsive.spec.ts",
+    "test:e2e:settings-persistence": "playwright test e2e/settings-persistence.spec.ts",
     "test:error-boundary": "npx tsc src/components/error-boundary-utils.ts src/components/error-boundary-utils.test.ts --module commonjs --target es2020 --rootDir src --outDir build/test-tmp --esModuleInterop && node build/test-tmp/components/error-boundary-utils.test.js",
     "test:toast": "npx tsc src/components/toast-utils.ts src/components/toast-utils.test.ts --module commonjs --target es2020 --rootDir src --outDir build/test-tmp --esModuleInterop && node build/test-tmp/components/toast-utils.test.js",
     "test:severity-badge": "npx tsc src/components/LogSeverityBadge.tsx src/components/LogSeverityBadge.test.ts --module commonjs --target es2020 --rootDir src --outDir build/test-tmp --esModuleInterop --jsx react && node build/test-tmp/components/LogSeverityBadge.test.js",
