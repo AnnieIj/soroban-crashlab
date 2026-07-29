@@ -157,6 +157,16 @@ jest.mock('./add-run-cluster-overview', () => ({
   default: () => null,
 }));
 
+jest.mock('./implement-run-health-score-widget', () => ({
+  __esModule: true,
+  default: () => null,
+}));
+
+jest.mock('./implement-ingredient-list-component', () => ({
+  __esModule: true,
+  IngredientList: () => null,
+}));
+
 jest.mock('./CampaignConfigForm', () => ({
   __esModule: true,
   default: () => null,
