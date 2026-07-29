@@ -1,7 +1,7 @@
 'use client';
 
 import { FuzzingRun } from './types';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 interface IssueTriageBoardProps {
   runs: FuzzingRun[];
@@ -48,8 +48,21 @@ export default function IssueTriageBoard({ runs }: IssueTriageBoardProps) {
     },
   ];
 
-  const [columns, setColumns] = useState<TriageColumn[]>(defaultColumns);
-  const [draggedColumn, setDraggedColumn] = useState<string | null>(null);
+  const getInitialColumns = () => {
+    if (typeof window === 'undefined') {
+      return defaultColumns;
+    }
+
+    try {
+      const saved = window.localStorage.getItem('triageColumnOrder');
+      if (!saved) {
+        return defaultColumns;
+      }
+
+      const order = JSON.parse(saved) as string[];
+      const reordered = order
+        .map((id) => defaultColumns.find((column) => column.id === id))
+        .filter((column): column is TriageColumn => Boolean(column));
 
   useEffect(() => {
     const saved = localStorage.getItem('triageColumnOrder');
@@ -66,8 +79,8 @@ export default function IssueTriageBoard({ runs }: IssueTriageBoardProps) {
       } catch {
         setColumns(defaultColumns);
       }
-    } else {
-      setColumns(defaultColumns);
+    } catch {
+      // Fall back to the default order.
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

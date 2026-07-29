@@ -107,15 +107,15 @@ const INTEGRATIONS: Integration[] = [
     category: 'Database'
   },
   {
-    id: 'ci',
-    title: 'CI Integration',
-    description: 'Integrate with CI/CD pipelines to run fuzzing tests automatically on code changes.',
+    id: 'github-actions',
+    title: 'GitHub Actions',
+    description: 'Monitor failed GitHub Actions workflows and re-run only their failed CI jobs from the dashboard.',
     icon: (
       <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
       </svg>
     ),
-    href: '/integrations/ci-replay',
+    href: '/integrations/github-actions',
     status: 'available',
     category: 'DevOps'
   },
