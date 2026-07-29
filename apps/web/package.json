@@ -13,6 +13,7 @@
     "test:api-client": "vitest run src/lib/api-client.test.ts",
     "test:sentry-client": "npx vitest run src/lib/integrations/sentry-client.test.ts",
     "test:script-style": "vitest run src/test/script-style-tests.test.ts",
+    "test:sanitize": "vitest run src/lib/sanitize.test.ts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",
