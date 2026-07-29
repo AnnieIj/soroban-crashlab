@@ -14,7 +14,7 @@
     "test:sentry-client": "npx vitest run src/lib/integrations/sentry-client.test.ts",
     "test:script-style": "vitest run src/test/script-style-tests.test.ts",
     "test:sanitize": "vitest run src/lib/sanitize.test.ts",
-    "test:e2e": "playwright test",
+    "test:e2e": "playwright test e2e/home.spec.ts e2e/search.spec.ts",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",
     "test:e2e:run-detail-navigation": "playwright test e2e/run-detail-navigation.spec.ts",
@@ -51,7 +51,8 @@
     "test:pagination-utils": "npx tsc src/app/pagination-utils.ts src/app/pagination-utils.test.ts --module commonjs --target es2020 --rootDir src --outDir build/test-tmp --esModuleInterop --skipLibCheck && node build/test-tmp/app/pagination-utils.test.js",
     "test:dashboard-layout-utils": "npx tsc src/app/dashboard-layout-utils.ts src/app/dashboard-layout-utils.test.ts --module commonjs --target es2020 --rootDir src --outDir build/test-tmp --esModuleInterop --skipLibCheck && node build/test-tmp/app/dashboard-layout-utils.test.js",
     "test:api-runs": "npx vitest run src/app/api/runs/route.test.ts",
-    "size": "size-limit"
+    "size": "size-limit",
+    "test:e2e:all": "playwright test"
   },
   "dependencies": {
     "@sentry/nextjs": "^10.62.0",
