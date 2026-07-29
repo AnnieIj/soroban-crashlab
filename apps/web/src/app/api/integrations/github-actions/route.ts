@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { successResponse } from '@/lib/api-response-utils';
-import { listGithubWorkflowRuns, rerunFailedGithubJobs } from '@/lib/integrations/github-actions';
+import { createGithubActionsAdapter } from '@/lib/integrations/github-actions';
 import { jsonError, readJsonBody, withRouteErrorHandling } from '@/lib/route-handler';
 
 const repositoryPattern = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
@@ -32,7 +32,8 @@ export const GET = withRouteErrorHandling(
     if (!token) return tokenUnavailableResponse();
 
     const [owner, repo] = repository;
-    const workflowRuns = await listGithubWorkflowRuns(owner, repo, token);
+    const adapter = createGithubActionsAdapter();
+    const workflowRuns = await adapter.listWorkflowRuns(owner, repo, token);
     return successResponse({ workflowRuns });
   },
   'Unable to load GitHub Actions workflow runs.',
@@ -58,7 +59,8 @@ export const POST = withRouteErrorHandling(
     if (!token) return tokenUnavailableResponse();
 
     const [owner, repo] = repositoryParts;
-    await rerunFailedGithubJobs(owner, repo, runId as number, token);
+    const adapter = createGithubActionsAdapter();
+    await adapter.rerunFailedJobs(owner, repo, runId as number, token);
     return successResponse({ queued: true, runId });
   },
   'Unable to queue the GitHub Actions re-run.',

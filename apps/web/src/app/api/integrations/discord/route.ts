@@ -7,7 +7,7 @@
 
 import { NextResponse } from 'next/server';
 import { withRouteErrorHandling, readJsonBody, jsonError } from '@/lib/route-handler';
-import { sendDiscordNotification, type DiscordMessage } from '@/lib/integrations/discord-webhook';
+import { createDiscordAdapter, type DiscordMessage } from '@/lib/integrations/discord-webhook';
 
 export const POST = withRouteErrorHandling(
   'POST /api/integrations/discord',
@@ -29,7 +29,8 @@ export const POST = withRouteErrorHandling(
       return jsonError('Message must include either content or embeds', 400);
     }
 
-    const result = await sendDiscordNotification({ webhookUrl }, message);
+    const adapter = createDiscordAdapter();
+    const result = await adapter.sendNotification({ webhookUrl }, message);
 
     if (!result.success) {
       return jsonError(result.error || 'Failed to send Discord notification', 500);

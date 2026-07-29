@@ -5,6 +5,7 @@
  * When credentials are not configured, falls back to building a canonical link.
  */
 
+import { createAbortSignal } from './adapter-utils';
 import { logger } from '../logger';
 
 export interface ResolvedLinearLink {
@@ -67,10 +68,16 @@ export async function resolveLinearIssueFromUrl(url: string): Promise<ResolvedLi
   return resolveLinearIssueLink(parsed.team, parsed.issueId);
 }
 
-/**
- * Fetches full issue metadata from Linear GraphQL API
- */
-export async function fetchLinearIssue(issueId: string): Promise<LinearIssue | null> {
+export interface LinearIssuesAdapterOptions {
+  fetchImpl?: typeof fetch;
+  timeoutMs?: number;
+}
+
+async function fetchLinearIssueImpl(
+  issueId: string,
+  fetchImpl: typeof fetch,
+  signal: AbortSignal | undefined,
+): Promise<LinearIssue | null> {
   const apiKey = process.env.LINEAR_API_KEY;
 
   if (!apiKey) {
@@ -97,12 +104,13 @@ export async function fetchLinearIssue(issueId: string): Promise<LinearIssue | n
   `;
 
   try {
-    const response = await fetch(apiUrl, {
+    const response = await fetchImpl(apiUrl, {
       method: 'POST',
       headers: {
         'Authorization': apiKey,
         'Content-Type': 'application/json',
       },
+      signal,
       body: JSON.stringify({
         query,
         variables: { issueId },
@@ -111,26 +119,24 @@ export async function fetchLinearIssue(issueId: string): Promise<LinearIssue | n
 
     if (!response.ok) {
       const errorText = await response.text();
-      logger.error('Linear API error', { 
-        issueId, 
-        status: response.status, 
-        error: errorText 
+      logger.error('Linear API error', {
+        issueId,
+        status: response.status,
+        error: errorText,
       });
       throw new Error(`Linear API returned ${response.status}`);
     }
 
     const data = await response.json();
 
-    // Check for GraphQL errors
     if (data.errors && data.errors.length > 0) {
-      logger.error('Linear GraphQL errors', { 
-        issueId, 
-        errors: data.errors 
+      logger.error('Linear GraphQL errors', {
+        issueId,
+        errors: data.errors,
       });
       throw new Error(`Linear GraphQL error: ${data.errors[0].message}`);
     }
 
-    // Check if issue was found
     if (!data.data || !data.data.issue) {
       logger.info('Linear issue not found', { issueId });
       return null;
@@ -146,12 +152,23 @@ export async function fetchLinearIssue(issueId: string): Promise<LinearIssue | n
       url: issue.url,
     };
   } catch (error) {
-    logger.error('Failed to fetch Linear issue', { 
-      issueId, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+    logger.error('Failed to fetch Linear issue', {
+      issueId,
+      error: error instanceof Error ? error.message : 'Unknown error',
     });
     throw error;
   }
+}
+
+export function createLinearIssuesAdapter(options: LinearIssuesAdapterOptions = {}) {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const signal = createAbortSignal(options.timeoutMs);
+
+  return {
+    async fetchIssue(issueId: string): Promise<LinearIssue | null> {
+      return fetchLinearIssueImpl(issueId, fetchImpl, signal);
+    },
+  };
 }
 
 

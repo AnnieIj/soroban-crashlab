@@ -1,12 +1,11 @@
-import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   validateSlackWebhookUrl,
-  sendSlackNotification,
+  createSlackAdapter,
   createRunEventMessage,
   createCriticalAlertMessage,
   createSimpleMessage,
   validateSlackBotToken,
-  postSlackMessage,
   buildRunDetailPreviewBlocks,
 } from "./slack-webhook";
 
@@ -28,23 +27,20 @@ describe("validateSlackWebhookUrl", () => {
   });
 });
 
-describe("sendSlackNotification", () => {
-  const originalFetch = global.fetch;
-
-  afterAll(() => {
-    global.fetch = originalFetch;
-  });
-
+describe("createSlackAdapter", () => {
   it("returns an error without calling fetch when the URL is invalid", async () => {
-    global.fetch = vi.fn();
-    const result = await sendSlackNotification({ webhookUrl: "" }, createSimpleMessage("hi"));
+    const mockFetch = vi.fn();
+    const adapter = createSlackAdapter({ fetchImpl: mockFetch });
+    const result = await adapter.sendNotification({ webhookUrl: "" }, createSimpleMessage("hi"));
     expect(result.success).toBe(false);
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it("returns success on a 2xx response", async () => {
-    global.fetch = vi.fn(() => Promise.resolve({ ok: true } as Response));
-    const result = await sendSlackNotification(
+    const adapter = createSlackAdapter({
+      fetchImpl: vi.fn(() => Promise.resolve({ ok: true } as Response)),
+    });
+    const result = await adapter.sendNotification(
       { webhookUrl: "https://hooks.slack.com/services/T/B/x" },
       createSimpleMessage("hi"),
     );
@@ -52,10 +48,12 @@ describe("sendSlackNotification", () => {
   });
 
   it("surfaces the response body on a non-2xx response", async () => {
-    global.fetch = vi.fn(() =>
-      Promise.resolve({ ok: false, status: 400, text: () => Promise.resolve("bad_payload") } as Response),
-    );
-    const result = await sendSlackNotification(
+    const adapter = createSlackAdapter({
+      fetchImpl: vi.fn(() =>
+        Promise.resolve({ ok: false, status: 400, text: () => Promise.resolve("bad_payload") } as Response),
+      ),
+    });
+    const result = await adapter.sendNotification(
       { webhookUrl: "https://hooks.slack.com/services/T/B/x" },
       createSimpleMessage("hi"),
     );
@@ -92,69 +90,67 @@ describe("validateSlackBotToken", () => {
   });
 });
 
-describe("postSlackMessage", () => {
-  const originalFetch = global.fetch;
-
-  beforeEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  afterAll(() => {
-    global.fetch = originalFetch;
-  });
-
+describe("postSlackMessage via adapter", () => {
   it("returns an error without calling fetch when the token is invalid", async () => {
-    global.fetch = vi.fn();
-    const result = await postSlackMessage({ botToken: "", channel: "C1" }, [], "fallback");
+    const mockFetch = vi.fn();
+    const adapter = createSlackAdapter({ fetchImpl: mockFetch });
+    const result = await adapter.postMessage({ botToken: "", channel: "C1" }, [], "fallback");
     expect(result.success).toBe(false);
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it("returns the message ts on success", async () => {
-    global.fetch = vi.fn(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ ok: true, ts: "1234.5678", channel: "C1" }),
-      } as Response),
-    );
+    const adapter = createSlackAdapter({
+      fetchImpl: vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, ts: "1234.5678", channel: "C1" }),
+        } as Response),
+      ),
+    });
 
-    const result = await postSlackMessage({ botToken: "xoxb-abc", channel: "C1" }, [], "fallback");
+    const result = await adapter.postMessage({ botToken: "xoxb-abc", channel: "C1" }, [], "fallback");
     expect(result.success).toBe(true);
     expect(result.ts).toBe("1234.5678");
   });
 
   it("includes thread_ts in the request body when replying to a thread", async () => {
     let capturedBody: string | undefined;
-    global.fetch = vi.fn((_url, init) => {
+    const mockFetch = vi.fn((_url, init) => {
       capturedBody = init?.body as string;
       return Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ ok: true, ts: "1234.9999", channel: "C1" }),
       } as Response);
     });
+    const adapter = createSlackAdapter({ fetchImpl: mockFetch });
 
-    await postSlackMessage({ botToken: "xoxb-abc", channel: "C1" }, [], "fallback", "1234.5678");
+    await adapter.postMessage({ botToken: "xoxb-abc", channel: "C1" }, [], "fallback", "1234.5678");
 
     expect(capturedBody).toBeDefined();
     expect(JSON.parse(capturedBody as string).thread_ts).toBe("1234.5678");
   });
 
   it("returns an error when Slack's API reports ok: false", async () => {
-    global.fetch = vi.fn(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ ok: false, error: "channel_not_found" }),
-      } as Response),
-    );
+    const adapter = createSlackAdapter({
+      fetchImpl: vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: false, error: "channel_not_found" }),
+        } as Response),
+      ),
+    });
 
-    const result = await postSlackMessage({ botToken: "xoxb-abc", channel: "C1" }, [], "fallback");
+    const result = await adapter.postMessage({ botToken: "xoxb-abc", channel: "C1" }, [], "fallback");
     expect(result.success).toBe(false);
     expect(result.error).toBe("channel_not_found");
   });
 
   it("returns an error when fetch throws", async () => {
-    global.fetch = vi.fn(() => Promise.reject(new Error("network down")));
-    const result = await postSlackMessage({ botToken: "xoxb-abc", channel: "C1" }, [], "fallback");
+    const adapter = createSlackAdapter({
+      fetchImpl: vi.fn(() => Promise.reject(new Error("network down"))),
+    });
+    const result = await adapter.postMessage({ botToken: "xoxb-abc", channel: "C1" }, [], "fallback");
     expect(result.success).toBe(false);
     expect(result.error).toContain("network down");
   });

@@ -6,6 +6,7 @@
  * and pagerduty-adapter.ts.
  */
 
+import { createAbortSignal } from './adapter-utils';
 import type {
   GrafanaConfig,
   GrafanaAnnotation,
@@ -38,20 +39,6 @@ export interface CreateAnnotationResult {
   success: boolean;
   annotationId?: number;
   error?: string;
-}
-
-function createAbortSignal(timeoutMs: number | undefined): AbortSignal | undefined {
-  if (!timeoutMs || timeoutMs <= 0) {
-    return undefined;
-  }
-
-  if (typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal) {
-    return AbortSignal.timeout(timeoutMs);
-  }
-
-  const controller = new AbortController();
-  setTimeout(() => controller.abort(), timeoutMs);
-  return controller.signal;
 }
 
 export function createGrafanaAdapter(options: GrafanaAdapterOptions = {}) {
