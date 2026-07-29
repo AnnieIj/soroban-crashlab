@@ -9,6 +9,8 @@
  * should never have to handle an exception from this module.
  */
 
+import { createAbortSignal } from './adapter-utils';
+
 export interface ResolvedIssueLink {
   url: string;
   title?: string;
@@ -54,17 +56,17 @@ function canonicalUrl(owner: string, repo: string, issueNumber: number): string 
   return `https://github.com/${owner}/${repo}/issues/${issueNumber}`;
 }
 
-/**
- * Resolves a GitHub issue to its real title/state via the public REST API.
- * Never throws: on any failure (network error, timeout, 404, rate limit,
- * private repo) it falls back to a placeholder title, matching the
- * previous stub behavior, with `resolved: false` so callers can tell the
- * difference if they need to.
- */
-export async function resolveGithubIssueLink(
+export interface GithubIssuesAdapterOptions {
+  fetchImpl?: typeof fetch;
+  timeoutMs?: number;
+}
+
+async function resolveIssueLinkImpl(
   owner: string,
   repo: string,
   issueNumber: number,
+  fetchImpl: typeof fetch,
+  signal: AbortSignal | undefined,
 ): Promise<ResolvedIssueLink> {
   const url = canonicalUrl(owner, repo, issueNumber);
   const fallback: ResolvedIssueLink = {
@@ -74,11 +76,11 @@ export async function resolveGithubIssueLink(
   };
 
   try {
-    const response = await fetch(
+    const response = await fetchImpl(
       `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issueNumber}`,
       {
         headers: { Accept: 'application/vnd.github+json' },
-        signal: AbortSignal.timeout?.(8_000),
+        signal,
       },
     );
 
@@ -98,24 +100,31 @@ export async function resolveGithubIssueLink(
       resolved: true,
     };
   } catch {
-    // Network error, timeout, or unexpected response shape - degrade
-    // gracefully rather than surfacing an error to the caller.
     return fallback;
   }
 }
 
-/**
- * Convenience wrapper: parses a raw GitHub issue URL and resolves it in one
- * step. Returns null if the URL isn't a GitHub issue link at all (caller
- * should treat that as "not applicable", distinct from a resolution
- * failure which still returns a fallback ResolvedIssueLink).
- */
-export async function resolveGithubIssueLinkFromUrl(
-  url: string,
-): Promise<ResolvedIssueLink | null> {
-  const parsed = parseGithubIssueUrl(url);
-  if (!parsed) return null;
-  return resolveGithubIssueLink(parsed.owner, parsed.repo, parsed.issueNumber);
+export function createGithubIssuesAdapter(options: GithubIssuesAdapterOptions = {}) {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const signal = createAbortSignal(options.timeoutMs);
+
+  return {
+    async resolveIssueLink(
+      owner: string,
+      repo: string,
+      issueNumber: number,
+    ): Promise<ResolvedIssueLink> {
+      return resolveIssueLinkImpl(owner, repo, issueNumber, fetchImpl, signal);
+    },
+
+    async resolveIssueLinkFromUrl(
+      url: string,
+    ): Promise<ResolvedIssueLink | null> {
+      const parsed = parseGithubIssueUrl(url);
+      if (!parsed) return null;
+      return resolveIssueLinkImpl(parsed.owner, parsed.repo, parsed.issueNumber, fetchImpl, signal);
+    },
+  };
 }
 
 

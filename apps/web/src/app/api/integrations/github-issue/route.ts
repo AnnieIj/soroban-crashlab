@@ -16,7 +16,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import { parseGithubIssueUrl, resolveGithubIssueLink } from '@/lib/integrations/github-issues';
+import { parseGithubIssueUrl, createGithubIssuesAdapter } from '@/lib/integrations/github-issues';
 import { successResponse } from '@/lib/api-response-utils';
 import { jsonError, withRouteErrorHandling } from '@/lib/route-handler';
 
@@ -34,7 +34,8 @@ export const GET = withRouteErrorHandling(
       return jsonError('Not a recognizable GitHub issue or pull request URL.', 400);
     }
 
-    const issue = await resolveGithubIssueLink(parsed.owner, parsed.repo, parsed.issueNumber);
+    const adapter = createGithubIssuesAdapter();
+    const issue = await adapter.resolveIssueLink(parsed.owner, parsed.repo, parsed.issueNumber);
     return successResponse({ issue });
   },
 );

@@ -7,7 +7,7 @@
 
 import { NextResponse } from 'next/server';
 import { withRouteErrorHandling, jsonError, readJsonBody } from '@/lib/route-handler';
-import { createJiraIssue, fetchJiraIssue } from '@/lib/integrations/jira-issues';
+import { createJiraIssuesAdapter } from '@/lib/integrations/jira-issues';
 
 interface RouteContext {
   params: Promise<{ issueKey: string }>;
@@ -32,7 +32,8 @@ export const POST = withRouteErrorHandling(
       return jsonError('A non-empty summary is required', 400);
     }
 
-    const issue = await createJiraIssue({
+    const adapter = createJiraIssuesAdapter();
+    const issue = await adapter.createIssue({
       summary: payload.summary.trim(),
       description: typeof payload.description === 'string' ? payload.description : undefined,
       projectKey: typeof payload.projectKey === 'string' ? payload.projectKey : undefined,
@@ -57,7 +58,8 @@ export const GET = withRouteErrorHandling(
       return jsonError('Issue key is required', 400);
     }
 
-    const issue = await fetchJiraIssue(issueKey);
+    const adapter = createJiraIssuesAdapter();
+    const issue = await adapter.fetchIssue(issueKey);
 
     if (!issue) {
       return jsonError('Issue not found or Jira not configured', 404);

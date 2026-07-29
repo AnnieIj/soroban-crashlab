@@ -12,7 +12,7 @@ import { NextResponse } from "next/server";
 import { withRouteErrorHandling, readJsonBody, jsonError } from "@/lib/route-handler";
 import {
   buildRunDetailPreviewBlocks,
-  postSlackMessage,
+  createSlackAdapter,
   type RunDetailPreviewInput,
 } from "@/lib/integrations/slack-webhook";
 import { getSlackThreadStore } from "@/lib/integrations/slack-thread-store";
@@ -64,7 +64,8 @@ export const POST = withRouteErrorHandling(
     const store = getSlackThreadStore();
     const existingThread = store.getThread(run.runId);
 
-    const result = await postSlackMessage(
+    const adapter = createSlackAdapter();
+    const result = await adapter.postMessage(
       { botToken, channel },
       blocks,
       fallbackText,

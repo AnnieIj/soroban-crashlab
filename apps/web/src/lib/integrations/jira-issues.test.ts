@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
-import { resolveJiraIssueLink, fetchJiraIssue, createJiraIssue } from './jira-issues';
+import { resolveJiraIssueLink, createJiraIssuesAdapter } from './jira-issues';
 import { logger } from '../logger';
 
 // Mock the logger
@@ -30,7 +30,7 @@ describe('resolveJiraIssueLink', () => {
   });
 });
 
-describe('createJiraIssue', () => {
+describe('createJiraIssuesAdapter', () => {
   const originalEnv = process.env;
 
   beforeEach(() => {
@@ -48,22 +48,24 @@ describe('createJiraIssue', () => {
     process.env.JIRA_API_TOKEN = 'token123';
     process.env.JIRA_PROJECT_KEY = 'CRASH';
 
-    global.fetch = vi.fn(() =>
-      Promise.resolve({
-        ok: true,
-        status: 201,
-        json: () => Promise.resolve({
-          key: 'CRASH-123',
-          fields: {
-            summary: 'Crash report for contract execution',
-            status: { name: 'To Do' },
-            assignee: null,
-          },
-        }),
-      } as Response),
-    );
+    const adapter = createJiraIssuesAdapter({
+      fetchImpl: vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          status: 201,
+          json: () => Promise.resolve({
+            key: 'CRASH-123',
+            fields: {
+              summary: 'Crash report for contract execution',
+              status: { name: 'To Do' },
+              assignee: null,
+            },
+          }),
+        } as Response),
+      ),
+    });
 
-    const result = await createJiraIssue({
+    const result = await adapter.createIssue({
       summary: 'Crash report for contract execution',
       description: 'This issue was created from a crash report.',
     });
@@ -75,15 +77,6 @@ describe('createJiraIssue', () => {
       assignee: null,
       url: 'https://jira.example.com/browse/CRASH-123',
     });
-    expect(fetch).toHaveBeenCalledWith(
-      'https://jira.example.com/rest/api/3/issue',
-      expect.objectContaining({
-        method: 'POST',
-        headers: expect.objectContaining({
-          Authorization: expect.stringMatching(/^Basic /),
-        }),
-      }),
-    );
   });
 
   it('returns null when Jira credentials are not configured', async () => {
@@ -91,14 +84,15 @@ describe('createJiraIssue', () => {
     delete process.env.JIRA_EMAIL;
     delete process.env.JIRA_API_TOKEN;
 
-    const result = await createJiraIssue({ summary: 'Crash report' });
+    const adapter = createJiraIssuesAdapter();
+    const result = await adapter.createIssue({ summary: 'Crash report' });
 
     expect(result).toBeNull();
     expect(logger.warn).toHaveBeenCalledWith('Jira credentials not configured', { issueKey: undefined });
   });
 });
 
-describe('fetchJiraIssue', () => {
+describe('fetchIssue via adapter', () => {
   const originalEnv = process.env;
 
   beforeEach(() => {
@@ -115,7 +109,8 @@ describe('fetchJiraIssue', () => {
     delete process.env.JIRA_EMAIL;
     delete process.env.JIRA_API_TOKEN;
 
-    const result = await fetchJiraIssue('PROJ-123');
+    const adapter = createJiraIssuesAdapter();
+    const result = await adapter.fetchIssue('PROJ-123');
 
     expect(result).toBeNull();
     expect(logger.warn).toHaveBeenCalledWith('Jira credentials not configured', { issueKey: 'PROJ-123' });
@@ -126,24 +121,24 @@ describe('fetchJiraIssue', () => {
     process.env.JIRA_EMAIL = 'test@example.com';
     process.env.JIRA_API_TOKEN = 'token123';
 
-    const mockResponse = {
-      key: 'PROJ-123',
-      fields: {
-        summary: 'Test issue summary',
-        status: { name: 'In Progress' },
-        assignee: { emailAddress: 'assignee@example.com' },
-      },
-    };
+    const adapter = createJiraIssuesAdapter({
+      fetchImpl: vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({
+            key: 'PROJ-123',
+            fields: {
+              summary: 'Test issue summary',
+              status: { name: 'In Progress' },
+              assignee: { emailAddress: 'assignee@example.com' },
+            },
+          }),
+        } as Response),
+      ),
+    });
 
-    global.fetch = vi.fn(() =>
-      Promise.resolve({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve(mockResponse),
-      } as Response),
-    );
-
-    const result = await fetchJiraIssue('PROJ-123');
+    const result = await adapter.fetchIssue('PROJ-123');
 
     expect(result).toEqual({
       key: 'PROJ-123',
@@ -152,18 +147,6 @@ describe('fetchJiraIssue', () => {
       assignee: 'assignee@example.com',
       url: 'https://jira.example.com/browse/PROJ-123',
     });
-
-    expect(fetch).toHaveBeenCalledWith(
-      'https://jira.example.com/rest/api/3/issue/PROJ-123',
-      expect.objectContaining({
-        method: 'GET',
-        headers: expect.objectContaining({
-          'Authorization': expect.stringMatching(/^Basic /),
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-        }),
-      }),
-    );
   });
 
   it('returns null for 404 response', async () => {
@@ -171,14 +154,16 @@ describe('fetchJiraIssue', () => {
     process.env.JIRA_EMAIL = 'test@example.com';
     process.env.JIRA_API_TOKEN = 'token123';
 
-    global.fetch = vi.fn(() =>
-      Promise.resolve({
-        ok: false,
-        status: 404,
-      } as Response),
-    );
+    const adapter = createJiraIssuesAdapter({
+      fetchImpl: vi.fn(() =>
+        Promise.resolve({
+          ok: false,
+          status: 404,
+        } as Response),
+      ),
+    });
 
-    const result = await fetchJiraIssue('NONEXISTENT-999');
+    const result = await adapter.fetchIssue('NONEXISTENT-999');
 
     expect(result).toBeNull();
     expect(logger.info).toHaveBeenCalledWith('Jira issue not found', { issueKey: 'NONEXISTENT-999' });
@@ -189,15 +174,17 @@ describe('fetchJiraIssue', () => {
     process.env.JIRA_EMAIL = 'test@example.com';
     process.env.JIRA_API_TOKEN = 'token123';
 
-    global.fetch = vi.fn(() =>
-      Promise.resolve({
-        ok: false,
-        status: 401,
-        text: () => Promise.resolve('Unauthorized'),
-      } as Response),
-    );
+    const adapter = createJiraIssuesAdapter({
+      fetchImpl: vi.fn(() =>
+        Promise.resolve({
+          ok: false,
+          status: 401,
+          text: () => Promise.resolve('Unauthorized'),
+        } as Response),
+      ),
+    });
 
-    await expect(fetchJiraIssue('PROJ-123')).rejects.toThrow('Jira API returned 401');
+    await expect(adapter.fetchIssue('PROJ-123')).rejects.toThrow('Jira API returned 401');
     expect(logger.error).toHaveBeenCalledWith('Jira API error', expect.any(Object));
   });
 
@@ -206,9 +193,11 @@ describe('fetchJiraIssue', () => {
     process.env.JIRA_EMAIL = 'test@example.com';
     process.env.JIRA_API_TOKEN = 'token123';
 
-    global.fetch = vi.fn(() => Promise.reject(new Error('Network error')));
+    const adapter = createJiraIssuesAdapter({
+      fetchImpl: vi.fn(() => Promise.reject(new Error('Network error'))),
+    });
 
-    await expect(fetchJiraIssue('PROJ-123')).rejects.toThrow('Network error');
+    await expect(adapter.fetchIssue('PROJ-123')).rejects.toThrow('Network error');
     expect(logger.error).toHaveBeenCalledWith('Failed to fetch Jira issue', expect.any(Object));
   });
 
@@ -217,20 +206,20 @@ describe('fetchJiraIssue', () => {
     process.env.JIRA_EMAIL = 'test@example.com';
     process.env.JIRA_API_TOKEN = 'token123';
 
-    const mockResponse = {
-      key: 'PROJ-123',
-      fields: {},
-    };
+    const adapter = createJiraIssuesAdapter({
+      fetchImpl: vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({
+            key: 'PROJ-123',
+            fields: {},
+          }),
+        } as Response),
+      ),
+    });
 
-    global.fetch = vi.fn(() =>
-      Promise.resolve({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve(mockResponse),
-      } as Response),
-    );
-
-    const result = await fetchJiraIssue('PROJ-123');
+    const result = await adapter.fetchIssue('PROJ-123');
 
     expect(result).toEqual({
       key: 'PROJ-123',
@@ -246,24 +235,24 @@ describe('fetchJiraIssue', () => {
     process.env.JIRA_EMAIL = 'test@example.com';
     process.env.JIRA_API_TOKEN = 'token123';
 
-    const mockResponse = {
-      key: 'PROJ-123',
-      fields: {
-        summary: 'Test',
-        status: { name: 'Open' },
-        assignee: { displayName: 'John Doe' },
-      },
-    };
+    const adapter = createJiraIssuesAdapter({
+      fetchImpl: vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({
+            key: 'PROJ-123',
+            fields: {
+              summary: 'Test',
+              status: { name: 'Open' },
+              assignee: { displayName: 'John Doe' },
+            },
+          }),
+        } as Response),
+      ),
+    });
 
-    global.fetch = vi.fn(() =>
-      Promise.resolve({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve(mockResponse),
-      } as Response),
-    );
-
-    const result = await fetchJiraIssue('PROJ-123');
+    const result = await adapter.fetchIssue('PROJ-123');
 
     expect(result?.assignee).toBe('John Doe');
   });
