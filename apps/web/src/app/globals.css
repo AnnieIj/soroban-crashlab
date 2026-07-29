@@ -514,6 +514,16 @@ html.theme-ready body {
   100% { transform: translateY(0); }
 }
 
+/**
+ * op-progress-indeterminate — sliding highlight for the indeterminate progress
+ * bar used by OperationProgressIndicator when no step count is available.
+ * Linear, 1.6 s loop — consistent with the shimmer skeleton timing convention.
+ */
+@keyframes op-progress-indeterminate {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+
 .parallax-slow {
   animation: parallax-drift 6s ease-in-out infinite;
 }
@@ -845,6 +855,13 @@ nav, header, .nav-bar {
     transform: none !important;
     opacity: 1 !important;
     box-shadow: none !important;
+  }
+
+  /* OperationProgressIndicator — keep the bar visible but static */
+  .op-progress-bar-indeterminate {
+    animation: none !important;
+    /* Show a 40 % filled static bar so the state is still perceptible */
+    transform: translateX(-60%) !important;
   }
 
   .drawer.open {

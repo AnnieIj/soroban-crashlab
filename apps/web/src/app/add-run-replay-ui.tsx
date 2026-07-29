@@ -6,6 +6,7 @@ import AddRunReplayHistoryWithTimestamps, {
   buildReplayHistoryEntryFromReplay,
   recordRunReplayHistoryEntry,
 } from "./add-run-replay-history-with-timestamps";
+import OperationProgressIndicator from "../components/OperationProgressIndicator";
 
 /**
  * Issue #275: Add Run replay UI
@@ -164,9 +165,6 @@ export default function AddRunReplayUi({ runs = [] }: AddRunReplayUiProps) {
       endTime: Date.now(),
     }));
   };
-
-  const progressPercentage =
-    progress.total > 0 ? (progress.current / progress.total) * 100 : 0;
 
   const isReplaying = progress.status === "running";
   const canStartReplay = selectedRun && !isReplaying;
@@ -378,40 +376,30 @@ export default function AddRunReplayUi({ runs = [] }: AddRunReplayUiProps) {
             <div className="p-6 rounded-[2rem] border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold">Replay Progress</h3>
-                <span
-                  className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${
-                    progress.status === "running"
-                      ? "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
-                      : progress.status === "completed"
-                        ? "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300"
-                        : progress.status === "failed"
-                          ? "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300"
-                          : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
-                  }`}
-                >
-                  {progress.status}
-                </span>
               </div>
 
-              <div className="mb-4">
-                <div className="flex items-center justify-between text-sm mb-2">
-                  <span className="text-zinc-600 dark:text-zinc-400">
-                    {progress.current} / {progress.total} seeds
-                  </span>
-                  <span className="font-bold text-zinc-900 dark:text-zinc-100">
-                    {progressPercentage.toFixed(1)}%
-                  </span>
-                </div>
-                <div className="h-3 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-300"
-                    style={{ width: `${progressPercentage}%` }}
-                  />
-                </div>
-              </div>
+              <OperationProgressIndicator
+                status={
+                  progress.status === "running"
+                    ? "running"
+                    : progress.status === "completed"
+                      ? "done"
+                      : progress.status === "failed"
+                        ? "failed"
+                        : "idle"
+                }
+                progress={
+                  progress.total > 0
+                    ? { current: progress.current, total: progress.total }
+                    : undefined
+                }
+                runningLabel="Replaying seeds"
+                doneLabel="Replay complete"
+                failedLabel="Replay failed"
+              />
 
               {progress.startTime && (
-                <div className="text-xs text-zinc-500">
+                <div className="mt-3 text-xs text-zinc-500">
                   Elapsed:{" "}
                   {Math.floor((now.getTime() - progress.startTime) / 1000)}s
                 </div>
