@@ -1,11 +1,11 @@
 'use client';
 
+import React from 'react';
 import dynamic from 'next/dynamic';
-import { LoadingSpinner } from '../../../components/LoadingSkeleton';
 
 const ApiConfigForm = dynamic(
   () => import('../../../components/ApiConfigForm'),
-  { loading: () => <LoadingSpinner /> },
+  { loading: () => <p>Loading...</p> },
 );
 
 export default function ApiSettingsPage() {
