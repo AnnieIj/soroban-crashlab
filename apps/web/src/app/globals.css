@@ -551,6 +551,9 @@ html.theme-ready body {
 @keyframes op-progress-indeterminate {
   0%   { transform: translateX(-100%); }
   100% { transform: translateX(400%); }
+}
+
+/**
  * status-pill-pulse — subtle opacity/scale loop for live "running" state pills.
  * Timing (2 s, ease-in-out) matches the parallax-drift convention in this file.
  * Deliberately gentle: scale stays within ±2% so text remains legible.
@@ -898,6 +901,8 @@ nav, header, .nav-bar {
     animation: none !important;
     /* Show a 40 % filled static bar so the state is still perceptible */
     transform: translateX(-60%) !important;
+  }
+
   /* Status pill animations — disable the running-state pulse/glow */
   .badge-running,
   .status-badge-running {
