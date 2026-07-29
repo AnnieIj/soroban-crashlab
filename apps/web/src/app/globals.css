@@ -898,6 +898,8 @@ nav, header, .nav-bar {
     animation: none !important;
     /* Show a 40 % filled static bar so the state is still perceptible */
     transform: translateX(-60%) !important;
+  }
+
   /* Status pill animations — disable the running-state pulse/glow */
   .badge-running,
   .status-badge-running {
