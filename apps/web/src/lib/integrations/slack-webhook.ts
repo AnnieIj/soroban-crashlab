@@ -2,6 +2,8 @@
  * Slack webhook integration for sending notifications
  */
 
+import { createAbortSignal } from './adapter-utils';
+
 export interface SlackWebhookConfig {
   webhookUrl: string;
   channel?: string;
@@ -71,51 +73,6 @@ export function validateSlackWebhookUrl(url: string): string | null {
   }
 
   return null;
-}
-
-/**
- * Sends a message to Slack webhook
- */
-export async function sendSlackNotification(
-  config: SlackWebhookConfig,
-  message: SlackMessage,
-): Promise<SlackNotificationResult> {
-  const validationError = validateSlackWebhookUrl(config.webhookUrl);
-  if (validationError) {
-    return { success: false, error: validationError };
-  }
-
-  const payload: SlackMessage = {
-    ...message,
-    channel: message.channel || config.channel,
-    username: message.username || config.username || "CrashLab",
-    icon_emoji: message.icon_emoji || config.iconEmoji || ":robot_face:",
-  };
-
-  try {
-    const response = await fetch(config.webhookUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      return {
-        success: false,
-        error: `Slack API error: ${response.status} - ${errorText}`,
-      };
-    }
-
-    return { success: true };
-  } catch (error) {
-    return {
-      success: false,
-      error: `Failed to send Slack notification: ${error instanceof Error ? error.message : "Unknown error"}`,
-    };
-  }
 }
 
 /**
@@ -240,58 +197,6 @@ export function validateSlackBotToken(token: string): string | null {
   return null;
 }
 
-/**
- * Posts a message via the Slack Web API (`chat.postMessage`).
- *
- * Pass `threadTs` to reply within an existing thread instead of starting a
- * new top-level message.
- */
-export async function postSlackMessage(
-  config: SlackBotConfig,
-  blocks: SlackBlock[],
-  fallbackText: string,
-  threadTs?: string,
-): Promise<SlackApiMessageResult> {
-  const validationError = validateSlackBotToken(config.botToken);
-  if (validationError) {
-    return { success: false, error: validationError };
-  }
-
-  try {
-    const response = await fetch(`${SLACK_API_BASE}/chat.postMessage`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json; charset=utf-8",
-        Authorization: `Bearer ${config.botToken}`,
-      },
-      body: JSON.stringify({
-        channel: config.channel,
-        text: fallbackText,
-        blocks,
-        ...(threadTs ? { thread_ts: threadTs } : {}),
-      }),
-    });
-
-    const data = (await response.json()) as {
-      ok: boolean;
-      ts?: string;
-      channel?: string;
-      error?: string;
-    };
-
-    if (!response.ok || !data.ok) {
-      return { success: false, error: data.error || `Slack API error: ${response.status}` };
-    }
-
-    return { success: true, ts: data.ts, channel: data.channel };
-  } catch (error) {
-    return {
-      success: false,
-      error: `Failed to post Slack message: ${error instanceof Error ? error.message : "Unknown error"}`,
-    };
-  }
-}
-
 export interface RunDetailPreviewInput {
   runId: string;
   eventType: "started" | "completed" | "failed" | "cancelled";
@@ -360,4 +265,106 @@ export function buildRunDetailPreviewBlocks(run: RunDetailPreviewInput): {
   const fallbackText = `${EVENT_HEADLINE[run.eventType]}: ${run.runId} (${run.status})`;
 
   return { blocks, fallbackText };
+}
+
+export interface SlackAdapterOptions {
+  fetchImpl?: typeof fetch;
+  timeoutMs?: number;
+}
+
+export function createSlackAdapter(options: SlackAdapterOptions = {}) {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const signal = createAbortSignal(options.timeoutMs);
+
+  return {
+    async sendNotification(
+      config: SlackWebhookConfig,
+      message: SlackMessage,
+    ): Promise<SlackNotificationResult> {
+      const validationError = validateSlackWebhookUrl(config.webhookUrl);
+      if (validationError) {
+        return { success: false, error: validationError };
+      }
+
+      const payload: SlackMessage = {
+        ...message,
+        channel: message.channel || config.channel,
+        username: message.username || config.username || "CrashLab",
+        icon_emoji: message.icon_emoji || config.iconEmoji || ":robot_face:",
+      };
+
+      try {
+        const response = await fetchImpl(config.webhookUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          signal,
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          return {
+            success: false,
+            error: `Slack API error: ${response.status} - ${errorText}`,
+          };
+        }
+
+        return { success: true };
+      } catch (error) {
+        return {
+          success: false,
+          error: `Failed to send Slack notification: ${error instanceof Error ? error.message : "Unknown error"}`,
+        };
+      }
+    },
+
+    async postMessage(
+      config: SlackBotConfig,
+      blocks: SlackBlock[],
+      fallbackText: string,
+      threadTs?: string,
+    ): Promise<SlackApiMessageResult> {
+      const validationError = validateSlackBotToken(config.botToken);
+      if (validationError) {
+        return { success: false, error: validationError };
+      }
+
+      try {
+        const response = await fetchImpl(`${SLACK_API_BASE}/chat.postMessage`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json; charset=utf-8",
+            Authorization: `Bearer ${config.botToken}`,
+          },
+          signal,
+          body: JSON.stringify({
+            channel: config.channel,
+            text: fallbackText,
+            blocks,
+            ...(threadTs ? { thread_ts: threadTs } : {}),
+          }),
+        });
+
+        const data = (await response.json()) as {
+          ok: boolean;
+          ts?: string;
+          channel?: string;
+          error?: string;
+        };
+
+        if (!response.ok || !data.ok) {
+          return { success: false, error: data.error || `Slack API error: ${response.status}` };
+        }
+
+        return { success: true, ts: data.ts, channel: data.channel };
+      } catch (error) {
+        return {
+          success: false,
+          error: `Failed to post Slack message: ${error instanceof Error ? error.message : "Unknown error"}`,
+        };
+      }
+    },
+  };
 }

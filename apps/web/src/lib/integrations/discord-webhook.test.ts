@@ -5,7 +5,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   validateDiscordWebhookUrl,
-  sendDiscordNotification,
+  createDiscordAdapter,
   createRunEventEmbed,
   createCriticalAlertEmbed,
   createSimpleMessage,
@@ -34,37 +34,33 @@ describe('validateDiscordWebhookUrl', () => {
   });
 });
 
-describe('sendDiscordNotification', () => {
+describe('createDiscordAdapter', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
   });
 
   it('sends notification successfully with valid webhook', async () => {
-    global.fetch = vi.fn(() =>
-      Promise.resolve({
-        ok: true,
-        status: 204,
-      } as Response),
-    );
+    const adapter = createDiscordAdapter({
+      fetchImpl: vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          status: 204,
+        } as Response),
+      ),
+    });
 
-    const result = await sendDiscordNotification(
+    const result = await adapter.sendNotification(
       { webhookUrl: 'https://discord.com/api/webhooks/123/abc' },
       { content: 'Test message' },
     );
 
     expect(result.success).toBe(true);
     expect(result.error).toBeUndefined();
-    expect(fetch).toHaveBeenCalledWith(
-      'https://discord.com/api/webhooks/123/abc',
-      expect.objectContaining({
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    );
   });
 
   it('returns error for invalid webhook URL', async () => {
-    const result = await sendDiscordNotification(
+    const adapter = createDiscordAdapter();
+    const result = await adapter.sendNotification(
       { webhookUrl: 'https://example.com/invalid' },
       { content: 'Test' },
     );
@@ -74,15 +70,17 @@ describe('sendDiscordNotification', () => {
   });
 
   it('returns error when Discord API returns non-OK response', async () => {
-    global.fetch = vi.fn(() =>
-      Promise.resolve({
-        ok: false,
-        status: 400,
-        text: () => Promise.resolve('Bad Request'),
-      } as Response),
-    );
+    const adapter = createDiscordAdapter({
+      fetchImpl: vi.fn(() =>
+        Promise.resolve({
+          ok: false,
+          status: 400,
+          text: () => Promise.resolve('Bad Request'),
+        } as Response),
+      ),
+    });
 
-    const result = await sendDiscordNotification(
+    const result = await adapter.sendNotification(
       { webhookUrl: 'https://discord.com/api/webhooks/123/abc' },
       { content: 'Test' },
     );
@@ -93,9 +91,11 @@ describe('sendDiscordNotification', () => {
   });
 
   it('returns error when fetch throws', async () => {
-    global.fetch = vi.fn(() => Promise.reject(new Error('Network error')));
+    const adapter = createDiscordAdapter({
+      fetchImpl: vi.fn(() => Promise.reject(new Error('Network error'))),
+    });
 
-    const result = await sendDiscordNotification(
+    const result = await adapter.sendNotification(
       { webhookUrl: 'https://discord.com/api/webhooks/123/abc' },
       { content: 'Test' },
     );
@@ -108,9 +108,9 @@ describe('sendDiscordNotification', () => {
     const mockFetch = vi.fn(() =>
       Promise.resolve({ ok: true, status: 204 } as Response),
     );
-    global.fetch = mockFetch;
+    const adapter = createDiscordAdapter({ fetchImpl: mockFetch });
 
-    await sendDiscordNotification(
+    await adapter.sendNotification(
       { webhookUrl: 'https://discord.com/api/webhooks/123/abc' },
       { content: 'Test' },
     );

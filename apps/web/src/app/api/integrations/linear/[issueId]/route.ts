@@ -7,7 +7,7 @@
 
 import { NextResponse } from 'next/server';
 import { withRouteErrorHandling, jsonError } from '@/lib/route-handler';
-import { fetchLinearIssue } from '@/lib/integrations/linear-issues';
+import { createLinearIssuesAdapter } from '@/lib/integrations/linear-issues';
 
 interface RouteContext {
   params: Promise<{ issueId: string }>;
@@ -22,7 +22,8 @@ export const GET = withRouteErrorHandling(
       return jsonError('Issue ID is required', 400);
     }
 
-    const issue = await fetchLinearIssue(issueId);
+    const adapter = createLinearIssuesAdapter();
+    const issue = await adapter.fetchIssue(issueId);
 
     if (!issue) {
       return jsonError('Issue not found or Linear not configured', 404);
