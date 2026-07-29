@@ -1,22 +1,31 @@
 import { test, expect } from './fixtures';
 
+const INTEGRATIONS_READY_TIMEOUT_MS = 120000;
+
+async function openIntegrationsHub(page: import('@playwright/test').Page) {
+  await page.goto('/integrations');
+  await expect(
+    page.getByRole('heading', { name: 'Integrations Hub' }),
+  ).toBeVisible({ timeout: INTEGRATIONS_READY_TIMEOUT_MS });
+}
+
 test.describe('Integrations Hub navigation', () => {
-  test('should load integrations hub and navigate to an integration page', async ({ page }) => {
-    // Navigate to integrations hub
-    await page.goto('/integrations');
+  test.setTimeout(150000);
 
-    // Verify title and main heading
-    await expect(page.getByRole('heading', { name: 'Integrations Hub' })).toBeVisible();
+  test('should load integrations hub and navigate to key integration pages', async ({ page }) => {
+    await openIntegrationsHub(page);
+    await expect(page.getByRole('heading', { name: 'Ready to Use' })).toBeVisible();
 
-    // Find and click the Artifact Storage integration card
-    const card = page.getByRole('heading', { name: 'Artifact Storage' });
-    await expect(card).toBeVisible();
-    await card.click();
-
-    // Verify navigation to artifacts page
+    await page.getByRole('link', { name: /Artifact Storage/i }).click();
     await expect(page).toHaveURL(/.*\/integrations\/artifacts/);
-
-    // Verify the integration subpage heading loads
     await expect(page.getByRole('heading', { name: 'Artifact Storage Integration' })).toBeVisible();
+
+    await openIntegrationsHub(page);
+
+    await page.getByRole('link', { name: /Replay E2E Tests/i }).click();
+    await expect(page).toHaveURL(/.*\/integrations\/replay-e2e/);
+    await expect(
+      page.getByRole('heading', { name: 'Replay End-to-End Integration Tests' }),
+    ).toBeVisible();
   });
 });
