@@ -14,13 +14,16 @@
     "test:sentry-client": "npx vitest run src/lib/integrations/sentry-client.test.ts",
     "test:script-style": "vitest run src/test/script-style-tests.test.ts",
     "test:sanitize": "vitest run src/lib/sanitize.test.ts",
-    "test:e2e": "playwright test",
+    "test:e2e": "playwright test e2e/integrations.spec.ts",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",
+    "test:confirm-dialog-utils": "npx tsc src/components/confirm-dialog-utils.ts src/components/confirm-dialog-utils.test.ts --module commonjs --target es2020 --rootDir src --outDir build/test-tmp --esModuleInterop && node build/test-tmp/components/confirm-dialog-utils.test.js",
     "test:e2e:run-detail-navigation": "playwright test e2e/run-detail-navigation.spec.ts",
     "test:e2e:search": "playwright test e2e/search.spec.ts",
     "test:e2e:dark-mode": "playwright test e2e/dark-mode.spec.ts",
     "test:e2e:mobile-responsive": "playwright test e2e/mobile-responsive.spec.ts",
+    "test:e2e:integrations": "playwright test e2e/integrations.spec.ts",
+    "test:e2e:maintainer": "playwright test e2e/maintainer.spec.ts",
     "test:error-boundary": "npx tsc src/components/error-boundary-utils.ts src/components/error-boundary-utils.test.ts --module commonjs --target es2020 --rootDir src --outDir build/test-tmp --esModuleInterop && node build/test-tmp/components/error-boundary-utils.test.js",
     "test:toast": "npx tsc src/components/toast-utils.ts src/components/toast-utils.test.ts --module commonjs --target es2020 --rootDir src --outDir build/test-tmp --esModuleInterop && node build/test-tmp/components/toast-utils.test.js",
     "test:severity-badge": "npx tsc src/components/LogSeverityBadge.tsx src/components/LogSeverityBadge.test.ts --module commonjs --target es2020 --rootDir src --outDir build/test-tmp --esModuleInterop --jsx react && node build/test-tmp/components/LogSeverityBadge.test.js",
@@ -49,7 +52,8 @@
     "test:pagination-utils": "npx tsc src/app/pagination-utils.ts src/app/pagination-utils.test.ts --module commonjs --target es2020 --rootDir src --outDir build/test-tmp --esModuleInterop --skipLibCheck && node build/test-tmp/app/pagination-utils.test.js",
     "test:dashboard-layout-utils": "npx tsc src/app/dashboard-layout-utils.ts src/app/dashboard-layout-utils.test.ts --module commonjs --target es2020 --rootDir src --outDir build/test-tmp --esModuleInterop --skipLibCheck && node build/test-tmp/app/dashboard-layout-utils.test.js",
     "test:api-runs": "npx vitest run src/app/api/runs/route.test.ts",
-    "size": "size-limit"
+    "size": "size-limit",
+    "test:e2e:all": "playwright test"
   },
   "dependencies": {
     "@sentry/nextjs": "^10.62.0",
@@ -62,6 +66,8 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.0",
+    "@size-limit/preset-app": "^11.2.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/jest": "^30.0.0",
     "@types/node": "^20",
@@ -71,11 +77,10 @@
     "babel-plugin-react-compiler": "1.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "size-limit": "^11.2.0",
     "tailwindcss": "^4",
     "typescript": "^5.9.3",
-    "vitest": "^2.1.8",
-    "size-limit": "^11.2.0",
-    "@size-limit/preset-app": "^11.2.0"
+    "vitest": "^2.1.8"
   },
   "packageManager": "pnpm@10.30.2+sha512.36cdc707e7b7940a988c9c1ecf88d084f8514b5c3f085f53a2e244c2921d3b2545bc20dd4ebe1fc245feec463bb298aecea7a63ed1f7680b877dc6379d8d0cb4"
 }

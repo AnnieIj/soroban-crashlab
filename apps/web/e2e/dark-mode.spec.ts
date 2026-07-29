@@ -17,7 +17,7 @@ test.describe('Dark mode toggle', () => {
     await page.goto('/');
     await setThemePreference(page, 'light');
     await page.reload();
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
   });
 
   test('toggles dark mode from the navbar theme button', async ({ page }) => {
@@ -47,7 +47,7 @@ test.describe('Dark mode toggle', () => {
     await expect(page.locator('html')).toHaveClass(/dark/);
 
     await page.reload();
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     await expect(page.locator('html')).toHaveClass(/dark/);
     await expect(page.getByRole('button', { name: 'Switch to light mode' })).toBeVisible();
@@ -61,12 +61,12 @@ test.describe('Dark mode toggle', () => {
     await expect(page.locator('html')).toHaveClass(/dark/);
 
     await page.goto('/runs');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await expect(page.locator('html')).toHaveClass(/dark/);
     await expect(page.getByRole('button', { name: 'Switch to light mode' })).toBeVisible();
 
     await page.goto('/runs/query');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await expect(page.locator('html')).toHaveClass(/dark/);
   });
 
@@ -76,7 +76,7 @@ test.describe('Dark mode toggle', () => {
     }, THEME_STORAGE_KEY);
 
     await page.reload();
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     await expect(page.getByRole('button', { name: /Switch to (dark|light) mode/ })).toBeVisible();
 

@@ -159,7 +159,7 @@ test.describe('Run detail navigation', () => {
     await fulfillRunsListRequest(page, { runs: mockRuns, total: mockRuns.length });
 
     await page.goto('/runs/non-existent-run-9999');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     await expect(page.getByRole('heading', { name: 'Run Details' })).toBeVisible();
     await expect(page.getByText('ID: non-existent-run-9999')).toBeVisible();
