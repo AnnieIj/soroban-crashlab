@@ -58,8 +58,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const mounted = useSyncExternalStore(subscribeToMount, getMountSnapshot, getMountServerSnapshot);
 
   useEffect(() => {
-    setUserTheme(getStoredTheme());
-    setSystemPrefersDark(getSystemPrefersDark());
+    queueMicrotask(() => {
+      setUserTheme(getStoredTheme());
+      setSystemPrefersDark(getSystemPrefersDark());
+    });
   }, []);
 
   const theme = useMemo<Theme>(() => {
