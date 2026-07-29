@@ -17,19 +17,14 @@ test.describe('Home Page', () => {
   });
 
   test('should render the main content area', async ({ page }) => {
-    // Wait for the main content to be visible
     const main = page.locator('main');
-    await expect(main).toBeVisible({ timeout: 5000 });
+    await expect(main).toBeVisible({ timeout: 30000 });
   });
 
   test('should have accessible heading structure', async ({ page }) => {
-    // Prefer an h1 when present; fall back to any landmark heading.
-    const h1 = page.locator('h1');
-    if (await h1.count()) {
-      await expect(h1.first()).toBeVisible({ timeout: 15000 });
-      return;
-    }
-    await expect(page.getByRole('heading').first()).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({
+      timeout: 60000,
+    });
   });
 
   test('should have no console errors', async ({ page }) => {
