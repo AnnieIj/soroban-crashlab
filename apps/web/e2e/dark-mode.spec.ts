@@ -55,4 +55,44 @@ test.describe('Dark mode toggle', () => {
       .poll(async () => page.evaluate((key) => localStorage.getItem(key), THEME_STORAGE_KEY))
       .toBe('dark');
   });
+
+  test('persists theme preference across page navigation', async ({ page }) => {
+    await page.getByRole('button', { name: 'Switch to dark mode' }).click();
+    await expect(page.locator('html')).toHaveClass(/dark/);
+
+    await page.goto('/runs');
+    await page.waitForLoadState('networkidle');
+    await expect(page.locator('html')).toHaveClass(/dark/);
+    await expect(page.getByRole('button', { name: 'Switch to light mode' })).toBeVisible();
+
+    await page.goto('/runs/query');
+    await page.waitForLoadState('networkidle');
+    await expect(page.locator('html')).toHaveClass(/dark/);
+  });
+
+  test('handles corrupted localStorage theme preference gracefully', async ({ page }) => {
+    await page.evaluate((key) => {
+      localStorage.setItem(key, 'invalid_corrupted_theme');
+    }, THEME_STORAGE_KEY);
+
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+
+    await expect(page.getByRole('button', { name: /Switch to (dark|light) mode/ })).toBeVisible();
+
+    await page.getByRole('button', { name: /Switch to (dark|light) mode/ }).click();
+
+    const storedTheme = await page.evaluate((key) => localStorage.getItem(key), THEME_STORAGE_KEY);
+    expect(['light', 'dark']).toContain(storedTheme);
+  });
+
+  test('handles rapid consecutive theme toggles without state desynchronization', async ({ page }) => {
+    for (let i = 0; i < 4; i++) {
+      await page.getByRole('button', { name: /Switch to (dark|light) mode/ }).click();
+    }
+
+    const isDark = await page.locator('html').evaluate((el) => el.classList.contains('dark'));
+    const storedTheme = await page.evaluate((key) => localStorage.getItem(key), THEME_STORAGE_KEY);
+    expect(storedTheme).toBe(isDark ? 'dark' : 'light');
+  });
 });
