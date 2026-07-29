@@ -76,10 +76,7 @@ function Field({
 export default function ApiConfigForm() {
   // Mount from the unsaved draft when one exists, so edits survive the browser
   // discarding a backgrounded tab and remounting this form (#1074).
-  const [config, setConfig] = useState<ApiConfig>(() => {
-    if (typeof window === 'undefined') return DEFAULT_CONFIG;
-    return resolveInitialConfig(loadFromStorage(), loadDraft());
-  });
+  const [config, setConfig] = useState<ApiConfig>(DEFAULT_CONFIG);
 
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [saved, setSaved] = useState(false);
@@ -95,17 +92,21 @@ export default function ApiConfigForm() {
   }, [config]);
 
   useEffect(() => {
-    queueMicrotask(() => setMounted(true));
+    queueMicrotask(() => {
+      setConfig(resolveInitialConfig(loadFromStorage(), loadDraft()));
+      setMounted(true);
+    });
   }, []);
 
   // Surface the restore so the user understands why the fields aren't the saved
   // values. Checked after mount to keep the server and client markup identical.
   useEffect(() => {
+    if (!mounted) return;
     const draft = loadDraft();
     if (draft && !isSameConfig(draft, loadFromStorage())) {
       queueMicrotask(() => setDraftRestored(true));
     }
-  }, []);
+  }, [mounted]);
 
   // A discarded tab gets no unmount callback, so mirror pending edits to storage
   // as they happen and flush again the moment the tab is backgrounded.
