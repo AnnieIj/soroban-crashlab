@@ -3,6 +3,7 @@ import {
   getPageSlice,
   clampPage,
   buildPaginationState,
+  type PaginationState as _PaginationState,
 } from './pagination-utils';
 
 function assertEqual<T>(actual: T, expected: T, message?: string): void {
