@@ -23,12 +23,23 @@ import { formatDuration } from './utils/format';
  * Renders a color-coded status badge for a run.
  * Colors are driven by CSS custom properties defined in globals.css,
  * which are chosen to meet WCAG AA contrast (≥4.5:1) in both light and dark modes.
+ * Running state gets a subtle pulse animation (disabled for prefers-reduced-motion).
  */
 const StatusBadge = ({ status }: { status: RunStatus }) => {
+    const isRunning = status === 'running';
     return (
         <span
-            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border status-badge status-badge-${status}`}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border status-badge status-badge-${status}`}
         >
+            {isRunning && (
+                <span
+                    className="relative inline-flex h-1.5 w-1.5 shrink-0"
+                    aria-hidden="true"
+                >
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-current opacity-60" />
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-current" />
+                </span>
+            )}
             {status.charAt(0).toUpperCase() + status.slice(1)}
         </span>
     );

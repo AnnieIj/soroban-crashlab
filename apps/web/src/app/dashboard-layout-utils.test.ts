@@ -8,7 +8,7 @@ import {
   DEFAULT_DASHBOARD_LAYOUT,
   DASHBOARD_LAYOUT_STORAGE_KEY,
   type DashboardSectionConfig,
-  type DashboardSectionId,
+  type DashboardSectionId as _DashboardSectionId,
 } from './dashboard-layout-utils';
 
 function assertEqual<T>(actual: T, expected: T, message?: string): void {
@@ -208,7 +208,7 @@ function assertTrue(condition: boolean, message?: string): void {
     { id: 'widget-editor', visible: true, order: 2 },
   ]);
   const result = parseDashboardLayout(input);
-  assertTrue(!result.some((s) => s.id === 'invalid-section'));
+  assertTrue(!result.some((s) => s.id === ('invalid-section' as _DashboardSectionId)));
 }
 
 // parseDashboardLayout: adds missing sections from default

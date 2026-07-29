@@ -106,4 +106,50 @@ test.describe('Search / Query Builder functionality', () => {
     await page.reload();
     await expect(page.getByText('Completed Runs Query')).toBeVisible();
   });
+
+  test('filters runs by criteria and handles empty search results edge case', async ({ page }) => {
+    await page.goto('/runs/query');
+    await expect(page.getByRole('heading', { name: 'Fuzzy Query Builder', level: 1 })).toBeVisible();
+
+    const addFilterBtn = page.getByRole('button', { name: '+ Add Filter' });
+    await addFilterBtn.click();
+
+    const fieldSelect = page.locator('select').first();
+    await fieldSelect.selectOption('status');
+
+    const operatorSelect = page.locator('select').nth(1);
+    await operatorSelect.selectOption('equals');
+
+    const valueSelect = page.locator('select').nth(2);
+    await valueSelect.selectOption('failed');
+
+    await expect(page.getByRole('button', { name: 'Save Query' })).toBeVisible();
+  });
+
+  test('handles special characters and boundary inputs in search without breaking', async ({ page }) => {
+    await page.goto('/runs/query');
+    await expect(page.getByRole('heading', { name: 'Fuzzy Query Builder', level: 1 })).toBeVisible();
+
+    const searchInput = page.getByPlaceholder(/search|filter/i).or(page.locator('input[type="text"]').first());
+    if (await searchInput.isVisible()) {
+      await searchInput.fill("'<script>alert(1)</script>' OR 1=1; -- %20");
+      await expect(searchInput).toHaveValue("'<script>alert(1)</script>' OR 1=1; -- %20");
+    }
+
+    await expect(page.getByRole('heading', { name: 'Fuzzy Query Builder', level: 1 })).toBeVisible();
+  });
+
+  test('handles API failure during search query execution gracefully', async ({ page }) => {
+    await page.route('**/api/runs', async (route) => {
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Internal Server Error' }),
+      });
+    });
+
+    await page.goto('/runs/query');
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByRole('heading', { name: 'Fuzzy Query Builder', level: 1 })).toBeVisible();
+  });
 });

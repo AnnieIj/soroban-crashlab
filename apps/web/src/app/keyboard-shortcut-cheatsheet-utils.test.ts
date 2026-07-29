@@ -47,6 +47,15 @@ function testShouldToggleCheatsheet() {
   assert.equal(shouldToggleCheatsheet({ key: "?", shiftKey: false, ctrlKey: false, metaKey: false, altKey: false }, true), false);
   assert.equal(shouldToggleCheatsheet({ key: "/", shiftKey: false, ctrlKey: false, metaKey: false, altKey: false }, false), false);
   assert.equal(shouldToggleCheatsheet({ key: "?", shiftKey: false, ctrlKey: true, metaKey: false, altKey: false }, false), false);
+
+  // Ctrl+/ and Cmd+/ toggle the cheatsheet, including while typing, since
+  // the chord doesn't insert a literal character into the focused field.
+  assert.equal(shouldToggleCheatsheet({ key: "/", shiftKey: false, ctrlKey: true, metaKey: false, altKey: false }, false), true);
+  assert.equal(shouldToggleCheatsheet({ key: "/", shiftKey: false, ctrlKey: false, metaKey: true, altKey: false }, false), true);
+  assert.equal(shouldToggleCheatsheet({ key: "/", shiftKey: false, ctrlKey: true, metaKey: false, altKey: false }, true), true);
+  // Alt+Ctrl+/ and Ctrl+Shift+/ are not the dedicated chord and stay blocked.
+  assert.equal(shouldToggleCheatsheet({ key: "/", shiftKey: false, ctrlKey: true, metaKey: false, altKey: true }, false), false);
+  assert.equal(shouldToggleCheatsheet({ key: "/", shiftKey: true, ctrlKey: true, metaKey: false, altKey: false }, false), false);
 }
 
 function testResolveGoNavigationShortcut() {

@@ -12,14 +12,28 @@ export const GET = withRouteErrorHandling('GET /api/runs', async (request: Reque
     try {
       const sanitizedSearchParams = sanitizeSearchParams(searchParams);
       const qs = sanitizedSearchParams.toString();
-      const res = await fetch(`${apiUrl}/api/runs${qs ? `?${qs}` : ''}`, {
+
+      // Race the upstream fetch against a 10-second timeout so tests that
+      // mock fetch can trigger the timeout path without waiting for real I/O.
+      const UPSTREAM_TIMEOUT_MS = 10_000;
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Upstream timeout')), UPSTREAM_TIMEOUT_MS),
+      );
+      const fetchPromise = fetch(`${apiUrl}/api/runs${qs ? `?${qs}` : ''}`, {
         cache: 'no-store',
-        signal: AbortSignal.timeout(10_000),
+        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
       });
+
+      const res = await Promise.race([fetchPromise, timeoutPromise]);
       if (res.ok) {
-        const data = await res.json();
-        return successResponse(data);
+        const backendData = await res.json() as { total?: number; [key: string]: unknown };
+        const init = backendData.total !== undefined ? { total: backendData.total as number } : undefined;
+        return successResponse(backendData, init);
       }
+      return NextResponse.json(
+        { error: 'Backend unavailable', runs: [], total: 0 },
+        { status: 503 },
+      );
     } catch (error) {
       logger.error('GET /api/runs upstream fetch failed', { error });
       return NextResponse.json(
