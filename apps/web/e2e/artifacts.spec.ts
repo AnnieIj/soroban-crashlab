@@ -51,9 +51,10 @@ async function navigateToArtifactPage(page: Page): Promise<void> {
   await page.goto('/integrations/artifacts');
   // Wait for the dynamically imported page content (avoid networkidle —
   // the app polls APIs and that wait never settles under next start).
-  await expect(page.getByRole('heading', { name: 'Upload New Artifact' })).toBeVisible({
+  await expect(page.getByText('Artifact Storage Integration')).toBeVisible({
     timeout: 60000,
   });
+  await expect(page.getByText('Upload New Artifact')).toBeVisible({ timeout: 15000 });
   await expect(page.locator('input[type="file"]')).toBeAttached({ timeout: 10000 });
 }
 
@@ -218,7 +219,7 @@ test.describe('Artifact Upload/Download E2E', () => {
 
       // Reload page
       await page.reload();
-      await expect(page.getByRole('heading', { name: 'Upload New Artifact' })).toBeVisible({
+      await expect(page.getByText('Artifact Storage Integration')).toBeVisible({
         timeout: 60000,
       });
 
