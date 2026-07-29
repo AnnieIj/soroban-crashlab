@@ -1,7 +1,7 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { buildMockRuns } from '../../../mockRuns';
 import AddRunReplayHistoryWithTimestamps from '../../../add-run-replay-history-with-timestamps';
+import BreadcrumbNav from '@/components/BreadcrumbNav';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,13 +19,13 @@ export default async function ReplayHistoryPage({ params }: ReplayHistoryPagePro
 
   return (
     <div className="container-full page-padding fade-in">
-      <div className="flex items-center gap-2 mb-6">
-        <Link href={`/runs/${id}`} className="btn-ghost text-sm px-3 h-8">
-          ← Run Details
-        </Link>
-        <span className="text-meta">/</span>
-        <span className="text-meta">Replay History</span>
-      </div>
+      <BreadcrumbNav
+        segments={[
+          { label: 'Runs', href: '/runs' },
+          { label: id, href: `/runs/${id}` },
+          { label: 'Replay History' },
+        ]}
+      />
 
       <div className="mb-6">
         <h1 className="heading-page">Replay History</h1>
