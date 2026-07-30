@@ -544,6 +544,16 @@ html.theme-ready body {
 }
 
 /**
+ * op-progress-indeterminate — sliding highlight for the indeterminate progress
+ * bar used by OperationProgressIndicator when no step count is available.
+ * Linear, 1.6 s loop — consistent with the shimmer skeleton timing convention.
+ */
+@keyframes op-progress-indeterminate {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+
+/**
  * status-pill-pulse — subtle opacity/scale loop for live "running" state pills.
  * Timing (2 s, ease-in-out) matches the parallax-drift convention in this file.
  * Deliberately gentle: scale stays within ±2% so text remains legible.
@@ -886,6 +896,13 @@ nav, header, .nav-bar {
     box-shadow: none !important;
   }
 
+  /* OperationProgressIndicator — keep the bar visible but static */
+  .op-progress-bar-indeterminate {
+    animation: none !important;
+    /* Show a 40 % filled static bar so the state is still perceptible */
+    transform: translateX(-60%) !important;
+  }
+
   /* Status pill animations — disable the running-state pulse/glow */
   .badge-running,
   .status-badge-running {
@@ -965,6 +982,103 @@ nav, header, .nav-bar {
 @media (min-width: 1024px) {
   .page-padding {
     padding: 24px 48px;
+  }
+}
+
+/* ===== Breadcrumb Navigation ===== */
+
+.breadcrumb-nav {
+  padding: 8px 0 4px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.breadcrumb-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.breadcrumb-list {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.breadcrumb-item {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.breadcrumb-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-weight: 500;
+  padding: 3px 6px;
+  border-radius: 5px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.breadcrumb-link:hover {
+  color: #0A66C2;
+  background: var(--highlight-bg);
+}
+
+.breadcrumb-link:focus-visible {
+  outline: 2px solid #0A66C2;
+  outline-offset: 1px;
+}
+
+.breadcrumb-home {
+  color: var(--text-secondary);
+}
+
+.breadcrumb-home-icon {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.breadcrumb-link:hover .breadcrumb-home-icon {
+  opacity: 1;
+}
+
+.breadcrumb-separator {
+  display: flex;
+  align-items: center;
+  color: var(--border-color);
+  flex-shrink: 0;
+}
+
+.breadcrumb-current {
+  color: var(--text-primary);
+  font-weight: 600;
+  padding: 3px 6px;
+  border-radius: 5px;
+}
+
+/* Responsive: tighten spacing on small screens */
+@media (max-width: 639px) {
+  .breadcrumb-nav {
+    padding: 6px 0 2px;
+  }
+
+  .breadcrumb-item {
+    font-size: 12px;
+  }
+
+  .breadcrumb-link,
+  .breadcrumb-current {
+    padding: 2px 4px;
   }
 }
 

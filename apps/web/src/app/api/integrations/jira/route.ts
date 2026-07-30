@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { withRouteErrorHandling, jsonError, readJsonBody } from '@/lib/route-handler';
-import { createJiraIssue } from '@/lib/integrations/jira-issues';
+import { createJiraIssuesAdapter } from '@/lib/integrations/jira-issues';
 
 export const POST = withRouteErrorHandling(
   'POST /api/integrations/jira',
@@ -21,7 +21,8 @@ export const POST = withRouteErrorHandling(
       return jsonError('A non-empty summary is required', 400);
     }
 
-    const issue = await createJiraIssue({
+    const adapter = createJiraIssuesAdapter();
+    const issue = await adapter.createIssue({
       summary: payload.summary.trim(),
       description: typeof payload.description === 'string' ? payload.description : undefined,
       projectKey: typeof payload.projectKey === 'string' ? payload.projectKey : undefined,

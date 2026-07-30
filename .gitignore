@@ -10,6 +10,7 @@ apps/web/.next/
 # Env and logs
 .env
 .env.*
+!.env.docker.example
 *.log
 
 .agents/

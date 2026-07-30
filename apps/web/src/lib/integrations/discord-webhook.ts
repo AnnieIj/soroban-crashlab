@@ -2,6 +2,8 @@
  * Discord webhook integration for sending notifications
  */
 
+import { createAbortSignal } from './adapter-utils';
+
 export interface DiscordWebhookConfig {
   webhookUrl: string;
   username?: string;
@@ -56,49 +58,6 @@ export function validateDiscordWebhookUrl(url: string): string | null {
   }
 
   return null;
-}
-
-/**
- * Sends a message to Discord webhook
- */
-export async function sendDiscordNotification(
-  config: DiscordWebhookConfig,
-  message: DiscordMessage,
-): Promise<DiscordNotificationResult> {
-  const validationError = validateDiscordWebhookUrl(config.webhookUrl);
-  if (validationError) {
-    return { success: false, error: validationError };
-  }
-
-  const payload: DiscordMessage = {
-    ...message,
-    username: message.username || config.username || "CrashLab",
-  };
-
-  try {
-    const response = await fetch(config.webhookUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      return {
-        success: false,
-        error: `Discord API error: ${response.status} - ${errorText}`,
-      };
-    }
-
-    return { success: true };
-  } catch (error) {
-    return {
-      success: false,
-      error: `Failed to send Discord notification: ${error instanceof Error ? error.message : "Unknown error"}`,
-    };
-  }
 }
 
 /**
@@ -175,4 +134,57 @@ export function createCriticalAlertEmbed(
  */
 export function createSimpleMessage(text: string): DiscordMessage {
   return { content: text };
+}
+
+export interface DiscordAdapterOptions {
+  fetchImpl?: typeof fetch;
+  timeoutMs?: number;
+}
+
+export function createDiscordAdapter(options: DiscordAdapterOptions = {}) {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const signal = createAbortSignal(options.timeoutMs);
+
+  return {
+    async sendNotification(
+      config: DiscordWebhookConfig,
+      message: DiscordMessage,
+    ): Promise<DiscordNotificationResult> {
+      const validationError = validateDiscordWebhookUrl(config.webhookUrl);
+      if (validationError) {
+        return { success: false, error: validationError };
+      }
+
+      const payload: DiscordMessage = {
+        ...message,
+        username: message.username || config.username || "CrashLab",
+      };
+
+      try {
+        const response = await fetchImpl(config.webhookUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          signal,
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          return {
+            success: false,
+            error: `Discord API error: ${response.status} - ${errorText}`,
+          };
+        }
+
+        return { success: true };
+      } catch (error) {
+        return {
+          success: false,
+          error: `Failed to send Discord notification: ${error instanceof Error ? error.message : "Unknown error"}`,
+        };
+      }
+    },
+  };
 }

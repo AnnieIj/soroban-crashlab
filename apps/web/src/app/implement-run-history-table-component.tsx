@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from "react";
 import { FuzzingRun, RunStatus, RunSeverity } from "./types";
 import { useDataTableKeyboardNav } from "./use-data-table-keyboard-nav";
+import TruncatedCell from "@/components/TruncatedCell";
 import {
   getSortIndicator,
   getNextSortState,
@@ -248,7 +249,7 @@ export default function EnhancedRunHistoryTable({
               {visibleColumns.includes("duration") && (
                 <th
                   className={`px-6 py-5 text-[10px] font-bold uppercase tracking-widest text-right cursor-pointer transition-colors ${
-                    activeSortField === "duration"
+                    sort.field === "duration"
                       ? "text-blue-600 dark:text-blue-400"
                       : "text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
                   }`}
@@ -261,7 +262,7 @@ export default function EnhancedRunHistoryTable({
               {visibleColumns.includes("seedCount") && (
                 <th
                   className={`px-6 py-5 text-[10px] font-bold uppercase tracking-widest text-right cursor-pointer transition-colors ${
-                    activeSortField === "seedCount"
+                    sort.field === "seedCount"
                       ? "text-blue-600 dark:text-blue-400"
                       : "text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
                   }`}
@@ -316,8 +317,8 @@ export default function EnhancedRunHistoryTable({
                    <td className="px-6 py-5">
                      <div className="flex flex-col">
                        <div className="flex items-center gap-1.5">
-                         <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100 font-mono group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" title={run.id}>
-                           #{run.id.split("-").pop()}
+                         <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100 font-mono group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors max-w-[160px]">
+                           <TruncatedCell>#{run.id.split("-").pop()}</TruncatedCell>
                          </span>
                         {run.annotations && run.annotations.length > 0 && (
                           <svg

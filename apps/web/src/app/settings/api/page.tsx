@@ -1,5 +1,12 @@
+'use client';
+
 import React from 'react';
-import ApiConfigForm from '../../../components/ApiConfigForm';
+import dynamic from 'next/dynamic';
+
+const ApiConfigForm = dynamic(
+  () => import('../../../components/ApiConfigForm'),
+  { loading: () => <p>Loading...</p> },
+);
 
 export default function ApiSettingsPage() {
   return (

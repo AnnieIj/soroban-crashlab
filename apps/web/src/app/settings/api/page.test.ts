@@ -22,15 +22,16 @@ const runAssertions = (): void => {
   const content = fs.readFileSync(componentPath, 'utf-8');
 
   assert.ok(
-    content.includes("import ApiConfigForm from '../../../components/ApiConfigForm'"),
-    'Page should import the ApiConfigForm component',
+    content.includes("import('../../../components/ApiConfigForm')") ||
+      content.includes("import ApiConfigForm from '../../../components/ApiConfigForm'"),
+    'Page should load the ApiConfigForm component',
   );
   assert.ok(
     content.includes('export default function ApiSettingsPage()'),
     'Page should export a default page component',
   );
   assert.ok(
-    content.includes('<ApiConfigForm />'),
+    content.includes('<ApiConfigForm'),
     'Page should render the ApiConfigForm component',
   );
 

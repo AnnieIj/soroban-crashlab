@@ -4,9 +4,26 @@ import React from 'react';
 import { LogLevel } from '../app/log-viewer-utils';
 
 export interface LogSeverityBadgeProps {
-  level: LogLevel | 'critical' | 'warning' | 'info' | 'debug';
+  level: LogLevel | 'critical' | 'warning' | 'info' | 'debug' | 'trace';
   size?: 'sm' | 'md';
   showDot?: boolean;
+}
+
+export function getSeverityDescription(level: string): string {
+  switch (level.toLowerCase()) {
+    case 'error':
+    case 'critical':
+      return 'Critical or error severity — requires immediate attention';
+    case 'warn':
+    case 'warning':
+      return 'Warning severity — review recommended';
+    case 'info':
+      return 'Informational log entry';
+    case 'debug':
+    case 'trace':
+    default:
+      return 'Debug or trace diagnostic entry';
+  }
 }
 
 export function getSeverityStyleClasses(level: string): { bg: string; text: string; border: string; dot: string } {
@@ -54,6 +71,7 @@ export default function LogSeverityBadge({
   showDot = true,
 }: LogSeverityBadgeProps) {
   const styles = getSeverityStyleClasses(level);
+  const description = getSeverityDescription(level);
 
   const sizeClasses =
     size === 'md'
@@ -62,8 +80,11 @@ export default function LogSeverityBadge({
 
   return (
     <span
+      role="status"
+      data-severity={String(level).toLowerCase()}
+      title={description}
       className={`inline-flex items-center gap-1.5 font-mono uppercase font-bold rounded border tracking-wider transition-colors ${sizeClasses} ${styles.bg} ${styles.text} ${styles.border}`}
-      aria-label={`Log level ${level}`}
+      aria-label={`Log level ${level}: ${description}`}
     >
       {showDot && <span className={`w-1.5 h-1.5 rounded-full ${styles.dot}`} aria-hidden="true" />}
       {level}

@@ -3,17 +3,20 @@
 import React, { useState } from 'react';
 import type { FuzzingRun } from './types';
 import { downloadTextFile } from './utils/browser-download';
+import OperationProgressIndicator, { type OperationStatus } from '../components/OperationProgressIndicator';
 
 type ExportRunJsonProps = {
   runs: FuzzingRun[];
 };
 
 export default function AddExportRunJson({ runs }: ExportRunJsonProps) {
-  const [isExporting, setIsExporting] = useState(false);
+  const [exportStatus, setExportStatus] = useState<OperationStatus>('idle');
+  const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
 
   const handleExport = () => {
-    setIsExporting(true);
-    
+    setExportStatus('running');
+    setErrorMessage(undefined);
+
     // Simulate slight delay for UX
     setTimeout(() => {
       try {
@@ -21,13 +24,17 @@ export default function AddExportRunJson({ runs }: ExportRunJsonProps) {
           JSON.stringify(runs, null, 2),
           `soroban-runs-export-${new Date().toISOString().split('T')[0]}.json`,
         );
+        setExportStatus('done');
+        setTimeout(() => setExportStatus('idle'), 2500);
       } catch (error) {
         console.error('Export failed:', error);
-      } finally {
-        setIsExporting(false);
+        setErrorMessage('Export failed. Please try again.');
+        setExportStatus('failed');
       }
     }, 600);
   };
+
+  const isExporting = exportStatus === 'running';
 
   return (
     <div className="group relative overflow-hidden rounded-[2rem] border border-blue-200 bg-blue-50/50 p-8 shadow-sm transition-all hover:shadow-md dark:border-blue-900/30 dark:bg-blue-950/20">
@@ -45,6 +52,19 @@ export default function AddExportRunJson({ runs }: ExportRunJsonProps) {
             <p className="text-sm text-zinc-600 dark:text-zinc-400">Download primary run data for programmatic analysis.</p>
           </div>
         </div>
+
+        {/* Progress indicator — shown while exporting or after completion */}
+        {exportStatus !== 'idle' && (
+          <div className="mt-4 mb-2">
+            <OperationProgressIndicator
+              status={exportStatus}
+              runningLabel="Serialising JSON…"
+              doneLabel="JSON ready — download started"
+              failedLabel="Export failed"
+              errorMessage={errorMessage}
+            />
+          </div>
+        )}
 
         <div className="mt-6 flex items-center justify-between">
           <div className="flex flex-col">

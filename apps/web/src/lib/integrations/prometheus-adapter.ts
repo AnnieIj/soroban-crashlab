@@ -1,3 +1,4 @@
+import { createAbortSignal } from './adapter-utils';
 import {
   type ExportConfig,
   type MetricsExportDependencies,
@@ -40,20 +41,6 @@ function toExportConfig(options: PrometheusAdapterOptions): ExportConfig {
     enabled: (options.enabled ?? true) && endpoint.length > 0,
     labels: options.labels ?? {},
   };
-}
-
-function createAbortSignal(timeoutMs: number | undefined): AbortSignal | undefined {
-  if (!timeoutMs || timeoutMs <= 0) {
-    return undefined;
-  }
-
-  if (typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal) {
-    return AbortSignal.timeout(timeoutMs);
-  }
-
-  const controller = new AbortController();
-  setTimeout(() => controller.abort(), timeoutMs);
-  return controller.signal;
 }
 
 async function parsePushedSeries(response: Response): Promise<number> {
