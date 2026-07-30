@@ -48,10 +48,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setMounted(true);
   }, []);
 
-  const theme = useMemo<Theme>(
-    () => resolveEffectiveTheme(userTheme, systemPrefersDark),
-    [userTheme, systemPrefersDark],
-  );
+  const theme = useMemo<Theme>(() => {
+    if (userTheme) return userTheme;
+    return systemPrefersDark ? 'dark' : 'light';
+  }, [systemPrefersDark, userTheme]);
 
   // Keep the effective theme in sync when the OS-level color scheme changes.
   useEffect(() => {

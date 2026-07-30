@@ -1,16 +1,7 @@
 'use client';
 
-import dynamic from 'next/dynamic';
-import { mockMilestoneEvents } from '../campaign-milestone-mock-data';
-import { LoadingSpinner } from '../../components/LoadingSkeleton';
-
-const CampaignMilestoneTimelineVisualizer = dynamic(
-  () => import('../add-campaign-milestone-timeline-visualizer'),
-  {
-    ssr: false,
-    loading: () => <LoadingSpinner />,
-  },
-);
+import CampaignMilestoneTimelineVisualizer from "../add-campaign-milestone-timeline-visualizer";
+import { mockMilestoneEvents } from "../campaign-milestone-mock-data";
 
 export default function CampaignMilestoneTimelinePage() {
   return (
