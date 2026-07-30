@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { WebhookConfig, RunEventType } from '@/app/webhook-manager';
 import { jsonError, readJsonBody, withRouteErrorHandling } from '@/lib/route-handler';
 import { getWebhookStore } from '@/lib/webhook-store';
+import { validateWebhookApiKey } from '@/lib/api-key-auth';
 
 const VALID_PROTOCOLS = new Set(['http:', 'https:']);
 
@@ -106,7 +107,10 @@ function parseWebhookBody(body: unknown): WebhookConfig | { error: string } {
  * GET /api/webhooks
  * Returns all registered webhook configurations.
  */
-export const GET = withRouteErrorHandling('GET /api/webhooks', async () => {
+export const GET = withRouteErrorHandling('GET /api/webhooks', async (request: NextRequest) => {
+  const authError = validateWebhookApiKey(request);
+  if (authError) return authError;
+
   const webhooks = store.getAllConfigs().map((wh) => ({
     ...wh,
     secret: wh.secret !== undefined ? '***' : undefined,
@@ -119,6 +123,9 @@ export const GET = withRouteErrorHandling('GET /api/webhooks', async () => {
  * Registers a new webhook. Body: WebhookConfig JSON.
  */
 export const POST = withRouteErrorHandling('POST /api/webhooks', async (request: NextRequest) => {
+  const authError = validateWebhookApiKey(request);
+  if (authError) return authError;
+
   const parsedBody = await readJsonBody(request);
   if ('error' in parsedBody) return parsedBody.error;
 
@@ -149,6 +156,9 @@ export const POST = withRouteErrorHandling('POST /api/webhooks', async (request:
  * Removes a registered webhook by id.
  */
 export const DELETE = withRouteErrorHandling('DELETE /api/webhooks', async (request: NextRequest) => {
+  const authError = validateWebhookApiKey(request);
+  if (authError) return authError;
+
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
 
@@ -169,6 +179,9 @@ export const DELETE = withRouteErrorHandling('DELETE /api/webhooks', async (requ
  * Updates an existing webhook. Body: partial WebhookConfig fields.
  */
 export const PATCH = withRouteErrorHandling('PATCH /api/webhooks', async (request: NextRequest) => {
+  const authError = validateWebhookApiKey(request);
+  if (authError) return authError;
+
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
 
