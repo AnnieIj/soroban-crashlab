@@ -1,7 +1,7 @@
 'use client';
 
 import { FuzzingRun } from './types';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface IssueTriageBoardProps {
   runs: FuzzingRun[];
