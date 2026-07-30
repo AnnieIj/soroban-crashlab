@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 type Theme = 'light' | 'dark';
 const STORAGE_KEY = 'crashlab:theme';
@@ -20,8 +20,7 @@ const ThemeContext = createContext<ThemeContextType>({
 function getStoredTheme(): Theme | null {
   if (typeof window === 'undefined') return null;
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved === 'light' || saved === 'dark' ? saved : null;
+    return parseTheme(localStorage.getItem(STORAGE_KEY));
   } catch {
     return null;
   }
@@ -32,43 +31,29 @@ function getSystemPrefersDark(): boolean {
   return window.matchMedia('(prefers-color-scheme: dark)').matches;
 }
 
-function subscribeToMount(cb: () => void): () => void {
-  if (typeof window === 'undefined') return () => {};
-  const id = requestAnimationFrame(() => cb());
-  return () => cancelAnimationFrame(id);
-}
-
-function getMountSnapshot(): boolean {
-  return typeof document !== 'undefined';
-}
-
-function getMountServerSnapshot(): boolean {
-  return false;
-}
-
 export function useTheme() {
   return useContext(ThemeContext);
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  // Keep SSR and the first client render identical to avoid hydration bailout,
-  // which left whole routes stuck on client-only loading gates in e2e.
   const [userTheme, setUserTheme] = useState<Theme | null>(null);
   const [systemPrefersDark, setSystemPrefersDark] = useState(false);
-  const mounted = useSyncExternalStore(subscribeToMount, getMountSnapshot, getMountServerSnapshot);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    queueMicrotask(() => {
-      setUserTheme(getStoredTheme());
-      setSystemPrefersDark(getSystemPrefersDark());
-    });
+    // Hydrate theme from localStorage / system preference after mount.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- client-only theme hydration
+    setUserTheme(getStoredTheme());
+    setSystemPrefersDark(getSystemPrefersDark());
+    setMounted(true);
   }, []);
 
-  const theme = useMemo<Theme>(() => {
-    if (userTheme) return userTheme;
-    return systemPrefersDark ? 'dark' : 'light';
-  }, [systemPrefersDark, userTheme]);
+  const theme = useMemo<Theme>(
+    () => resolveEffectiveTheme(userTheme, systemPrefersDark),
+    [userTheme, systemPrefersDark],
+  );
 
+  // Keep the effective theme in sync when the OS-level color scheme changes.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
@@ -84,26 +69,20 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     document.documentElement.classList.toggle('dark', theme === 'dark');
   }, [theme]);
 
+  // Keep multiple tabs in sync when the user changes their override elsewhere.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-
     const onStorage = (event: StorageEvent) => {
       if (event.key !== STORAGE_KEY) return;
-      if (event.newValue === 'light' || event.newValue === 'dark') {
-        setUserTheme(event.newValue);
-        return;
-      }
-      setUserTheme(null);
+      setUserTheme(parseTheme(event.newValue));
     };
-
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
   const toggle = useCallback(() => {
     setUserTheme((prev) => {
-      const base = prev ?? (systemPrefersDark ? 'dark' : 'light');
-      const next: Theme = base === 'light' ? 'dark' : 'light';
+      const next = nextToggledTheme(prev, systemPrefersDark);
       try {
         localStorage.setItem(STORAGE_KEY, next);
       } catch {

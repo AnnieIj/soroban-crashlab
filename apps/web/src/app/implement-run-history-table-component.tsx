@@ -249,7 +249,7 @@ export default function EnhancedRunHistoryTable({
               {visibleColumns.includes("duration") && (
                 <th
                   className={`px-6 py-5 text-[10px] font-bold uppercase tracking-widest text-right cursor-pointer transition-colors ${
-                    activeSortField === "duration"
+                    sort.field === "duration"
                       ? "text-blue-600 dark:text-blue-400"
                       : "text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
                   }`}
@@ -262,7 +262,7 @@ export default function EnhancedRunHistoryTable({
               {visibleColumns.includes("seedCount") && (
                 <th
                   className={`px-6 py-5 text-[10px] font-bold uppercase tracking-widest text-right cursor-pointer transition-colors ${
-                    activeSortField === "seedCount"
+                    sort.field === "seedCount"
                       ? "text-blue-600 dark:text-blue-400"
                       : "text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
                   }`}

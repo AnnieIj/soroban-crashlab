@@ -24,6 +24,23 @@ function apiUrl(path: string): string {
   return `${API_BASE}/api${path}`;
 }
 
+function unwrapApiPayload<T>(json: unknown): T {
+  if (json && typeof json === 'object' && 'data' in json) {
+    const envelope = json as { data: unknown; total?: number };
+    if (
+      envelope.data &&
+      typeof envelope.data === 'object' &&
+      !Array.isArray(envelope.data) &&
+      envelope.total !== undefined &&
+      !('total' in (envelope.data as object))
+    ) {
+      return { ...(envelope.data as object), total: envelope.total } as T;
+    }
+    return envelope.data as T;
+  }
+  return json as T;
+}
+
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(apiUrl(path), {
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -39,7 +56,7 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   if (res.status === 204) {
     return undefined as T;
   }
-  return res.json() as Promise<T>;
+  return unwrapApiPayload<T>(await res.json());
 }
 
 export interface ArtifactMetadata {
