@@ -1,5 +1,12 @@
-import React from 'react';
-import NetworkConfigForm from '../../../components/NetworkConfigForm';
+'use client';
+
+import dynamic from 'next/dynamic';
+import { LoadingSpinner } from '../../../components/LoadingSkeleton';
+
+const NetworkConfigForm = dynamic(
+  () => import('../../../components/NetworkConfigForm'),
+  { loading: () => <LoadingSpinner /> },
+);
 
 export default function NetworkSettingsPage() {
   return (
