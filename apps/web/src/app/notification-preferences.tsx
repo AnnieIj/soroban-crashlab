@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import {
-  type NotificationPreference as Prefs,
+  type NotificationPreferences as Prefs,
   type NotificationType,
   type NotificationPriority,
   type DigestFrequency,
@@ -18,8 +18,8 @@ import {
 const NOTIFICATION_TYPES: NotificationType[] = ['info', 'success', 'warning', 'error'];
 const PRIORITIES: NotificationPriority[] = ['low', 'medium', 'high', 'critical'];
 const DIGEST_OPTIONS: { value: DigestFrequency; label: string }[] = [
-  { value: 'daily', label: 'Real-time' },
-  { value: 'daily', label: 'Hourly digest' },
+  { value: 'realtime', label: 'Real-time' },
+  { value: 'hourly', label: 'Hourly digest' },
   { value: 'daily', label: 'Daily digest' },
   { value: 'never', label: 'Never' },
 ];
@@ -29,10 +29,6 @@ const TYPE_LABELS: Record<NotificationType, string> = {
   success: 'Success',
   warning: 'Warning',
   error: 'Error',
-  crashes: 'Crashes',
-  alerts: 'Alerts',
-  reports: 'Reports',
-  updates: 'Updates',
 };
 
 const TYPE_COLORS: Record<NotificationType, string> = {
@@ -40,10 +36,6 @@ const TYPE_COLORS: Record<NotificationType, string> = {
   success: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
   warning: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
   error: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
-  crashes: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
-  alerts: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
-  reports: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-  updates: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
 };
 
 const PRIORITY_LABELS: Record<NotificationPriority, string> = {
@@ -60,29 +52,20 @@ interface NotificationPreferencesPageProps {
 export default function NotificationPreferencesPage({
   className = '',
 }: NotificationPreferencesPageProps) {
-  const [prefs, setPrefs] = useState<Prefs[]>(() => loadPreferences());
+  const [prefs, setPrefs] = useState<Prefs>(() => loadPreferences());
   const [loaded] = useState(true);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-
-  const isTypeEnabled = (type: NotificationType) => {
-    const activePrefs = prefs.find((pref) => pref.channelId === 'in-app') ?? prefs[0];
-    if (!activePrefs) {
-      return false;
-    }
-
-    return Boolean(activePrefs.notificationTypes[type as keyof typeof activePrefs.notificationTypes]);
-  };
 
   const handleSave = useCallback(async () => {
     setIsSaving(true);
     setError(null);
     setSaved(false);
 
-    const validationResult = validatePreferences(prefs);
-    if (validationResult.length === 0) {
-      setError('No preferences available to save.');
+    const validationError = validatePreferences(prefs);
+    if (validationError) {
+      setError(validationError);
       setIsSaving(false);
       return;
     }
@@ -99,13 +82,13 @@ export default function NotificationPreferencesPage({
   }, [prefs]);
 
   const handleReset = useCallback(() => {
-    setPrefs([...DEFAULT_PREFERENCES]);
+    setPrefs({ ...DEFAULT_PREFERENCES });
     setError(null);
     setSaved(false);
   }, []);
 
   const handleToggleType = useCallback((type: NotificationType) => {
-    setPrefs((prev) => toggleType(prev, 'in-app', type));
+    setPrefs((prev) => toggleType(prev, type));
     setSaved(false);
   }, []);
 
@@ -120,7 +103,8 @@ export default function NotificationPreferencesPage({
   }, []);
 
   const handleToggle = useCallback(
-    (_key: 'soundEnabled' | 'desktopNotifications' | 'emailNotifications' | 'quietHoursEnabled') => {
+    (key: 'soundEnabled' | 'desktopNotifications' | 'emailNotifications' | 'quietHoursEnabled') => {
+      setPrefs((prev) => ({ ...prev, [key]: !prev[key] }));
       setSaved(false);
     },
     [],
@@ -186,11 +170,11 @@ export default function NotificationPreferencesPage({
                 key={type}
                 onClick={() => handleToggleType(type)}
                 className={`flex items-center gap-2 px-4 py-3 rounded-lg border transition-all text-sm font-medium ${
-                  isTypeEnabled(type)
+                  prefs.enabledTypes.includes(type)
                     ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 shadow-sm'
                     : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-600'
                 }`}
-                aria-pressed={isTypeEnabled(type)}
+                aria-pressed={prefs.enabledTypes.includes(type)}
               >
                 <span className={`w-2 h-2 rounded-full ${TYPE_COLORS[type].split(' ')[0]}`} />
                 {TYPE_LABELS[type]}
@@ -213,11 +197,11 @@ export default function NotificationPreferencesPage({
                 key={priority}
                 onClick={() => handleSetPriority(priority)}
                 className={`px-4 py-2 rounded-lg border transition-all text-sm font-medium ${
-                  (prefs[0]?.priority ?? 'low') === priority
+                  prefs.minPriority === priority
                     ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 shadow-sm'
                     : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-600'
                 }`}
-                aria-pressed={(prefs[0]?.priority ?? 'low') === priority}
+                aria-pressed={prefs.minPriority === priority}
               >
                 {PRIORITY_LABELS[priority]}
               </button>
@@ -239,11 +223,11 @@ export default function NotificationPreferencesPage({
                 key={option.value}
                 onClick={() => handleSetDigest(option.value)}
                 className={`px-4 py-2 rounded-lg border transition-all text-sm font-medium ${
-                  (prefs[0]?.digestFrequency ?? 'never') === option.value
+                  prefs.digestFrequency === option.value
                     ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 shadow-sm'
                     : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-600'
                 }`}
-                aria-pressed={(prefs[0]?.digestFrequency ?? 'never') === option.value}
+                aria-pressed={prefs.digestFrequency === option.value}
               >
                 {option.label}
               </button>
@@ -271,7 +255,7 @@ export default function NotificationPreferencesPage({
               </div>
               <input
                 type="checkbox"
-                checked={false}
+                checked={prefs.soundEnabled}
                 onChange={() => handleToggle('soundEnabled')}
                 className="h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
               />
@@ -288,7 +272,7 @@ export default function NotificationPreferencesPage({
               </div>
               <input
                 type="checkbox"
-                checked={false}
+                checked={prefs.desktopNotifications}
                 onChange={() => handleToggle('desktopNotifications')}
                 className="h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
               />
@@ -305,7 +289,7 @@ export default function NotificationPreferencesPage({
               </div>
               <input
                 type="checkbox"
-                checked={false}
+                checked={prefs.emailNotifications}
                 onChange={() => handleToggle('emailNotifications')}
                 className="h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
               />
@@ -328,13 +312,13 @@ export default function NotificationPreferencesPage({
             </span>
             <input
               type="checkbox"
-              checked={Boolean(prefs[0]?.quietHours?.enabled)}
+              checked={prefs.quietHoursEnabled}
               onChange={() => handleToggle('quietHoursEnabled')}
               className="h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
             />
           </label>
 
-          {Boolean(prefs[0]?.quietHours?.enabled) && (
+          {prefs.quietHoursEnabled && (
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label
@@ -346,7 +330,7 @@ export default function NotificationPreferencesPage({
                 <input
                   type="time"
                   id="quiet-start"
-                  value={prefs[0]?.quietHours?.start ?? '22:00'}
+                  value={prefs.quietHoursStart}
                   onChange={(e) => handleTimeChange('quietHoursStart', e.target.value)}
                   className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
@@ -361,7 +345,7 @@ export default function NotificationPreferencesPage({
                 <input
                   type="time"
                   id="quiet-end"
-                  value={prefs[0]?.quietHours?.end ?? '08:00'}
+                  value={prefs.quietHoursEnd}
                   onChange={(e) => handleTimeChange('quietHoursEnd', e.target.value)}
                   className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
