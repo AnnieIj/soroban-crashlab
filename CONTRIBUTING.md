@@ -98,7 +98,49 @@ cd contracts/crashlab-core
 cargo test --all-targets
 ```
 
-### 8. Expected first-run result
+### 8. Docker-based setup (alternative)
+
+If you prefer a containerized environment (no local Node.js or Rust
+installed):
+
+```bash
+# 1. Copy the Docker environment template
+cp .env.docker.example .env
+
+# 2. Start the development server
+docker compose up web
+
+# 3. Open http://localhost:3000
+
+# To also run the fuzzing engine:
+docker compose --profile core up
+
+# To run the production-like build:
+docker compose --profile prod up web-prod
+
+# To stop:
+docker compose down
+```
+
+**Troubleshooting Docker:**
+
+- **Port conflict (3000 already in use):** Change the host port in
+  `docker-compose.yml` (e.g. `"3000:3000"` → `"3001:3000"`).
+
+- **Hot reload not working:** Ensure `WATCHPACK_POLLING=true` is set in
+  your `.env` file. This enables file polling inside the container.
+
+- **Permission errors on mounted volumes:** On Linux, ensure your user
+  has read/write access to `apps/web/`. On macOS and Windows this is
+  handled automatically by Docker Desktop.
+
+- **Node_modules conflicts:** If the container's `node_modules` differs
+  from your host's, rebuild with:
+  ```bash
+  docker compose down -v && docker compose up web
+  ```
+
+### 9. Expected first-run result
 
 On a clean machine, a successful setup looks like this:
 

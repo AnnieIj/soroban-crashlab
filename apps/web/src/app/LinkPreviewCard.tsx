@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useState } from 'react';
 
 interface LinkPreviewCardProps {
@@ -30,9 +31,12 @@ export default function LinkPreviewCard({
         {/* Favicon */}
         <div className="flex-shrink-0 w-6 h-6 rounded bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center">
           {faviconUrl && !faviconError ? (
-            <img
+            <Image
               src={faviconUrl}
               alt=""
+              width={16}
+              height={16}
+              unoptimized
               className="w-4 h-4"
               onError={() => setFaviconError(true)}
             />
