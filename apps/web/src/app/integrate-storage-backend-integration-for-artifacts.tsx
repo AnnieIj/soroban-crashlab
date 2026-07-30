@@ -43,7 +43,8 @@ async function uploadArtifact(file: File): Promise<Artifact> {
     throw new Error(error.error || 'Failed to upload artifact');
   }
 
-  const data = await response.json();
+  const json = await response.json();
+  const data = (json?.data?.artifact ?? json?.artifact ?? json) as Artifact;
   return {
     id: data.id,
     name: data.name,
@@ -190,7 +191,8 @@ export default function ArtifactStorageIntegration() {
             <input 
               type="file" 
               id="artifact-upload"
-              className="sr-only"
+              data-testid="artifact-file-input"
+              className="absolute opacity-0 w-0 h-0 overflow-hidden"
               onChange={handleFileUpload} 
               disabled={isUploading}
             />
