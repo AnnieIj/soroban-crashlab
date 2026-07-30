@@ -48,6 +48,12 @@ The fuzzer runner executes case seeds against the smart contract under test. You
 - **OAuth Callback**: Redirection from GitHub is handled by the server-side callback route `/api/auth/github/callback` (`apps/web/src/app/api/auth/github/callback/route.ts`).
 - **OAuth Secret**: The corresponding client secret must remain strictly server-side (never prefixed with `NEXT_PUBLIC_`) and is not exposed to client-side code.
 
+### `CRASHLAB_WEBHOOK_API_KEY`
+- **Required**: No
+- **Default**: empty (no authentication enforced)
+- **Used by**: Webhook API routes (`apps/web/src/app/api/webhooks/route.ts`)
+- **Description**: When set, all `GET`, `POST`, `PATCH`, and `DELETE` requests to `/api/webhooks` must include an `Authorization: Bearer <key>` header that matches this value exactly. The comparison is performed using a timing-safe algorithm to prevent side-channel attacks. Requests with a missing or incorrect token are rejected with HTTP 401. When this variable is absent or empty, the endpoint is unauthenticated (existing behaviour is preserved for deployments that have not yet configured this variable).
+
 ---
 
 ## 4. Web Application Variables
