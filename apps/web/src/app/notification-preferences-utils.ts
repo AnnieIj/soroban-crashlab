@@ -36,16 +36,20 @@ export interface NotificationPreference {
     reports: boolean;
     updates: boolean;
   };
+  priority?: NotificationPriority;
+  digestFrequency?: DigestFrequency;
 }
 
 export interface Notification {
   id: string;
   title: string;
   message: string;
-  channel: string;
-  severity: 'info' | 'warning' | 'error' | 'success';
+  channel?: string;
+  severity?: 'info' | 'warning' | 'error' | 'success';
   timestamp: Date;
   read: boolean;
+  type?: NotificationType;
+  priority?: NotificationPriority;
 }
 
 const PRIORITY_RANK: Record<NotificationPriority, number> = {

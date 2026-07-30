@@ -15,6 +15,7 @@ import {
   type DashboardSectionId,
 } from "./dashboard-layout-utils";
 import { ResourceFeeInsightPanel } from "./implement-resource-fee-insight-panel-component";
+import RunHealthScoreWidget from "./implement-run-health-score-widget";
 import Pagination from "./Pagination";
 import { getPageSlice, computeTotalPages, clampPage } from "./pagination-utils";
 
@@ -326,6 +327,10 @@ function DashboardContent() {
             };
             return <div key={section.id}>{sectionContent[section.id]}</div>;
           })}
+          <div className="section">
+            <RunHealthScoreWidget runs={filteredRuns} dataState={dataState} />
+          </div>
+
           <div className="section">
             <ResourceFeeInsightPanel runs={filteredRuns} dataState={dataState} />
           </div>

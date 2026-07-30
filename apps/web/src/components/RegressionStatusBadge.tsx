@@ -19,11 +19,18 @@ const STATUS_LABELS: Record<RegressionStatus, string> = {
 };
 
 export default function RegressionStatusBadge({ status }: RegressionStatusBadgeProps) {
+  const isRunning = status === 'running';
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${STATUS_STYLES[status]}`}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${STATUS_STYLES[status]}`}
       aria-label={`Regression suite status: ${STATUS_LABELS[status]}`}
     >
+      {isRunning && (
+        <span className="relative inline-flex h-1.5 w-1.5 shrink-0" aria-hidden="true">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-current opacity-60" />
+          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-current" />
+        </span>
+      )}
       {STATUS_LABELS[status]}
     </span>
   );

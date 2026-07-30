@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import {
   loadOnboardingProgress,
@@ -10,7 +10,7 @@ import {
 } from './onboarding-utils';
 
 export default function OnboardingWizardPage() {
-  const [steps, setSteps] = useState<OnboardingStep[]>([]);
+  const [steps, setSteps] = useState<OnboardingStep[]>(() => (typeof window === 'undefined' ? [] : loadOnboardingProgress()));
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [loading, setLoading] = useState(true);
 

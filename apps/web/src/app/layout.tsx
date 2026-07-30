@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { ThemeProvider } from "../components/ThemeProvider";
+import { ToastProvider } from "../components/Toast";
 import NavBar from "../components/NavBar";
 import AddKeyboardShortcutCheatsheetModal from "./add-keyboard-shortcut-cheatsheet-modal";
 import OnboardingWizardHost from "./OnboardingWizardHost";
@@ -66,12 +67,14 @@ export default function RootLayout({
       </head>
       <body className="antialiased min-h-screen">
         <ThemeProvider>
-          <NavBar />
-          <AddKeyboardShortcutCheatsheetModal />
-          <OnboardingWizardHost />
-          <main style={{ background: 'var(--bg)', paddingTop: '52px', minHeight: '100vh', transition: 'background 0.3s ease' }}>
-            {children}
-          </main>
+          <ToastProvider>
+            <NavBar />
+            <AddKeyboardShortcutCheatsheetModal />
+            <OnboardingWizardHost />
+            <main style={{ background: 'var(--bg)', paddingTop: '52px', minHeight: '100vh', transition: 'background 0.3s ease' }}>
+              {children}
+            </main>
+          </ToastProvider>
         </ThemeProvider>
       </body>
     </html>
