@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 type Theme = 'light' | 'dark';
 const STORAGE_KEY = 'crashlab:theme';
@@ -32,30 +32,22 @@ function getSystemPrefersDark(): boolean {
   return window.matchMedia('(prefers-color-scheme: dark)').matches;
 }
 
-function subscribeToMount(cb: () => void): () => void {
-  if (typeof window === 'undefined') return () => {};
-  const id = requestAnimationFrame(() => cb());
-  return () => cancelAnimationFrame(id);
-}
-
-function getMountSnapshot(): boolean {
-  return typeof document !== 'undefined';
-}
-
-function getMountServerSnapshot(): boolean {
-  return false;
-}
-
 export function useTheme() {
   return useContext(ThemeContext);
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  // Keep SSR and the first client render identical to avoid hydration bailout,
-  // which left whole routes stuck on client-only loading gates in e2e.
   const [userTheme, setUserTheme] = useState<Theme | null>(null);
   const [systemPrefersDark, setSystemPrefersDark] = useState(false);
-  const mounted = useSyncExternalStore(subscribeToMount, getMountSnapshot, getMountServerSnapshot);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    // Hydrate theme from localStorage / system preference after mount.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- client-only theme hydration
+    setUserTheme(getStoredTheme());
+    setSystemPrefersDark(getSystemPrefersDark());
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     queueMicrotask(() => {

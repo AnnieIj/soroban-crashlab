@@ -1,11 +1,19 @@
 'use client';
 
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { Suspense, useEffect, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
-import FailureClusterView from '../../FailureClusterView';
-import RunClusterVisualization from '../../add-run-cluster-visualization';
 import type { FuzzingRun } from '../../types';
+import { LoadingSpinner } from '../../../components/LoadingSkeleton';
+
+const FailureClusterView = dynamic(() => import('../../FailureClusterView'), {
+  loading: () => <LoadingSpinner />,
+});
+const RunClusterVisualization = dynamic(
+  () => import('../../add-run-cluster-visualization'),
+  { loading: () => <LoadingSpinner /> },
+);
 
 function ClustersContent() {
   const [runs, setRuns] = useState<FuzzingRun[]>([]);

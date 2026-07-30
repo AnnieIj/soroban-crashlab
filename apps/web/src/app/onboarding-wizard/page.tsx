@@ -12,7 +12,13 @@ import {
 export default function OnboardingWizardPage() {
   const [steps, setSteps] = useState<OnboardingStep[]>(() => (typeof window === 'undefined' ? [] : loadOnboardingProgress()));
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [loading] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate onboarding progress once
+    setSteps(loadOnboardingProgress());
+    setLoading(false);
+  }, []);
 
   if (loading) {
     return (
@@ -158,7 +164,7 @@ export default function OnboardingWizardPage() {
               🎉 Welcome to CrashLab!
             </h3>
             <p className="text-green-800 dark:text-green-200 mb-4">
-              You have completed the onboarding. Now explore the dashboard and start fuzzing!
+              You&apos;ve completed the onboarding. Now explore the dashboard and start fuzzing!
             </p>
             <Link
               href="/"

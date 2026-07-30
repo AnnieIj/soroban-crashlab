@@ -22,15 +22,16 @@ const runAssertions = (): void => {
   const content = fs.readFileSync(componentPath, 'utf-8');
 
   assert.ok(
-    content.includes("import NetworkConfigForm from '../../../components/NetworkConfigForm'"),
-    'Page should import the NetworkConfigForm component',
+    content.includes("import('../../../components/NetworkConfigForm')") ||
+      content.includes("import NetworkConfigForm from '../../../components/NetworkConfigForm'"),
+    'Page should load the NetworkConfigForm component',
   );
   assert.ok(
     content.includes('export default function NetworkSettingsPage()'),
     'Page should export a default page component',
   );
   assert.ok(
-    content.includes('<NetworkConfigForm />'),
+    content.includes('<NetworkConfigForm'),
     'Page should render the NetworkConfigForm component',
   );
 

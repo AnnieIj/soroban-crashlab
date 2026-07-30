@@ -1,7 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import OnboardingChecklistModal from '../implement-onboarding-checklist-modal-component';
+import dynamic from 'next/dynamic';
+
+const OnboardingChecklistModal = dynamic(
+  () => import('../implement-onboarding-checklist-modal-component'),
+  { ssr: false },
+);
 
 export default function OnboardingPage() {
     const [modalOpen, setModalOpen] = useState(true);

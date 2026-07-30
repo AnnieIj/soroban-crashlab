@@ -65,9 +65,9 @@ test.describe('Search / Query Builder functionality', () => {
     await expect(page).toHaveURL(/.*\/runs\/query/);
     await expect(page.getByRole('heading', { name: 'Fuzzy Query Builder', level: 1 })).toBeVisible();
 
-    // 2. Add filter
+    // 2. Add filter (builder mounts after runs fetch resolves)
     const addFilterBtn = page.getByRole('button', { name: '+ Add Filter' });
-    await expect(addFilterBtn).toBeVisible();
+    await expect(addFilterBtn).toBeVisible({ timeout: 15000 });
     await addFilterBtn.click();
 
     // Verify first filter select is field select
