@@ -1,9 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
 import type { FuzzingRun } from '../../types';
-import ImplementRunWorkflowBoardPage58 from '../../implement-run-workflow-board-page-58';
 import { fetchRuns as fetchRunsFromApi } from '../../../lib/api-client';
+
+const ImplementRunWorkflowBoardPage58 = dynamic(
+  () => import('../../implement-run-workflow-board-page-58'),
+  { ssr: false },
+);
 
 async function fetchRuns(): Promise<FuzzingRun[]> {
   const data = await fetchRunsFromApi();

@@ -1,3 +1,19 @@
+export type NotificationType = 'info' | 'success' | 'warning' | 'error';
+export type NotificationPriority = 'low' | 'medium' | 'high' | 'critical';
+export type DigestFrequency = 'realtime' | 'hourly' | 'daily' | 'never';
+
+export interface NotificationPreferences {
+  enabledTypes: NotificationType[];
+  minPriority: NotificationPriority;
+  digestFrequency: DigestFrequency;
+  quietHoursEnabled: boolean;
+  quietHoursStart: string;
+  quietHoursEnd: string;
+  soundEnabled: boolean;
+  desktopNotifications: boolean;
+  emailNotifications: boolean;
+}
+
 export interface NotificationChannel {
   id: string;
   name: string;
@@ -35,6 +51,25 @@ export interface Notification {
   type?: NotificationType;
   priority?: NotificationPriority;
 }
+
+const PRIORITY_RANK: Record<NotificationPriority, number> = {
+  low: 0,
+  medium: 1,
+  high: 2,
+  critical: 3,
+};
+
+export const DEFAULT_PREFERENCES: NotificationPreferences = {
+  enabledTypes: ['info', 'success', 'warning', 'error'],
+  minPriority: 'low',
+  digestFrequency: 'realtime',
+  quietHoursEnabled: false,
+  quietHoursStart: '22:00',
+  quietHoursEnd: '08:00',
+  soundEnabled: false,
+  desktopNotifications: true,
+  emailNotifications: false,
+};
 
 export const DEFAULT_CHANNELS: NotificationChannel[] = [
   {
@@ -75,15 +110,12 @@ export const DEFAULT_CHANNEL_PREFERENCES: NotificationPreference[] = DEFAULT_CHA
       reports: true,
       updates: channel.id === 'in-app',
     },
-  })
+  }),
 );
 
 export const saveChannelPreferences = (prefs: NotificationPreference[]): void => {
   try {
-    localStorage.setItem(
-      'notification-preferences',
-      JSON.stringify(prefs)
-    );
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
   } catch (e) {
     console.error('Failed to save notification preferences:', e);
   }

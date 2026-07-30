@@ -15,6 +15,7 @@
     "test:sentry-client": "npx vitest run src/lib/integrations/sentry-client.test.ts",
     "test:script-style": "vitest run src/test/script-style-tests.test.ts",
     "test:sanitize": "vitest run src/lib/sanitize.test.ts",
+    "test:e2e": "playwright test e2e/settings-persistence.spec.ts",
     "test:e2e": "playwright test e2e/integrations.spec.ts",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",
@@ -23,9 +24,11 @@
     "test:e2e:search": "playwright test e2e/search.spec.ts",
     "test:e2e:dark-mode": "playwright test e2e/dark-mode.spec.ts",
     "test:e2e:mobile-responsive": "playwright test e2e/mobile-responsive.spec.ts",
+    "test:e2e:settings-persistence": "playwright test e2e/settings-persistence.spec.ts",
     "test:e2e:integrations": "playwright test e2e/integrations.spec.ts",
     "test:e2e:maintainer": "playwright test e2e/maintainer.spec.ts",
     "test:error-boundary": "npx tsc src/components/error-boundary-utils.ts src/components/error-boundary-utils.test.ts --module commonjs --target es2020 --rootDir src --outDir build/test-tmp --esModuleInterop && node build/test-tmp/components/error-boundary-utils.test.js",
+    "test:error-boundary-integration": "npx tsc src/components/error-boundary-utils.ts src/components/ErrorBoundary.tsx src/components/ErrorBoundary.integration.test.ts --module commonjs --target es2020 --rootDir src --outDir build/test-tmp --esModuleInterop --jsx react-jsx && node build/test-tmp/components/ErrorBoundary.integration.test.js",
     "test:toast": "npx tsc src/components/toast-utils.ts src/components/toast-utils.test.ts --module commonjs --target es2020 --rootDir src --outDir build/test-tmp --esModuleInterop && node build/test-tmp/components/toast-utils.test.js",
     "test:severity-badge": "npx tsc src/components/LogSeverityBadge.tsx src/components/LogSeverityBadge.test.ts --module commonjs --target es2020 --rootDir src --outDir build/test-tmp --esModuleInterop --jsx react && node build/test-tmp/components/LogSeverityBadge.test.js",
     "test:sort-arrows": "npx tsc src/app/run-history-sort-utils.ts src/app/run-history-sort-utils.test.ts --module commonjs --target es2020 --rootDir src --outDir build/test-tmp --esModuleInterop && node build/test-tmp/app/run-history-sort-utils.test.js",
@@ -53,9 +56,12 @@
     "test:theme-provider-utils": "npx tsc src/app/theme-provider-utils.ts src/app/theme-provider-utils.test.ts --module commonjs --target es2020 --rootDir src --outDir build/test-tmp --esModuleInterop --skipLibCheck && node build/test-tmp/app/theme-provider-utils.test.js",
     "test:pagination-utils": "npx tsc src/app/pagination-utils.ts src/app/pagination-utils.test.ts --module commonjs --target es2020 --rootDir src --outDir build/test-tmp --esModuleInterop --skipLibCheck && node build/test-tmp/app/pagination-utils.test.js",
     "test:dashboard-layout-utils": "npx tsc src/app/dashboard-layout-utils.ts src/app/dashboard-layout-utils.test.ts --module commonjs --target es2020 --rootDir src --outDir build/test-tmp --esModuleInterop --skipLibCheck && node build/test-tmp/app/dashboard-layout-utils.test.js",
+    "test:webhook-retry-dashboard": "npx tsc src/app/webhook-retry-dashboard-utils.ts src/app/webhook-retry-dashboard-utils.test.ts src/fixtures/webhook-delivery-history.ts --module commonjs --target es2020 --rootDir src --outDir build/test-tmp --esModuleInterop --skipLibCheck && node build/test-tmp/app/webhook-retry-dashboard-utils.test.js && npx tsc src/app/integrations/webhooks/retry-dashboard/page.test.ts --module commonjs --target es2020 --rootDir src --outDir build/test-tmp --esModuleInterop --skipLibCheck && node build/test-tmp/app/integrations/webhooks/retry-dashboard/page.test.js",
     "test:api-runs": "npx vitest run src/app/api/runs/route.test.ts",
+    "test:api-key-auth": "npx vitest run src/lib/api-key-auth.test.ts",
     "size": "size-limit",
-    "test:e2e:all": "playwright test"
+    "test:e2e:all": "playwright test",
+    "test:widget-layout-profile-utils": "npx tsc src/app/widget-layout-profile-utils.ts src/app/widget-layout-profile-utils.test.ts --module commonjs --target es2020 --rootDir src --outDir build/test-tmp --esModuleInterop --skipLibCheck && node build/test-tmp/app/widget-layout-profile-utils.test.js"
   },
   "dependencies": {
     "@sentry/nextjs": "^10.62.0",
@@ -69,8 +75,7 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
-    "@playwright/test": "^1.62.0",
-    "@size-limit/preset-app": "^11.2.0",
+    "@playwright/test": "1.61.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/jest": "^30.0.0",
     "@types/node": "^20",
