@@ -4,11 +4,14 @@ import BreadcrumbNav from '@/components/BreadcrumbNav';
 import RunDetailAutoRefresh from './RunDetailAutoRefresh';
 import { buildMockRuns } from '../../mockRuns';
 import { buildLedgerChangesForRun } from '../../mock-ledger-changes';
+import { buildCallSequenceForRun } from '../../mock-call-sequence';
 import RunIssueLinkPage53 from '../../add-run-issue-link-page-53';
 import RunStatusTimeline from '../../RunStatusTimeline';
 import DownloadArtifactsButton from './DownloadArtifactsButton';
 import ContractStateDiffView from '../../components/ContractStateDiffView';
 import { summarizeStateChanges } from '../../components/state-diff-utils';
+import RunSequenceDiagram from './RunSequenceDiagram';
+import { summarizeCallSequence } from './run-sequence-diagram-utils';
 import AddRunReplayHistoryWithTimestamps from '../../add-run-replay-history-with-timestamps';
 import RunMetadataEditorWrapper from './RunMetadataEditorWrapper';
 
@@ -35,6 +38,9 @@ export default async function RunDetailPage({ params }: RunDetailPageProps) {
 
     const ledgerChanges = buildLedgerChangesForRun(run);
     const ledgerSummary = summarizeStateChanges(ledgerChanges);
+
+    const callSequence = buildCallSequenceForRun(run);
+    const callSequenceSummary = summarizeCallSequence(callSequence);
 
     return (
         <div className="px-6 md:px-8 max-w-5xl mx-auto w-full py-14">
@@ -150,6 +156,22 @@ export default async function RunDetailPage({ params }: RunDetailPageProps) {
                         </p>
                     </div>
                     <ContractStateDiffView changes={ledgerChanges} />
+                </section>
+
+                <section className="mt-8">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+                        <h2 className="text-lg font-semibold">Call Sequence Diagram</h2>
+                        <p className="text-meta">
+                            {callSequenceSummary.total} {callSequenceSummary.total === 1 ? 'call' : 'calls'}
+                            {callSequenceSummary.total > 0 && (
+                                <>
+                                    {' · '}
+                                    {callSequenceSummary.success} success, {callSequenceSummary.failed} failed
+                                </>
+                            )}
+                        </p>
+                    </div>
+                    <RunSequenceDiagram steps={callSequence} />
                 </section>
 
                 <div className="mt-6">
