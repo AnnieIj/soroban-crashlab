@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from "react";
 import { FuzzingRun, RunStatus, RunSeverity } from "./types";
 import { useDataTableKeyboardNav } from "./use-data-table-keyboard-nav";
+import TruncatedCell from "@/components/TruncatedCell";
 import {
   getSortIndicator,
   getNextSortState,
@@ -123,6 +124,7 @@ export default function EnhancedRunHistoryTable({
     field: "id",
     order: "desc",
   });
+  const activeSortField = sort.field;
 
   const sortedRuns = useMemo(() => {
     return [...runs].sort((a: FuzzingRun, b: FuzzingRun) => {
@@ -224,7 +226,7 @@ export default function EnhancedRunHistoryTable({
               {visibleColumns.includes("id") && (
                 <th
                   className={`px-6 py-5 text-[10px] font-bold uppercase tracking-widest cursor-pointer transition-colors ${
-                    sort.field === "id"
+                    activeSortField === "id"
                       ? "text-blue-600 dark:text-blue-400"
                       : "text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
                   }`}
@@ -315,8 +317,8 @@ export default function EnhancedRunHistoryTable({
                    <td className="px-6 py-5">
                      <div className="flex flex-col">
                        <div className="flex items-center gap-1.5">
-                         <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100 font-mono group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" title={run.id}>
-                           #{run.id.split("-").pop()}
+                         <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100 font-mono group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors max-w-[160px]">
+                           <TruncatedCell>#{run.id.split("-").pop()}</TruncatedCell>
                          </span>
                         {run.annotations && run.annotations.length > 0 && (
                           <svg

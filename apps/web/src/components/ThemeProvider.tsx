@@ -49,6 +49,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setMounted(true);
   }, []);
 
+  useEffect(() => {
+    queueMicrotask(() => {
+      setUserTheme(getStoredTheme());
+      setSystemPrefersDark(getSystemPrefersDark());
+    });
+  }, []);
+
   const theme = useMemo<Theme>(() => {
     if (userTheme) return userTheme;
     return systemPrefersDark ? 'dark' : 'light';

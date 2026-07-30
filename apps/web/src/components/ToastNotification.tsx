@@ -1,3 +1,9 @@
+/**
+ * @deprecated Use `ToastProvider` and `useToast` from `@/components/Toast` instead.
+ * This standalone component is superseded by the canonical toast system
+ * in `components/Toast.tsx` which includes pause/resume timers, proper
+ * auto-dismiss countdowns, and fix for #841 / #1075.
+ */
 'use client';
 
 import { useEffect, useState } from 'react';

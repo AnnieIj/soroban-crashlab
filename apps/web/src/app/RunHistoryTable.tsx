@@ -3,6 +3,7 @@
 import { FuzzingRun, RunStatus } from './types';
 import AddReplayFromUiAction from './add-replay-from-ui-action';
 import { useDataTableKeyboardNav } from './use-data-table-keyboard-nav';
+import TruncatedCell from '@/components/TruncatedCell';
 
 interface RunHistoryTableProps {
     /** Array of fuzzing runs to display */
@@ -23,12 +24,23 @@ import { formatDuration } from './utils/format';
  * Renders a color-coded status badge for a run.
  * Colors are driven by CSS custom properties defined in globals.css,
  * which are chosen to meet WCAG AA contrast (≥4.5:1) in both light and dark modes.
+ * Running state gets a subtle pulse animation (disabled for prefers-reduced-motion).
  */
 const StatusBadge = ({ status }: { status: RunStatus }) => {
+    const isRunning = status === 'running';
     return (
         <span
-            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border status-badge status-badge-${status}`}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border status-badge status-badge-${status}`}
         >
+            {isRunning && (
+                <span
+                    className="relative inline-flex h-1.5 w-1.5 shrink-0"
+                    aria-hidden="true"
+                >
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-current opacity-60" />
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-current" />
+                </span>
+            )}
             {status.charAt(0).toUpperCase() + status.slice(1)}
         </span>
     );
@@ -87,16 +99,16 @@ export default function RunHistoryTable({
                                 aria-label={`Fuzzing run ${run.id}, status ${run.status}`}
                             >
                                 {visibleColumns.includes('id') && (
-                                    <td className="px-6 py-4">
+                                    <td className="px-6 py-4 max-w-[200px]">
                                         <button
                                             type="button"
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 onSelectRun(run.id);
                                             }}
-                                            className="text-sm font-mono text-blue-600 dark:text-blue-400 hover:underline decoration-blue-500/30 underline-offset-4 text-left"
+                                            className="text-sm font-mono text-blue-600 dark:text-blue-400 hover:underline decoration-blue-500/30 underline-offset-4 text-left w-full min-w-0"
                                         >
-                                            {run.id}
+                                            <TruncatedCell>{run.id}</TruncatedCell>
                                         </button>
                                     </td>
                                 )}

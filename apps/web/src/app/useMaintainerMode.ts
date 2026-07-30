@@ -36,18 +36,20 @@ export function useMaintainerMode(): {
       }
     };
 
-    // Schedule on next tick so setState calls go through React's batching,
-    // avoiding the react-hooks/set-state-in-effect lint rule.
-    const t = window.setTimeout(() => {
+    // queueMicrotask keeps setState out of the effect body for the lint rule
+    // while still running before the next paint (more reliable than setTimeout in e2e).
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
       setMounted(true);
       syncState();
-    }, 0);
+    });
 
     window.addEventListener('maintainer-mode-change', syncState);
     window.addEventListener('storage', syncState);
 
     return () => {
-      window.clearTimeout(t);
+      cancelled = true;
       window.removeEventListener('maintainer-mode-change', syncState);
       window.removeEventListener('storage', syncState);
     };

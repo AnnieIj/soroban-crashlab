@@ -28,6 +28,8 @@ interface ToastContextValue {
   notify: (input: ToastInput) => string;
   /** Convenience helper for the common API-error case. */
   notifyError: (message: string) => string;
+  /** Convenience helper for the common success case. */
+  notifySuccess: (message: string) => string;
   dismiss: (id: string) => void;
 }
 
@@ -104,6 +106,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     [notify],
   );
 
+  const notifySuccess = useCallback(
+    (message: string) => notify({ message, variant: 'success' }),
+    [notify],
+  );
+
   // Pause auto-dismiss while the pointer/focus is on a toast so users can read
   // longer messages. Scoped to the one toast being read — hovering a single
   // error no longer freezes the rest of the stack indefinitely.
@@ -152,8 +159,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo<ToastContextValue>(
-    () => ({ notify, notifyError, dismiss }),
-    [notify, notifyError, dismiss],
+    () => ({ notify, notifyError, notifySuccess, dismiss }),
+    [notify, notifyError, notifySuccess, dismiss],
   );
 
   return (
@@ -165,7 +172,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         every toast timer without the user ever touching a toast. Individual
         toasts opt back in.
       */}
-      <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 w-[min(92vw,22rem)] pointer-events-none">
+      <div className="fixed bottom-4 right-4 left-4 sm:left-auto z-50 flex flex-col gap-2 w-auto sm:w-[min(92vw,24rem)] pointer-events-none">
         {toasts.map((toast) => (
           <ToastItem
             key={toast.id}
