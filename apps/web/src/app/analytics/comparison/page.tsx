@@ -2,9 +2,14 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import AddRunComparisonSideBySideView from '../../add-run-comparison-side-by-side-view';
+import dynamic from 'next/dynamic';
 import type { FuzzingRun } from '../../types';
 import { fetchRuns } from '../../../lib/api-client';
+
+const AddRunComparisonSideBySideView = dynamic(
+  () => import('../../add-run-comparison-side-by-side-view'),
+  { ssr: false },
+);
 
 export default function ComparisonPage() {
   const [runs, setRuns] = useState<FuzzingRun[]>([]);

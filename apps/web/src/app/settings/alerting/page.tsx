@@ -1,5 +1,13 @@
+'use client';
+
+import dynamic from 'next/dynamic';
 import BreadcrumbNav from '@/components/BreadcrumbNav';
-import AlertingSettingsPage from "../../create-alerting-settings-page-page";
+import { LoadingSpinner } from '../../../components/LoadingSkeleton';
+
+const AlertingSettingsPage = dynamic(
+  () => import('../../create-alerting-settings-page-page'),
+  { loading: () => <LoadingSpinner /> },
+);
 
 export default function AlertingSettingsRoutePage() {
   return (
