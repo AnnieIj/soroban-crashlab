@@ -1,19 +1,17 @@
-import IntegrateSentryIntegrationForCrashReporting from '../../integrate-sentry-integration-for-crash-reporting';
-import IntegrationPageSkeleton from '../IntegrationPageSkeleton';
-import { Suspense } from 'react';
+'use client';
 
-export const metadata = {
-  title: 'Sentry Integration – Integrations | SorobanCrashLab',
-  description:
-    'Automatically send crash reports and error traces from fuzzing runs to Sentry for centralized monitoring, alerting, and debugging workflows.',
-};
+import dynamic from 'next/dynamic';
+import IntegrationPageSkeleton from '../IntegrationPageSkeleton';
+
+const IntegrateSentryIntegrationForCrashReporting = dynamic(
+  () => import('../../integrate-sentry-integration-for-crash-reporting'),
+  { loading: () => <IntegrationPageSkeleton /> },
+);
 
 export default function SentryIntegrationPage() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8">
-      <Suspense fallback={<IntegrationPageSkeleton />}>
-        <IntegrateSentryIntegrationForCrashReporting />
-      </Suspense>
+      <IntegrateSentryIntegrationForCrashReporting />
     </div>
   );
 }

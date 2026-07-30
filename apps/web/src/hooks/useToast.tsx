@@ -1,3 +1,9 @@
+/**
+ * @deprecated Use `useToast` from `@/components/Toast` instead.
+ * This hook-based implementation is superseded by the canonical toast system
+ * in `components/Toast.tsx` which includes pause/resume timers, proper
+ * auto-dismiss countdowns, and fix for #841 / #1075.
+ */
 'use client';
 
 import { useCallback, useContext, createContext, useState, ReactNode } from 'react';

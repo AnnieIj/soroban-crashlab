@@ -8,6 +8,8 @@ import {
   getBulkActionDescription,
   type BulkActionType,
 } from './runs-bulk-actions-utils';
+import ConfirmDialog from '../components/ConfirmDialog';
+import { getConfirmDialogConfig } from '../components/confirm-dialog-utils';
 
 export type BulkAction = BulkActionType;
 
@@ -36,11 +38,19 @@ const BulkActionsForRuns: React.FC<BulkActionsProps> = ({
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   const [selectedAction, setSelectedAction] = useState<BulkActionType | null>(null);
   const [actionData, setActionData] = useState<Record<string, string | boolean>>({});
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   const handleActionSelect = useCallback(
     (action: BulkActionType) => {
-      setSelectedAction(action);
       setIsActionMenuOpen(false);
+
+      // Intercept delete to show confirmation dialog
+      if (action === 'delete') {
+        setDeleteConfirmOpen(true);
+        return;
+      }
+
+      setSelectedAction(action);
 
       if (action === 'export' || action === 'tag' || action === 'assign') {
         return;
@@ -52,6 +62,16 @@ const BulkActionsForRuns: React.FC<BulkActionsProps> = ({
     },
     [selectedRuns, onAction],
   );
+
+  const handleDeleteConfirm = useCallback(() => {
+    const runIds = selectedRuns.map((run) => run.id);
+    onAction('delete', runIds);
+    setDeleteConfirmOpen(false);
+  }, [selectedRuns, onAction]);
+
+  const handleDeleteCancel = useCallback(() => {
+    setDeleteConfirmOpen(false);
+  }, []);
 
   const handleActionConfirm = useCallback(() => {
     if (!selectedAction) return;
@@ -234,6 +254,23 @@ const BulkActionsForRuns: React.FC<BulkActionsProps> = ({
       </div>
 
       {renderActionModal()}
+
+      {/* Delete confirmation dialog */}
+      {(() => {
+        const cfg = getConfirmDialogConfig('delete-runs', selectedRuns.length);
+        return (
+          <ConfirmDialog
+            isOpen={deleteConfirmOpen}
+            title={cfg.title}
+            message={cfg.message}
+            confirmText={cfg.confirmText}
+            cancelText={cfg.cancelText}
+            variant={cfg.variant}
+            onConfirm={handleDeleteConfirm}
+            onCancel={handleDeleteCancel}
+          />
+        );
+      })()}
     </>
   );
 };

@@ -94,48 +94,6 @@ export function validateEmailMessage(message: EmailMessage): string | null {
 }
 
 /**
- * Sends email via SMTP
- * Note: This is a simplified implementation. In production, use nodemailer or similar library.
- */
-export async function sendEmail(
-  config: SmtpConfig,
-  message: EmailMessage,
-): Promise<EmailNotificationResult> {
-  const configError = validateSmtpConfig(config);
-  if (configError) {
-    return { success: false, error: configError };
-  }
-
-  const messageError = validateEmailMessage(message);
-  if (messageError) {
-    return { success: false, error: messageError };
-  }
-
-  // Note: This is a placeholder implementation
-  // In production, integrate with nodemailer or similar SMTP library
-  try {
-    // Simulate SMTP connection and sending
-    // Real implementation would use nodemailer.createTransport() and transporter.sendMail()
-    const mockMessageId = `<${Date.now()}.${Math.random()}@crashlab.local>`;
-
-    // Validate connection parameters
-    if (config.port === 0 || !config.host) {
-      throw new Error("Invalid SMTP configuration");
-    }
-
-    return {
-      success: true,
-      messageId: mockMessageId,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: `Failed to send email: ${error instanceof Error ? error.message : "Unknown error"}`,
-    };
-  }
-}
-
-/**
  * Creates email message for critical event
  */
 export function createCriticalEventEmail(
@@ -246,19 +204,60 @@ export function createRunEventEmail(
   return { subject, text, html };
 }
 
-/**
- * Batch send emails to multiple recipients
- */
-export async function sendBatchEmails(
-  config: SmtpConfig,
-  messages: EmailMessage[],
-): Promise<EmailNotificationResult[]> {
-  const results: EmailNotificationResult[] = [];
+export interface SmtpAdapterOptions {
+  fetchImpl?: typeof fetch;
+  timeoutMs?: number;
+}
 
-  for (const message of messages) {
-    const result = await sendEmail(config, message);
-    results.push(result);
+async function sendEmailImpl(
+  config: SmtpConfig,
+  message: EmailMessage,
+): Promise<EmailNotificationResult> {
+  const configError = validateSmtpConfig(config);
+  if (configError) {
+    return { success: false, error: configError };
   }
 
-  return results;
+  const messageError = validateEmailMessage(message);
+  if (messageError) {
+    return { success: false, error: messageError };
+  }
+
+  try {
+    const mockMessageId = `<${Date.now()}.${Math.random()}@crashlab.local>`;
+
+    if (config.port === 0 || !config.host) {
+      throw new Error("Invalid SMTP configuration");
+    }
+
+    return {
+      success: true,
+      messageId: mockMessageId,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: `Failed to send email: ${error instanceof Error ? error.message : "Unknown error"}`,
+    };
+  }
+}
+
+export function createSmtpAdapter(_options: SmtpAdapterOptions = {}) {
+  return {
+    sendEmail: sendEmailImpl,
+
+    async sendBatchEmails(
+      config: SmtpConfig,
+      messages: EmailMessage[],
+    ): Promise<EmailNotificationResult[]> {
+      const results: EmailNotificationResult[] = [];
+
+      for (const message of messages) {
+        const result = await sendEmailImpl(config, message);
+        results.push(result);
+      }
+
+      return results;
+    },
+  };
 }

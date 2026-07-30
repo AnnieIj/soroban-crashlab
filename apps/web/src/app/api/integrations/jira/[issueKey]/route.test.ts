@@ -3,10 +3,63 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { GET } from './route';
-import * as jiraIssues from '@/lib/integrations/jira-issues';
+import { GET, POST } from './route';
+import { createJiraIssuesAdapter } from '@/lib/integrations/jira-issues';
 
-vi.mock('@/lib/integrations/jira-issues');
+vi.mock('@/lib/integrations/jira-issues', () => ({
+  createJiraIssuesAdapter: vi.fn(),
+}));
+
+describe('POST /api/integrations/jira', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('returns 400 for missing summary', async () => {
+    const request = new Request('http://localhost/api/integrations/jira', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description: 'Body only' }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.error).toContain('summary');
+  });
+
+  it('returns 200 with created issue data', async () => {
+    const mockIssue = {
+      key: 'CRASH-123',
+      summary: 'Crash report issue',
+      status: 'To Do',
+      assignee: null,
+      url: 'https://jira.example.com/browse/CRASH-123',
+    };
+
+    const mockAdapter = { createIssue: vi.fn().mockResolvedValue(mockIssue) };
+    vi.mocked(createJiraIssuesAdapter).mockReturnValue(mockAdapter as ReturnType<typeof createJiraIssuesAdapter>);
+
+    const request = new Request('http://localhost/api/integrations/jira', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ summary: 'Crash report issue', description: 'details' }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.issue).toEqual(mockIssue);
+    expect(mockAdapter.createIssue).toHaveBeenCalledWith({
+      summary: 'Crash report issue',
+      description: 'details',
+      projectKey: undefined,
+      issueType: undefined,
+    });
+  });
+});
 
 describe('GET /api/integrations/jira/[issueKey]', () => {
   beforeEach(() => {
@@ -33,7 +86,8 @@ describe('GET /api/integrations/jira/[issueKey]', () => {
       url: 'https://jira.example.com/browse/PROJ-123',
     };
 
-    vi.mocked(jiraIssues.fetchJiraIssue).mockResolvedValue(mockIssue);
+    const mockAdapter = { fetchIssue: vi.fn().mockResolvedValue(mockIssue) };
+    vi.mocked(createJiraIssuesAdapter).mockReturnValue(mockAdapter as ReturnType<typeof createJiraIssuesAdapter>);
 
     const request = new Request('http://localhost/api/integrations/jira/PROJ-123');
     const context = { params: Promise.resolve({ issueKey: 'PROJ-123' }) };
@@ -43,11 +97,12 @@ describe('GET /api/integrations/jira/[issueKey]', () => {
 
     expect(response.status).toBe(200);
     expect(data.issue).toEqual(mockIssue);
-    expect(jiraIssues.fetchJiraIssue).toHaveBeenCalledWith('PROJ-123');
+    expect(mockAdapter.fetchIssue).toHaveBeenCalledWith('PROJ-123');
   });
 
   it('returns 404 when issue is not found', async () => {
-    vi.mocked(jiraIssues.fetchJiraIssue).mockResolvedValue(null);
+    const mockAdapter = { fetchIssue: vi.fn().mockResolvedValue(null) };
+    vi.mocked(createJiraIssuesAdapter).mockReturnValue(mockAdapter as ReturnType<typeof createJiraIssuesAdapter>);
 
     const request = new Request('http://localhost/api/integrations/jira/NONEXISTENT-999');
     const context = { params: Promise.resolve({ issueKey: 'NONEXISTENT-999' }) };
@@ -59,8 +114,9 @@ describe('GET /api/integrations/jira/[issueKey]', () => {
     expect(data.error).toContain('not found');
   });
 
-  it('returns 500 when fetchJiraIssue throws error', async () => {
-    vi.mocked(jiraIssues.fetchJiraIssue).mockRejectedValue(new Error('API Error'));
+  it('returns 500 when fetchIssue throws error', async () => {
+    const mockAdapter = { fetchIssue: vi.fn().mockRejectedValue(new Error('API Error')) };
+    vi.mocked(createJiraIssuesAdapter).mockReturnValue(mockAdapter as ReturnType<typeof createJiraIssuesAdapter>);
 
     const request = new Request('http://localhost/api/integrations/jira/PROJ-123');
     const context = { params: Promise.resolve({ issueKey: 'PROJ-123' }) };
@@ -81,7 +137,8 @@ describe('GET /api/integrations/jira/[issueKey]', () => {
       url: 'https://jira.example.com/browse/PROJ-123',
     };
 
-    vi.mocked(jiraIssues.fetchJiraIssue).mockResolvedValue(mockIssue);
+    const mockAdapter = { fetchIssue: vi.fn().mockResolvedValue(mockIssue) };
+    vi.mocked(createJiraIssuesAdapter).mockReturnValue(mockAdapter as ReturnType<typeof createJiraIssuesAdapter>);
 
     const request = new Request('http://localhost/api/integrations/jira/PROJ-123');
     const context = { params: Promise.resolve({ issueKey: 'PROJ-123' }) };

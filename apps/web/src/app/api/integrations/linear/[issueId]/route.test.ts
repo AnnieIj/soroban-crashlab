@@ -4,9 +4,11 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GET } from './route';
-import * as linearIssues from '@/lib/integrations/linear-issues';
+import { createLinearIssuesAdapter } from '@/lib/integrations/linear-issues';
 
-vi.mock('@/lib/integrations/linear-issues');
+vi.mock('@/lib/integrations/linear-issues', () => ({
+  createLinearIssuesAdapter: vi.fn(),
+}));
 
 describe('GET /api/integrations/linear/[issueId]', () => {
   beforeEach(() => {
@@ -33,7 +35,8 @@ describe('GET /api/integrations/linear/[issueId]', () => {
       url: 'https://linear.app/team/issue/TEAM-123',
     };
 
-    vi.mocked(linearIssues.fetchLinearIssue).mockResolvedValue(mockIssue);
+    const mockAdapter = { fetchIssue: vi.fn().mockResolvedValue(mockIssue) };
+    vi.mocked(createLinearIssuesAdapter).mockReturnValue(mockAdapter as unknown as ReturnType<typeof createLinearIssuesAdapter>);
 
     const request = new Request('http://localhost/api/integrations/linear/TEAM-123');
     const context = { params: Promise.resolve({ issueId: 'TEAM-123' }) };
@@ -43,11 +46,12 @@ describe('GET /api/integrations/linear/[issueId]', () => {
 
     expect(response.status).toBe(200);
     expect(data.issue).toEqual(mockIssue);
-    expect(linearIssues.fetchLinearIssue).toHaveBeenCalledWith('TEAM-123');
+    expect(mockAdapter.fetchIssue).toHaveBeenCalledWith('TEAM-123');
   });
 
   it('returns 404 when issue is not found', async () => {
-    vi.mocked(linearIssues.fetchLinearIssue).mockResolvedValue(null);
+    const mockAdapter = { fetchIssue: vi.fn().mockResolvedValue(null) };
+    vi.mocked(createLinearIssuesAdapter).mockReturnValue(mockAdapter as unknown as ReturnType<typeof createLinearIssuesAdapter>);
 
     const request = new Request('http://localhost/api/integrations/linear/NONEXISTENT-999');
     const context = { params: Promise.resolve({ issueId: 'NONEXISTENT-999' }) };
@@ -59,8 +63,9 @@ describe('GET /api/integrations/linear/[issueId]', () => {
     expect(data.error).toContain('not found');
   });
 
-  it('returns 500 when fetchLinearIssue throws error', async () => {
-    vi.mocked(linearIssues.fetchLinearIssue).mockRejectedValue(new Error('GraphQL Error'));
+  it('returns 500 when fetchIssue throws error', async () => {
+    const mockAdapter = { fetchIssue: vi.fn().mockRejectedValue(new Error('GraphQL Error')) };
+    vi.mocked(createLinearIssuesAdapter).mockReturnValue(mockAdapter as unknown as ReturnType<typeof createLinearIssuesAdapter>);
 
     const request = new Request('http://localhost/api/integrations/linear/TEAM-123');
     const context = { params: Promise.resolve({ issueId: 'TEAM-123' }) };
@@ -81,7 +86,8 @@ describe('GET /api/integrations/linear/[issueId]', () => {
       url: 'https://linear.app/team/issue/TEAM-123',
     };
 
-    vi.mocked(linearIssues.fetchLinearIssue).mockResolvedValue(mockIssue);
+    const mockAdapter = { fetchIssue: vi.fn().mockResolvedValue(mockIssue) };
+    vi.mocked(createLinearIssuesAdapter).mockReturnValue(mockAdapter as unknown as ReturnType<typeof createLinearIssuesAdapter>);
 
     const request = new Request('http://localhost/api/integrations/linear/TEAM-123');
     const context = { params: Promise.resolve({ issueId: 'TEAM-123' }) };

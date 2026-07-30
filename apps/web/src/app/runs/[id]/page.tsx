@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import BreadcrumbNav from '@/components/BreadcrumbNav';
 import RunDetailAutoRefresh from './RunDetailAutoRefresh';
 import { buildMockRuns } from '../../mockRuns';
 import { buildLedgerChangesForRun } from '../../mock-ledger-changes';
@@ -9,6 +10,7 @@ import DownloadArtifactsButton from './DownloadArtifactsButton';
 import ContractStateDiffView from '../../components/ContractStateDiffView';
 import { summarizeStateChanges } from '../../components/state-diff-utils';
 import AddRunReplayHistoryWithTimestamps from '../../add-run-replay-history-with-timestamps';
+import RunMetadataEditorWrapper from './RunMetadataEditorWrapper';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,6 +38,13 @@ export default async function RunDetailPage({ params }: RunDetailPageProps) {
 
     return (
         <div className="px-6 md:px-8 max-w-5xl mx-auto w-full py-14">
+            <BreadcrumbNav
+                segments={[
+                    { label: 'Runs', href: '/runs' },
+                    { label: id },
+                ]}
+            />
+
             <div className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xl p-6 md:p-8">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
                     <div>
@@ -73,6 +82,8 @@ export default async function RunDetailPage({ params }: RunDetailPageProps) {
                         finishedAt={formatDate(run.finishedAt)}
                     />
                 </div>
+
+                <RunMetadataEditorWrapper run={run} />
 
                 <RunIssueLinkPage53 issues={run.associatedIssues ?? []} />
 
