@@ -83,8 +83,9 @@ export default defineConfig({
     // CI already runs `pnpm run build`; start the production server there.
     // Locally prefer `next dev` for faster iteration.
     command: process.env.CI
-      ? 'pnpm exec next start -p 3077'
+      ? 'PORT=3077 node .next/standalone/apps/web/server.js'
       : 'pnpm exec next dev -p 3077',
+    command: process.env.CI ? 'npm run start -- -p 3077' : 'npm run dev -- -p 3077',
     url: 'http://localhost:3077',
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,

@@ -124,8 +124,6 @@ export default function EnhancedRunHistoryTable({
     field: "id",
     order: "desc",
   });
-  const activeSortField = sort.field;
-
   const sortedRuns = useMemo(() => {
     return [...runs].sort((a: FuzzingRun, b: FuzzingRun) => {
       const valA = a[sort.field] ?? "";
@@ -226,7 +224,7 @@ export default function EnhancedRunHistoryTable({
               {visibleColumns.includes("id") && (
                 <th
                   className={`px-6 py-5 text-[10px] font-bold uppercase tracking-widest cursor-pointer transition-colors ${
-                    activeSortField === "id"
+                    sort.field === "id"
                       ? "text-blue-600 dark:text-blue-400"
                       : "text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
                   }`}
