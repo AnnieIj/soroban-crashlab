@@ -1,14 +1,27 @@
-'use client';
+"use client";
 
-import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { useMaintainerMode } from './useMaintainerMode';
+import React, {
+  useState,
+  useCallback,
+  useRef,
+  useEffect,
+  useMemo,
+} from "react";
+import { useMaintainerMode } from "./useMaintainerMode";
+import {
+  WIDGET_LAYOUT_PROFILES,
+  DEFAULT_WIDGET_LAYOUT_PROFILE_ID,
+  ACTIVE_WIDGET_LAYOUT_PROFILE_STORAGE_KEY,
+  resolveProfileId,
+  getWidgetLayoutStorageKey,
+} from "./widget-layout-profile-utils";
 
 // Widget types and interfaces
 interface Widget {
   id: string;
-  type: 'chart' | 'metric' | 'table' | 'alert' | 'status' | 'custom';
+  type: "chart" | "metric" | "table" | "alert" | "status" | "custom";
   title: string;
-  size: 'small' | 'medium' | 'large' | 'xlarge';
+  size: "small" | "medium" | "large" | "xlarge";
   position: { x: number; y: number };
   config: Record<string, unknown>;
   visible: boolean;
@@ -22,40 +35,40 @@ interface LayoutGrid {
 }
 
 // Sample widget templates
-const WIDGET_TEMPLATES: Omit<Widget, 'id' | 'position'>[] = [
+const WIDGET_TEMPLATES: Omit<Widget, "id" | "position">[] = [
   {
-    type: 'chart',
-    title: 'Performance Chart',
-    size: 'large',
-    config: { chartType: 'line', dataSource: 'performance' },
+    type: "chart",
+    title: "Performance Chart",
+    size: "large",
+    config: { chartType: "line", dataSource: "performance" },
     visible: true,
   },
   {
-    type: 'metric',
-    title: 'Success Rate',
-    size: 'small',
-    config: { metric: 'success_rate', format: 'percentage' },
+    type: "metric",
+    title: "Success Rate",
+    size: "small",
+    config: { metric: "success_rate", format: "percentage" },
     visible: true,
   },
   {
-    type: 'table',
-    title: 'Recent Runs',
-    size: 'medium',
-    config: { columns: ['id', 'status', 'duration'], limit: 10 },
+    type: "table",
+    title: "Recent Runs",
+    size: "medium",
+    config: { columns: ["id", "status", "duration"], limit: 10 },
     visible: true,
   },
   {
-    type: 'alert',
-    title: 'Active Alerts',
-    size: 'medium',
-    config: { severity: 'all', autoRefresh: true },
+    type: "alert",
+    title: "Active Alerts",
+    size: "medium",
+    config: { severity: "all", autoRefresh: true },
     visible: true,
   },
   {
-    type: 'status',
-    title: 'System Status',
-    size: 'small',
-    config: { components: ['api', 'database', 'queue'] },
+    type: "status",
+    title: "System Status",
+    size: "small",
+    config: { components: ["api", "database", "queue"] },
     visible: true,
   },
 ];
@@ -76,61 +89,100 @@ export default function WidgetLayoutEditor() {
   const [draggedWidget, setDraggedWidget] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [showWidgetPalette, setShowWidgetPalette] = useState(false);
-  const [layoutMode, setLayoutMode] = useState<'grid' | 'freeform'>('grid');
+  const [layoutMode, setLayoutMode] = useState<"grid" | "freeform">("grid");
+  const [activeProfileId, setActiveProfileId] = useState<string>(
+    DEFAULT_WIDGET_LAYOUT_PROFILE_ID,
+  );
   const gridRef = useRef<HTMLDivElement>(null);
 
-  // Load saved layout on component mount
-  useEffect(() => {
-    const initializeDefaultLayout = () => {
-      const defaultWidgets: Widget[] = WIDGET_TEMPLATES.slice(0, 4).map((template, index) => ({
-        ...template,
-        id: `widget-${Date.now()}-${index}`,
-        position: {
-          x: (index % 3) * 2,
-          y: Math.floor(index / 3) * 2,
-        },
-      }));
-      return defaultWidgets;
-    };
+  const initializeDefaultLayout = useCallback((): Widget[] => {
+    return WIDGET_TEMPLATES.slice(0, 4).map((template, index) => ({
+      ...template,
+      id: `widget-${Date.now()}-${index}`,
+      position: {
+        x: (index % 3) * 2,
+        y: Math.floor(index / 3) * 2,
+      },
+    }));
+  }, []);
 
-    // Use startTransition to mark state updates as non-urgent
-    const loadLayout = () => {
-      const savedLayout = localStorage.getItem('dashboard-widget-layout');
+  const loadLayoutForProfile = useCallback(
+    (profileId: string) => {
+      const savedLayout = localStorage.getItem(
+        getWidgetLayoutStorageKey(profileId),
+      );
       if (savedLayout) {
         try {
           const parsedLayout = JSON.parse(savedLayout);
           setWidgets(parsedLayout);
+          return;
         } catch (error) {
-          console.error('Failed to load saved layout:', error);
-          setWidgets(initializeDefaultLayout());
+          console.error("Failed to load saved layout:", error);
         }
-      } else {
-        setWidgets(initializeDefaultLayout());
       }
-    };
+      setWidgets(initializeDefaultLayout());
+    },
+    [initializeDefaultLayout],
+  );
+
+  // Load the persisted profile choice, then that profile's saved layout, on mount
+  useEffect(() => {
+    const storedProfileId = localStorage.getItem(
+      ACTIVE_WIDGET_LAYOUT_PROFILE_STORAGE_KEY,
+    );
+    const resolvedProfileId = resolveProfileId(storedProfileId);
 
     // Schedule on next tick to avoid synchronous setState in effect
-    const timeoutId = setTimeout(loadLayout, 0);
+    const timeoutId = setTimeout(() => {
+      setActiveProfileId(resolvedProfileId);
+      loadLayoutForProfile(resolvedProfileId);
+    }, 0);
     return () => clearTimeout(timeoutId);
-  }, []);
+  }, [loadLayoutForProfile]);
 
-  const gridConfig: LayoutGrid = useMemo(() => ({
-    cols: 6,
-    rows: 8,
-    cellWidth: 200,
-    cellHeight: 150,
-  }), []);
+  const switchProfile = useCallback(
+    (nextProfileId: string) => {
+      // Persist the layout for the profile we're leaving before switching.
+      localStorage.setItem(
+        getWidgetLayoutStorageKey(activeProfileId),
+        JSON.stringify(widgets),
+      );
+
+      const resolved = resolveProfileId(nextProfileId);
+      localStorage.setItem(ACTIVE_WIDGET_LAYOUT_PROFILE_STORAGE_KEY, resolved);
+      setActiveProfileId(resolved);
+      loadLayoutForProfile(resolved);
+    },
+    [activeProfileId, widgets, loadLayoutForProfile],
+  );
+
+  const gridConfig: LayoutGrid = useMemo(
+    () => ({
+      cols: 6,
+      rows: 8,
+      cellWidth: 200,
+      cellHeight: 150,
+    }),
+    [],
+  );
 
   const saveLayout = useCallback(() => {
-    localStorage.setItem('dashboard-widget-layout', JSON.stringify(widgets));
-  }, [widgets]);
+    localStorage.setItem(
+      getWidgetLayoutStorageKey(activeProfileId),
+      JSON.stringify(widgets),
+    );
+  }, [widgets, activeProfileId]);
 
   const findEmptyPosition = useCallback((): { x: number; y: number } => {
     const occupied = new Set<string>();
-    widgets.forEach(widget => {
+    widgets.forEach((widget) => {
       const size = WIDGET_SIZES[widget.size];
       for (let x = widget.position.x; x < widget.position.x + size.width; x++) {
-        for (let y = widget.position.y; y < widget.position.y + size.height; y++) {
+        for (
+          let y = widget.position.y;
+          y < widget.position.y + size.height;
+          y++
+        ) {
           occupied.add(`${x},${y}`);
         }
       }
@@ -146,31 +198,36 @@ export default function WidgetLayoutEditor() {
     return { x: 0, y: 0 };
   }, [widgets, gridConfig]);
 
-  const addWidget = useCallback((template: Omit<Widget, 'id' | 'position'>) => {
-    const newWidget: Widget = {
-      ...template,
-      id: `widget-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      position: findEmptyPosition(),
-    };
-    setWidgets(prev => [...prev, newWidget]);
-  }, [findEmptyPosition]);
+  const addWidget = useCallback(
+    (template: Omit<Widget, "id" | "position">) => {
+      const newWidget: Widget = {
+        ...template,
+        id: `widget-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        position: findEmptyPosition(),
+      };
+      setWidgets((prev) => [...prev, newWidget]);
+    },
+    [findEmptyPosition],
+  );
 
   const removeWidget = (widgetId: string) => {
-    setWidgets(prev => prev.filter(w => w.id !== widgetId));
+    setWidgets((prev) => prev.filter((w) => w.id !== widgetId));
     if (selectedWidget === widgetId) {
       setSelectedWidget(null);
     }
   };
 
   const updateWidget = (widgetId: string, updates: Partial<Widget>) => {
-    setWidgets(prev => prev.map(w => w.id === widgetId ? { ...w, ...updates } : w));
+    setWidgets((prev) =>
+      prev.map((w) => (w.id === widgetId ? { ...w, ...updates } : w)),
+    );
   };
 
   const handleMouseDown = (e: React.MouseEvent, widgetId: string) => {
     if (!isEditing) return;
-    
+
     e.preventDefault();
-    const widget = widgets.find(w => w.id === widgetId);
+    const widget = widgets.find((w) => w.id === widgetId);
     if (!widget) return;
 
     const rect = e.currentTarget.getBoundingClientRect();
@@ -182,21 +239,34 @@ export default function WidgetLayoutEditor() {
     setSelectedWidget(widgetId);
   };
 
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!draggedWidget || !gridRef.current) return;
+  const handleMouseMove = useCallback(
+    (e: MouseEvent) => {
+      if (!draggedWidget || !gridRef.current) return;
 
-    const gridRect = gridRef.current.getBoundingClientRect();
-    const x = Math.max(0, Math.min(
-      Math.floor((e.clientX - gridRect.left - dragOffset.x) / gridConfig.cellWidth),
-      gridConfig.cols - 1
-    ));
-    const y = Math.max(0, Math.min(
-      Math.floor((e.clientY - gridRect.top - dragOffset.y) / gridConfig.cellHeight),
-      gridConfig.rows - 1
-    ));
+      const gridRect = gridRef.current.getBoundingClientRect();
+      const x = Math.max(
+        0,
+        Math.min(
+          Math.floor(
+            (e.clientX - gridRect.left - dragOffset.x) / gridConfig.cellWidth,
+          ),
+          gridConfig.cols - 1,
+        ),
+      );
+      const y = Math.max(
+        0,
+        Math.min(
+          Math.floor(
+            (e.clientY - gridRect.top - dragOffset.y) / gridConfig.cellHeight,
+          ),
+          gridConfig.rows - 1,
+        ),
+      );
 
-    updateWidget(draggedWidget, { position: { x, y } });
-  }, [draggedWidget, dragOffset, gridConfig]);
+      updateWidget(draggedWidget, { position: { x, y } });
+    },
+    [draggedWidget, dragOffset, gridConfig],
+  );
 
   const handleMouseUp = useCallback(() => {
     setDraggedWidget(null);
@@ -204,11 +274,11 @@ export default function WidgetLayoutEditor() {
 
   useEffect(() => {
     if (draggedWidget) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
       return () => {
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
+        document.removeEventListener("mousemove", handleMouseMove);
+        document.removeEventListener("mouseup", handleMouseUp);
       };
     }
   }, [draggedWidget, handleMouseMove, handleMouseUp]);
@@ -223,9 +293,9 @@ export default function WidgetLayoutEditor() {
         key={widget.id}
         className={`
           absolute border-2 rounded-lg bg-white shadow-sm transition-all duration-200
-          ${isSelected ? 'border-blue-500 shadow-lg' : 'border-gray-200'}
-          ${isDragging ? 'opacity-75 z-50' : 'z-10'}
-          ${isEditing ? 'cursor-move hover:shadow-md' : 'cursor-default'}
+          ${isSelected ? "border-blue-500 shadow-lg" : "border-gray-200"}
+          ${isDragging ? "opacity-75 z-50" : "z-10"}
+          ${isEditing ? "cursor-move hover:shadow-md" : "cursor-default"}
         `}
         style={{
           left: widget.position.x * gridConfig.cellWidth,
@@ -239,8 +309,12 @@ export default function WidgetLayoutEditor() {
         {/* Widget Header */}
         <div className="flex items-center justify-between p-3 border-b border-gray-100">
           <div className="flex items-center space-x-2">
-            <div className={`w-3 h-3 rounded-full ${getWidgetTypeColor(widget.type)}`} />
-            <h3 className="font-medium text-sm text-gray-900">{widget.title}</h3>
+            <div
+              className={`w-3 h-3 rounded-full ${getWidgetTypeColor(widget.type)}`}
+            />
+            <h3 className="font-medium text-sm text-gray-900">
+              {widget.title}
+            </h3>
           </div>
           {isEditing && (
             <div className="flex items-center space-x-1">
@@ -252,9 +326,24 @@ export default function WidgetLayoutEditor() {
                 className="p-1 text-gray-400 hover:text-gray-600 rounded"
                 title="Configure"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                  />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                  />
                 </svg>
               </button>
               <button
@@ -265,8 +354,18 @@ export default function WidgetLayoutEditor() {
                 className="p-1 text-gray-400 hover:text-red-600 rounded"
                 title="Remove"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
                 </svg>
               </button>
             </div>
@@ -274,9 +373,7 @@ export default function WidgetLayoutEditor() {
         </div>
 
         {/* Widget Content */}
-        <div className="p-3 h-full">
-          {renderWidgetContent(widget)}
-        </div>
+        <div className="p-3 h-full">{renderWidgetContent(widget)}</div>
 
         {/* Resize Handle */}
         {isEditing && isSelected && (
@@ -288,25 +385,35 @@ export default function WidgetLayoutEditor() {
 
   const renderWidgetContent = (widget: Widget) => {
     switch (widget.type) {
-      case 'chart':
+      case "chart":
         return (
           <div className="flex items-center justify-center h-full bg-gray-50 rounded">
             <div className="text-center">
-              <svg className="w-8 h-8 mx-auto text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              <svg
+                className="w-8 h-8 mx-auto text-gray-400 mb-2"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                />
               </svg>
               <p className="text-xs text-gray-500">Chart Widget</p>
             </div>
           </div>
         );
-      case 'metric':
+      case "metric":
         return (
           <div className="text-center">
             <div className="text-2xl font-bold text-blue-600">94.2%</div>
             <div className="text-xs text-gray-500 mt-1">Success Rate</div>
           </div>
         );
-      case 'table':
+      case "table":
         return (
           <div className="space-y-2">
             <div className="flex justify-between text-xs text-gray-500 border-b pb-1">
@@ -314,7 +421,7 @@ export default function WidgetLayoutEditor() {
               <span>Status</span>
               <span>Duration</span>
             </div>
-            {[1, 2, 3].map(i => (
+            {[1, 2, 3].map((i) => (
               <div key={i} className="flex justify-between text-xs">
                 <span>#{i}234</span>
                 <span className="text-green-600">✓</span>
@@ -323,7 +430,7 @@ export default function WidgetLayoutEditor() {
             ))}
           </div>
         );
-      case 'alert':
+      case "alert":
         return (
           <div className="space-y-2">
             <div className="flex items-center space-x-2 text-xs">
@@ -336,11 +443,14 @@ export default function WidgetLayoutEditor() {
             </div>
           </div>
         );
-      case 'status':
+      case "status":
         return (
           <div className="space-y-2">
-            {['API', 'Database', 'Queue'].map(service => (
-              <div key={service} className="flex items-center justify-between text-xs">
+            {["API", "Database", "Queue"].map((service) => (
+              <div
+                key={service}
+                className="flex items-center justify-between text-xs"
+              >
                 <span>{service}</span>
                 <div className="w-2 h-2 bg-green-500 rounded-full"></div>
               </div>
@@ -356,14 +466,14 @@ export default function WidgetLayoutEditor() {
     }
   };
 
-  const getWidgetTypeColor = (type: Widget['type']) => {
+  const getWidgetTypeColor = (type: Widget["type"]) => {
     const colors = {
-      chart: 'bg-blue-500',
-      metric: 'bg-green-500',
-      table: 'bg-purple-500',
-      alert: 'bg-red-500',
-      status: 'bg-yellow-500',
-      custom: 'bg-gray-500',
+      chart: "bg-blue-500",
+      metric: "bg-green-500",
+      table: "bg-purple-500",
+      alert: "bg-red-500",
+      status: "bg-yellow-500",
+      custom: "bg-gray-500",
     };
     return colors[type];
   };
@@ -372,11 +482,25 @@ export default function WidgetLayoutEditor() {
     return (
       <div className="p-6 bg-gray-50 rounded-lg">
         <div className="text-center">
-          <svg className="w-12 h-12 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          <svg
+            className="w-12 h-12 mx-auto text-gray-400 mb-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+            />
           </svg>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Widget Layout Editor</h3>
-          <p className="text-gray-600">Enable maintainer mode to access the widget layout editor.</p>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            Widget Layout Editor
+          </h3>
+          <p className="text-gray-600">
+            Enable maintainer mode to access the widget layout editor.
+          </p>
         </div>
       </div>
     );
@@ -387,15 +511,36 @@ export default function WidgetLayoutEditor() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Widget Layout Editor</h2>
-          <p className="text-gray-600">Customize your dashboard layout with drag-and-drop widgets</p>
+          <h2 className="text-2xl font-bold text-gray-900">
+            Widget Layout Editor
+          </h2>
+          <p className="text-gray-600">
+            Customize your dashboard layout with drag-and-drop widgets
+          </p>
         </div>
         <div className="flex items-center space-x-3">
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <span className="sr-only">Layout profile</span>
+            <select
+              value={activeProfileId}
+              onChange={(e) => switchProfile(e.target.value)}
+              aria-label="Layout profile"
+              className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {WIDGET_LAYOUT_PROFILES.map((profile) => (
+                <option key={profile.id} value={profile.id}>
+                  {profile.label}
+                </option>
+              ))}
+            </select>
+          </label>
           <button
-            onClick={() => setLayoutMode(layoutMode === 'grid' ? 'freeform' : 'grid')}
+            onClick={() =>
+              setLayoutMode(layoutMode === "grid" ? "freeform" : "grid")
+            }
             className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
           >
-            {layoutMode === 'grid' ? 'Grid Mode' : 'Freeform Mode'}
+            {layoutMode === "grid" ? "Grid Mode" : "Freeform Mode"}
           </button>
           <button
             onClick={() => setShowWidgetPalette(!showWidgetPalette)}
@@ -411,12 +556,12 @@ export default function WidgetLayoutEditor() {
               }
             }}
             className={`px-4 py-2 rounded-md ${
-              isEditing 
-                ? 'bg-green-600 text-white hover:bg-green-700' 
-                : 'bg-gray-600 text-white hover:bg-gray-700'
+              isEditing
+                ? "bg-green-600 text-white hover:bg-green-700"
+                : "bg-gray-600 text-white hover:bg-gray-700"
             }`}
           >
-            {isEditing ? 'Save Layout' : 'Edit Layout'}
+            {isEditing ? "Save Layout" : "Edit Layout"}
           </button>
         </div>
       </div>
@@ -435,9 +580,15 @@ export default function WidgetLayoutEditor() {
                 }}
                 className="p-3 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 text-left"
               >
-                <div className={`w-3 h-3 rounded-full ${getWidgetTypeColor(template.type)} mb-2`} />
-                <div className="text-sm font-medium text-gray-900">{template.title}</div>
-                <div className="text-xs text-gray-500 capitalize">{template.type} • {template.size}</div>
+                <div
+                  className={`w-3 h-3 rounded-full ${getWidgetTypeColor(template.type)} mb-2`}
+                />
+                <div className="text-sm font-medium text-gray-900">
+                  {template.title}
+                </div>
+                <div className="text-xs text-gray-500 capitalize">
+                  {template.type} • {template.size}
+                </div>
               </button>
             ))}
           </div>
@@ -452,25 +603,41 @@ export default function WidgetLayoutEditor() {
           style={{
             width: gridConfig.cols * gridConfig.cellWidth,
             height: gridConfig.rows * gridConfig.cellHeight,
-            backgroundImage: layoutMode === 'grid' 
-              ? `linear-gradient(to right, #e5e7eb 1px, transparent 1px), linear-gradient(to bottom, #e5e7eb 1px, transparent 1px)`
-              : 'none',
-            backgroundSize: layoutMode === 'grid' 
-              ? `${gridConfig.cellWidth}px ${gridConfig.cellHeight}px`
-              : 'auto',
+            backgroundImage:
+              layoutMode === "grid"
+                ? `linear-gradient(to right, #e5e7eb 1px, transparent 1px), linear-gradient(to bottom, #e5e7eb 1px, transparent 1px)`
+                : "none",
+            backgroundSize:
+              layoutMode === "grid"
+                ? `${gridConfig.cellWidth}px ${gridConfig.cellHeight}px`
+                : "auto",
           }}
         >
-          {widgets.filter(w => w.visible).map(renderWidget)}
-          
+          {widgets.filter((w) => w.visible).map(renderWidget)}
+
           {/* Empty State */}
           {widgets.length === 0 && (
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="text-center">
-                <svg className="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                <svg
+                  className="w-16 h-16 mx-auto text-gray-300 mb-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+                  />
                 </svg>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No Widgets Added</h3>
-                <p className="text-gray-600 mb-4">Start building your dashboard by adding widgets</p>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  No Widgets Added
+                </h3>
+                <p className="text-gray-600 mb-4">
+                  Start building your dashboard by adding widgets
+                </p>
                 <button
                   onClick={() => setShowWidgetPalette(true)}
                   className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
@@ -488,25 +655,35 @@ export default function WidgetLayoutEditor() {
         <div className="bg-white border border-gray-200 rounded-lg p-4">
           <h3 className="font-medium text-gray-900 mb-3">Widget Properties</h3>
           {(() => {
-            const widget = widgets.find(w => w.id === selectedWidget);
+            const widget = widgets.find((w) => w.id === selectedWidget);
             if (!widget) return null;
-            
+
             return (
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Title
+                  </label>
                   <input
                     type="text"
                     value={widget.title}
-                    onChange={(e) => updateWidget(widget.id, { title: e.target.value })}
+                    onChange={(e) =>
+                      updateWidget(widget.id, { title: e.target.value })
+                    }
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Size</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Size
+                  </label>
                   <select
                     value={widget.size}
-                    onChange={(e) => updateWidget(widget.id, { size: e.target.value as Widget['size'] })}
+                    onChange={(e) =>
+                      updateWidget(widget.id, {
+                        size: e.target.value as Widget["size"],
+                      })
+                    }
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="small">Small (1x1)</option>
@@ -520,10 +697,17 @@ export default function WidgetLayoutEditor() {
                     type="checkbox"
                     id="visible"
                     checked={widget.visible}
-                    onChange={(e) => updateWidget(widget.id, { visible: e.target.checked })}
+                    onChange={(e) =>
+                      updateWidget(widget.id, { visible: e.target.checked })
+                    }
                     className="mr-2"
                   />
-                  <label htmlFor="visible" className="text-sm font-medium text-gray-700">Visible</label>
+                  <label
+                    htmlFor="visible"
+                    className="text-sm font-medium text-gray-700"
+                  >
+                    Visible
+                  </label>
                 </div>
               </div>
             );
@@ -534,14 +718,21 @@ export default function WidgetLayoutEditor() {
       {/* Layout Actions */}
       <div className="flex items-center justify-between bg-gray-50 p-4 rounded-lg">
         <div className="text-sm text-gray-600">
-          {widgets.length} widget{widgets.length !== 1 ? 's' : ''} • 
-          {widgets.filter(w => w.visible).length} visible
+          {widgets.length} widget{widgets.length !== 1 ? "s" : ""} •
+          {widgets.filter((w) => w.visible).length} visible
         </div>
         <div className="flex items-center space-x-2">
           <button
             onClick={() => {
-              if (confirm('Reset to default layout? This will remove all custom widgets.')) {
-                const defaultWidgets: Widget[] = WIDGET_TEMPLATES.slice(0, 4).map((template, index) => ({
+              if (
+                confirm(
+                  "Reset to default layout? This will remove all custom widgets.",
+                )
+              ) {
+                const defaultWidgets: Widget[] = WIDGET_TEMPLATES.slice(
+                  0,
+                  4,
+                ).map((template, index) => ({
                   ...template,
                   id: `widget-${Date.now()}-${index}`,
                   position: {
@@ -560,7 +751,7 @@ export default function WidgetLayoutEditor() {
             onClick={() => {
               const layout = JSON.stringify(widgets, null, 2);
               navigator.clipboard.writeText(layout);
-              alert('Layout copied to clipboard!');
+              alert("Layout copied to clipboard!");
             }}
             className="px-3 py-2 text-sm text-blue-600 hover:text-blue-800"
           >
