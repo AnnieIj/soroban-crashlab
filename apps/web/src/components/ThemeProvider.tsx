@@ -20,8 +20,7 @@ const ThemeContext = createContext<ThemeContextType>({
 function getStoredTheme(): Theme | null {
   if (typeof window === 'undefined') return null;
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved === 'light' || saved === 'dark' ? saved : null;
+    return parseTheme(localStorage.getItem(STORAGE_KEY));
   } catch {
     return null;
   }
@@ -54,6 +53,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     return systemPrefersDark ? 'dark' : 'light';
   }, [systemPrefersDark, userTheme]);
 
+  // Keep the effective theme in sync when the OS-level color scheme changes.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
@@ -69,26 +69,20 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     document.documentElement.classList.toggle('dark', theme === 'dark');
   }, [theme]);
 
+  // Keep multiple tabs in sync when the user changes their override elsewhere.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-
     const onStorage = (event: StorageEvent) => {
       if (event.key !== STORAGE_KEY) return;
-      if (event.newValue === 'light' || event.newValue === 'dark') {
-        setUserTheme(event.newValue);
-        return;
-      }
-      setUserTheme(null);
+      setUserTheme(parseTheme(event.newValue));
     };
-
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
   const toggle = useCallback(() => {
     setUserTheme((prev) => {
-      const base = prev ?? (systemPrefersDark ? 'dark' : 'light');
-      const next: Theme = base === 'light' ? 'dark' : 'light';
+      const next = nextToggledTheme(prev, systemPrefersDark);
       try {
         localStorage.setItem(STORAGE_KEY, next);
       } catch {

@@ -6,8 +6,7 @@ import * as assert from 'node:assert/strict';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const appRoot = path.resolve(__dirname);
-const componentPath = path.resolve(appRoot, '../../src/app/RunStatusTimeline.tsx');
+const componentPath = path.resolve(process.cwd(), 'src/app/RunStatusTimeline.tsx');
 
 const runAssertions = (): void => {
   console.log('Starting RunStatusTimeline assertions...');
@@ -50,6 +49,11 @@ const runAssertions = (): void => {
   assert.ok(content.includes('status === \'running\''), 'Should handle running status');
   assert.ok(content.includes('status === \'failed\''), 'Should handle failed status');
   assert.ok(content.includes('status === \'completed\''), 'Should handle completed status');
+
+  // Requirement: Hover details
+  assert.ok(content.includes('role="tooltip"'), 'Should expose hover tooltip details');
+  assert.ok(content.includes('group-hover/step:opacity-100'), 'Should reveal details on hover');
+  assert.ok(content.includes('group-focus-within/step:opacity-100'), 'Should reveal details on keyboard focus');
   
   console.log('RunStatusTimeline.test.ts: all structural assertions passed');
 };
