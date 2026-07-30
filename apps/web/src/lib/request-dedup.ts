@@ -34,9 +34,23 @@ export function dedupedFetchJson<T>(url: string, signal?: AbortSignal): Promise<
   const combinedSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
 
   const request = fetch(url, { signal: combinedSignal })
-    .then((res) => {
+    .then(async (res) => {
       if (!res.ok) throw new HttpError(res.status);
-      return res.json() as Promise<T>;
+      const json = (await res.json()) as unknown;
+      if (json && typeof json === 'object' && 'data' in json) {
+        const envelope = json as { data: unknown; total?: number };
+        if (
+          envelope.data &&
+          typeof envelope.data === 'object' &&
+          !Array.isArray(envelope.data) &&
+          envelope.total !== undefined &&
+          !('total' in (envelope.data as object))
+        ) {
+          return { ...(envelope.data as object), total: envelope.total } as T;
+        }
+        return envelope.data as T;
+      }
+      return json as T;
     })
     .finally(() => {
       inFlightRequests.delete(url);

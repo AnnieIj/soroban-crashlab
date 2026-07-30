@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import BulkActionsForRuns, { BulkAction } from '../add-bulk-actions-for-runs';
+import type { BulkAction } from '../add-bulk-actions-for-runs';
 import {
   applyBulkActionToRuns,
   getSelectedRuns,
@@ -13,7 +14,15 @@ import {
 } from '../runs-bulk-actions-utils';
 import { FuzzingRun } from '../types';
 import { fetchRuns } from '../../lib/api-client';
-import VirtualizedRunTable from '../implement-virtualized-run-table-component';
+import { LoadingSpinner } from '../../components/LoadingSkeleton';
+
+const BulkActionsForRuns = dynamic(() => import('../add-bulk-actions-for-runs'), {
+  loading: () => <LoadingSpinner />,
+});
+const VirtualizedRunTable = dynamic(
+  () => import('../implement-virtualized-run-table-component'),
+  { loading: () => <LoadingSpinner /> },
+);
 
 const RUN_TABLE_COLUMNS = ['id', 'status', 'area', 'severity', 'duration', 'seedCount'];
 
