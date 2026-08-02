@@ -172,17 +172,17 @@ const INTEGRATIONS: Integration[] = [
     category: 'Monitoring'
   },
   {
-    id: 'sentry',
-    title: 'Sentry Integration',
-    description: 'Automatically send crash reports and error traces from fuzzing runs to Sentry for centralized monitoring, alerting, and debugging workflows.',
+    id: 'smtp',
+    title: 'SMTP Email',
+    description: 'Send critical event notifications and run status updates over a standard SMTP connection using nodemailer.',
     icon: (
       <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
       </svg>
     ),
-    href: '/integrations/sentry',
+    href: '/integrations/smtp',
     status: 'available',
-    category: 'Error Tracking'
+    category: 'Notifications'
   },
   {
     id: 'auth',

@@ -46,17 +46,9 @@ export default function RootLayout({
         {/* eslint-disable-next-line @next/next/no-page-custom-font */}
         <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
         <script dangerouslySetInnerHTML={{
-          __html: `
-            try {
-              var t = localStorage.getItem('crashlab:theme');
-              var d = t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches);
-              document.documentElement.classList.toggle('dark', d);
-            } catch(e) {}
-            document.documentElement.classList.add('theme-ready');
-          `
-        }} />
-        <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect fill='%230A66C2' width='32' height='32'/><text x='50%' y='50%' font-size='24' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'>◈</text></svg>" type="image/svg+xml" />
-        <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect fill='%230A66C2' width='180' height='180' rx='30'/><text x='50%' y='50%' font-size='90' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'>◈</text></svg>" />
+          __html: `\n            try {\n              var t = localStorage.getItem('crashlab:theme');\n              var d = t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches);\n              document.documentElement.classList.toggle('dark', d);\n            } catch(e) {}\n            document.documentElement.classList.add('theme-ready');\n          `\n        }} />
+        <link rel="icon" href="/favicon/192x192/favicon.svg" type="image/svg+xml" />
+        <link rel="apple-touch-icon" href="/favicon/180x180/favicon.svg" />
         <meta name="theme-color" content="#0A66C2" media="(prefers-color-scheme: light)" />
         <meta name="theme-color" content="#0c0c0c" media="(prefers-color-scheme: dark)" />
         <meta name="apple-mobile-web-app-capable" content="yes" />

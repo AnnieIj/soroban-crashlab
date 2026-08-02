@@ -111,6 +111,32 @@ export interface CrashTrendPoint {
     [signatureKey: string]: string | number;
 }
 
+/** Outcome of a single contract call within a run's call sequence. */
+export type ContractCallStatus = 'success' | 'failed' | 'pending';
+
+/**
+ * A single contract-to-contract call captured during a run, in the order it
+ * occurred. Used to render the run's sequence diagram.
+ */
+export interface ContractCallStep {
+    /** Stable identifier for this call within the run */
+    id: string;
+    /** 1-based position of this call in the run's overall call order */
+    sequence: number;
+    /** Contract or account that initiated the call */
+    caller: string;
+    /** Contract that was invoked */
+    callee: string;
+    /** Invoked method/function name */
+    method: string;
+    /** Nesting depth; 0 is a top-level call from the fuzz harness */
+    depth: number;
+    /** Outcome of this specific call */
+    status: ContractCallStatus;
+    /** Elapsed time for this call, in milliseconds */
+    durationMs: number;
+}
+
 export type LedgerChangeType = 'created' | 'updated' | 'deleted';
 
 export interface LedgerStateChange {

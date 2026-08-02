@@ -1,19 +1,17 @@
-import IntegratePagerdutyAlertIntegration from '../../integrate-pagerduty-alert-integration';
-import IntegrationPageSkeleton from '../IntegrationPageSkeleton';
-import { Suspense } from 'react';
+'use client';
 
-export const metadata = {
-  title: 'PagerDuty Alerts – Integrations | SorobanCrashLab',
-  description:
-    'Configure PagerDuty alerting for critical fuzzing failures. Page your on-call team automatically when crashes exceed your alert threshold.',
-};
+import dynamic from 'next/dynamic';
+import IntegrationPageSkeleton from '../IntegrationPageSkeleton';
+
+const IntegratePagerdutyAlertIntegration = dynamic(
+  () => import('../../integrate-pagerduty-alert-integration'),
+  { loading: () => <IntegrationPageSkeleton /> },
+);
 
 export default function PagerDutyIntegrationPage() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8">
-      <Suspense fallback={<IntegrationPageSkeleton />}>
-        <IntegratePagerdutyAlertIntegration />
-      </Suspense>
+      <IntegratePagerdutyAlertIntegration />
     </div>
   );
 }

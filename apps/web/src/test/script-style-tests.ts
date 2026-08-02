@@ -54,7 +54,6 @@ export const QUARANTINED_TESTS: readonly string[] = [
   'src/app/dependency-update-policy.test.ts',
   'src/app/integrations/page.test.ts',
   'src/app/maintainer-mode-utils.test.ts',
-  'src/app/notification-center-integration.test.ts',
   'src/app/page.integration.test.ts',
   'src/app/page.test.tsx',
   'src/app/run-filter-utils.test.ts',
