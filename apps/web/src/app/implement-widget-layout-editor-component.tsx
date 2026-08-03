@@ -1,20 +1,13 @@
-"use client";
+'use client';
 
-import React, {
-  useState,
-  useCallback,
-  useRef,
-  useEffect,
-  useMemo,
-} from "react";
-import { useMaintainerMode } from "./useMaintainerMode";
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { useMaintainerMode } from './useMaintainerMode';
 import {
-  WIDGET_LAYOUT_PROFILES,
-  DEFAULT_WIDGET_LAYOUT_PROFILE_ID,
-  ACTIVE_WIDGET_LAYOUT_PROFILE_STORAGE_KEY,
-  resolveProfileId,
-  getWidgetLayoutStorageKey,
-} from "./widget-layout-profile-utils";
+  loadWidgetLayoutForProfile,
+  readActiveWidgetLayoutProfileId,
+  saveWidgetLayoutForProfile,
+  writeActiveWidgetLayoutProfileId,
+} from './widget-layout-profile-utils';
 
 // Widget types and interfaces
 interface Widget {
@@ -89,36 +82,34 @@ export default function WidgetLayoutEditor() {
   const [draggedWidget, setDraggedWidget] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [showWidgetPalette, setShowWidgetPalette] = useState(false);
-  const [layoutMode, setLayoutMode] = useState<"grid" | "freeform">("grid");
-  const [activeProfileId, setActiveProfileId] = useState<string>(
-    DEFAULT_WIDGET_LAYOUT_PROFILE_ID,
-  );
+  const [layoutMode, setLayoutMode] = useState<'grid' | 'freeform'>('grid');
+  const [profileId, setProfileId] = useState('default');
+  const [profileDraft, setProfileDraft] = useState('default');
   const gridRef = useRef<HTMLDivElement>(null);
 
-  const initializeDefaultLayout = useCallback((): Widget[] => {
-    return WIDGET_TEMPLATES.slice(0, 4).map((template, index) => ({
-      ...template,
-      id: `widget-${Date.now()}-${index}`,
-      position: {
-        x: (index % 3) * 2,
-        y: Math.floor(index / 3) * 2,
-      },
-    }));
-  }, []);
+  // Load saved layout on component mount / profile change
+  useEffect(() => {
+    const initializeDefaultLayout = () => {
+      const defaultWidgets: Widget[] = WIDGET_TEMPLATES.slice(0, 4).map((template, index) => ({
+        ...template,
+        id: `widget-${Date.now()}-${index}`,
+        position: {
+          x: (index % 3) * 2,
+          y: Math.floor(index / 3) * 2,
+        },
+      }));
+      return defaultWidgets;
+    };
 
-  const loadLayoutForProfile = useCallback(
-    (profileId: string) => {
-      const savedLayout = localStorage.getItem(
-        getWidgetLayoutStorageKey(profileId),
-      );
-      if (savedLayout) {
-        try {
-          const parsedLayout = JSON.parse(savedLayout);
-          setWidgets(parsedLayout);
-          return;
-        } catch (error) {
-          console.error("Failed to load saved layout:", error);
-        }
+    const loadLayout = () => {
+      const activeProfile = readActiveWidgetLayoutProfileId();
+      setProfileId(activeProfile);
+      setProfileDraft(activeProfile);
+      const parsedLayout = loadWidgetLayoutForProfile<Widget[] | null>(activeProfile, null);
+      if (parsedLayout && Array.isArray(parsedLayout)) {
+        setWidgets(parsedLayout);
+      } else {
+        setWidgets(initializeDefaultLayout());
       }
       setWidgets(initializeDefaultLayout());
     },
@@ -167,11 +158,28 @@ export default function WidgetLayoutEditor() {
   );
 
   const saveLayout = useCallback(() => {
-    localStorage.setItem(
-      getWidgetLayoutStorageKey(activeProfileId),
-      JSON.stringify(widgets),
-    );
-  }, [widgets, activeProfileId]);
+    saveWidgetLayoutForProfile(profileId, widgets);
+  }, [widgets, profileId]);
+
+  const switchProfile = useCallback(() => {
+    const nextProfile = writeActiveWidgetLayoutProfileId(profileDraft);
+    setProfileId(nextProfile);
+    setProfileDraft(nextProfile);
+    const parsedLayout = loadWidgetLayoutForProfile<Widget[] | null>(nextProfile, null);
+    if (parsedLayout && Array.isArray(parsedLayout)) {
+      setWidgets(parsedLayout);
+    } else {
+      const defaultWidgets: Widget[] = WIDGET_TEMPLATES.slice(0, 4).map((template, index) => ({
+        ...template,
+        id: `widget-${Date.now()}-${index}`,
+        position: {
+          x: (index % 3) * 2,
+          y: Math.floor(index / 3) * 2,
+        },
+      }));
+      setWidgets(defaultWidgets);
+    }
+  }, [profileDraft]);
 
   const findEmptyPosition = useCallback((): { x: number; y: number } => {
     const occupied = new Set<string>();
@@ -511,12 +519,28 @@ export default function WidgetLayoutEditor() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">
-            Widget Layout Editor
-          </h2>
-          <p className="text-gray-600">
-            Customize your dashboard layout with drag-and-drop widgets
-          </p>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-zinc-100">Widget Layout Editor</h2>
+          <p className="text-gray-600 dark:text-zinc-400">Customize your dashboard layout with drag-and-drop widgets</p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <label className="text-sm text-zinc-600 dark:text-zinc-400" htmlFor="widget-layout-profile">
+              Profile
+            </label>
+            <input
+              id="widget-layout-profile"
+              value={profileDraft}
+              onChange={(e) => setProfileDraft(e.target.value)}
+              className="rounded-md border border-zinc-300 dark:border-zinc-700 bg-[var(--bg)] px-2 py-1 text-sm"
+              placeholder="profile id"
+            />
+            <button
+              type="button"
+              onClick={switchProfile}
+              className="px-3 py-1.5 text-sm border border-zinc-300 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-900"
+            >
+              Load profile
+            </button>
+            <span className="text-xs text-zinc-500 dark:text-zinc-400">Active: {profileId}</span>
+          </div>
         </div>
         <div className="flex items-center space-x-3">
           <label className="flex items-center gap-2 text-sm text-gray-700">

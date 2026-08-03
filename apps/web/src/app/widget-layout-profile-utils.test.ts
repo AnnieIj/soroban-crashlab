@@ -1,53 +1,48 @@
-import * as assert from "node:assert/strict";
+import assert from 'node:assert/strict';
 import {
-  WIDGET_LAYOUT_PROFILES,
   DEFAULT_WIDGET_LAYOUT_PROFILE_ID,
-  isKnownProfileId,
-  resolveProfileId,
   getWidgetLayoutStorageKey,
-} from "./widget-layout-profile-utils";
+  loadWidgetLayoutForProfile,
+  normalizeProfileId,
+  readActiveWidgetLayoutProfileId,
+  saveWidgetLayoutForProfile,
+  writeActiveWidgetLayoutProfileId,
+} from './widget-layout-profile-utils';
 
-const runAssertions = () => {
-  // There should be at least a default profile, and it should be known.
-  assert.ok(WIDGET_LAYOUT_PROFILES.length > 0);
-  assert.ok(isKnownProfileId(DEFAULT_WIDGET_LAYOUT_PROFILE_ID));
+class MemoryStorage {
+  private data = new Map<string, string>();
+  getItem(key: string): string | null {
+    return this.data.has(key) ? (this.data.get(key) as string) : null;
+  }
+  setItem(key: string, value: string): void {
+    this.data.set(key, value);
+  }
+}
 
-  // Known profile ids resolve to themselves.
-  assert.equal(resolveProfileId("engineering"), "engineering");
-  assert.equal(isKnownProfileId("engineering"), true);
-
-  // Unknown / missing profile ids fall back to the default.
+function testNormalizeAndKeys(): void {
+  assert.equal(normalizeProfileId(''), DEFAULT_WIDGET_LAYOUT_PROFILE_ID);
+  assert.equal(normalizeProfileId('  Alice / Ops '), 'Alice---Ops');
   assert.equal(
-    resolveProfileId("not-a-real-profile"),
-    DEFAULT_WIDGET_LAYOUT_PROFILE_ID,
+    getWidgetLayoutStorageKey('alice'),
+    'dashboard-widget-layout:alice',
   );
-  assert.equal(resolveProfileId(null), DEFAULT_WIDGET_LAYOUT_PROFILE_ID);
-  assert.equal(resolveProfileId(undefined), DEFAULT_WIDGET_LAYOUT_PROFILE_ID);
-  assert.equal(isKnownProfileId(""), false);
-  assert.equal(isKnownProfileId(null), false);
+}
 
-  // Storage keys are namespaced per profile, and fall back safely.
-  assert.equal(
-    getWidgetLayoutStorageKey("engineering"),
-    "dashboard-widget-layout:engineering",
-  );
-  assert.equal(
-    getWidgetLayoutStorageKey("bogus"),
-    `dashboard-widget-layout:${DEFAULT_WIDGET_LAYOUT_PROFILE_ID}`,
-  );
-  assert.equal(
-    getWidgetLayoutStorageKey(undefined),
-    `dashboard-widget-layout:${DEFAULT_WIDGET_LAYOUT_PROFILE_ID}`,
-  );
+function testPersistenceRoundTrip(): void {
+  const storage = new MemoryStorage();
+  const profile = writeActiveWidgetLayoutProfileId('maintainer', storage);
+  assert.equal(profile, 'maintainer');
+  assert.equal(readActiveWidgetLayoutProfileId(storage), 'maintainer');
 
-  // Two different profiles never collide on the same storage key.
-  const keys = new Set(
-    WIDGET_LAYOUT_PROFILES.map((p) => getWidgetLayoutStorageKey(p.id)),
-  );
-  assert.equal(keys.size, WIDGET_LAYOUT_PROFILES.length);
-};
+  const layout = [{ id: 'w1', title: 'Success Rate' }];
+  saveWidgetLayoutForProfile(profile, layout, storage);
+  const loaded = loadWidgetLayoutForProfile(profile, [], storage);
+  assert.deepEqual(loaded, layout);
 
-runAssertions();
-console.log(
-  "widget-layout-profile-utils.test.ts: all structural assertions passed",
-);
+  const missing = loadWidgetLayoutForProfile('other', [{ id: 'fallback' }], storage);
+  assert.deepEqual(missing, [{ id: 'fallback' }]);
+}
+
+testNormalizeAndKeys();
+testPersistenceRoundTrip();
+console.log('widget-layout-profile-utils.test.ts: all assertions passed');

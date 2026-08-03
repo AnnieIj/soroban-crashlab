@@ -25,6 +25,12 @@ export default function CreateSavedFilterPresetsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate presets from local storage once
+    setPresets(readPresets());
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
     if (hydrated) savePresets(presets);
   }, [hydrated, presets]);
 

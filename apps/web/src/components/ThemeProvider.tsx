@@ -48,6 +48,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setMounted(true);
   }, []);
 
+  useEffect(() => {
+    // Hydrate theme from localStorage / system preference after mount.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- client-only theme hydration
+    setUserTheme(getStoredTheme());
+    setSystemPrefersDark(getSystemPrefersDark());
+    setMounted(true);
+  }, []);
+
   const theme = useMemo<Theme>(() => {
     if (userTheme) return userTheme;
     return systemPrefersDark ? 'dark' : 'light';
