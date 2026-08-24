@@ -215,9 +215,6 @@ export default function RunStatusTimeline({
         </div>
 
         {steps.map((step) => {
-          const isCompleted = step.isComplete;
-          const isActive = step.isActive;
-
           return (
             <div
               key={step.id}

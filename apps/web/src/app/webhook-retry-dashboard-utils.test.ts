@@ -76,7 +76,7 @@ const runTests = (): void => {
   assert.equal(emptyStats.successRate, 100, 'Empty success rate should default to 100%');
 
   // Test retryDeliveryItem
-  const { updatedItems, retriedItem } = retryDeliveryItem(TEST_ITEMS, 'del_1');
+  const { updatedItems: _updatedItems, retriedItem } = retryDeliveryItem(TEST_ITEMS, 'del_1');
   assert.ok(retriedItem, 'Retried item should exist');
   assert.equal(retriedItem.attempts, 3, 'Attempts should increment to 3');
   assert.equal(retriedItem.status, 'delivered', 'Retry should succeed and update status to delivered');

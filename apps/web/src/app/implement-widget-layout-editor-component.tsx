@@ -111,41 +111,10 @@ export default function WidgetLayoutEditor() {
       } else {
         setWidgets(initializeDefaultLayout());
       }
-      setWidgets(initializeDefaultLayout());
-    },
-    [initializeDefaultLayout],
-  );
+    };
 
-  // Load the persisted profile choice, then that profile's saved layout, on mount
-  useEffect(() => {
-    const storedProfileId = localStorage.getItem(
-      ACTIVE_WIDGET_LAYOUT_PROFILE_STORAGE_KEY,
-    );
-    const resolvedProfileId = resolveProfileId(storedProfileId);
-
-    // Schedule on next tick to avoid synchronous setState in effect
-    const timeoutId = setTimeout(() => {
-      setActiveProfileId(resolvedProfileId);
-      loadLayoutForProfile(resolvedProfileId);
-    }, 0);
-    return () => clearTimeout(timeoutId);
-  }, [loadLayoutForProfile]);
-
-  const switchProfile = useCallback(
-    (nextProfileId: string) => {
-      // Persist the layout for the profile we're leaving before switching.
-      localStorage.setItem(
-        getWidgetLayoutStorageKey(activeProfileId),
-        JSON.stringify(widgets),
-      );
-
-      const resolved = resolveProfileId(nextProfileId);
-      localStorage.setItem(ACTIVE_WIDGET_LAYOUT_PROFILE_STORAGE_KEY, resolved);
-      setActiveProfileId(resolved);
-      loadLayoutForProfile(resolved);
-    },
-    [activeProfileId, widgets, loadLayoutForProfile],
-  );
+    loadLayout();
+  }, []);
 
   const gridConfig: LayoutGrid = useMemo(
     () => ({
@@ -543,21 +512,6 @@ export default function WidgetLayoutEditor() {
           </div>
         </div>
         <div className="flex items-center space-x-3">
-          <label className="flex items-center gap-2 text-sm text-gray-700">
-            <span className="sr-only">Layout profile</span>
-            <select
-              value={activeProfileId}
-              onChange={(e) => switchProfile(e.target.value)}
-              aria-label="Layout profile"
-              className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {WIDGET_LAYOUT_PROFILES.map((profile) => (
-                <option key={profile.id} value={profile.id}>
-                  {profile.label}
-                </option>
-              ))}
-            </select>
-          </label>
           <button
             onClick={() =>
               setLayoutMode(layoutMode === "grid" ? "freeform" : "grid")

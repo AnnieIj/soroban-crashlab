@@ -55,7 +55,10 @@ export default function WebhookRetryDashboardComponent() {
   }, [statusFilter, searchQuery]);
 
   useEffect(() => {
-    fetchHistory();
+    const timeoutId = setTimeout(() => {
+      fetchHistory();
+    }, 0);
+    return () => clearTimeout(timeoutId);
   }, [fetchHistory]);
 
   // Auto-refresh interval if enabled

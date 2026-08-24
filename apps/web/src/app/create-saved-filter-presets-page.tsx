@@ -13,7 +13,7 @@ import {
 
 export default function CreateSavedFilterPresetsPage() {
   const [presets, setPresets] = useState<FilterPreset[]>(() => (typeof window === 'undefined' ? [] : readPresets()));
-  const hydrated = true;
+  const [hydrated, setHydrated] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newName, setNewName] = useState('');

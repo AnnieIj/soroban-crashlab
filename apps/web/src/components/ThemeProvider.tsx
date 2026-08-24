@@ -1,8 +1,13 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  resolveTheme,
+  parseStoredTheme,
+  nextTheme,
+  type Theme,
+} from '../app/theme-provider-utils';
 
-type Theme = 'light' | 'dark';
 const STORAGE_KEY = 'crashlab:theme';
 
 interface ThemeContextType {
@@ -20,7 +25,7 @@ const ThemeContext = createContext<ThemeContextType>({
 function getStoredTheme(): Theme | null {
   if (typeof window === 'undefined') return null;
   try {
-    return parseTheme(localStorage.getItem(STORAGE_KEY));
+    return parseStoredTheme(localStorage.getItem(STORAGE_KEY));
   } catch {
     return null;
   }
@@ -48,18 +53,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setMounted(true);
   }, []);
 
-  useEffect(() => {
-    // Hydrate theme from localStorage / system preference after mount.
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- client-only theme hydration
-    setUserTheme(getStoredTheme());
-    setSystemPrefersDark(getSystemPrefersDark());
-    setMounted(true);
-  }, []);
-
-  const theme = useMemo<Theme>(() => {
-    if (userTheme) return userTheme;
-    return systemPrefersDark ? 'dark' : 'light';
-  }, [systemPrefersDark, userTheme]);
+  const theme = useMemo<Theme>(
+    () => resolveTheme(userTheme, systemPrefersDark),
+    [systemPrefersDark, userTheme],
+  );
 
   // Keep the effective theme in sync when the OS-level color scheme changes.
   useEffect(() => {
@@ -82,23 +79,23 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     if (typeof window === 'undefined') return;
     const onStorage = (event: StorageEvent) => {
       if (event.key !== STORAGE_KEY) return;
-      setUserTheme(parseTheme(event.newValue));
+      setUserTheme(parseStoredTheme(event.newValue));
     };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
   const toggle = useCallback(() => {
-    setUserTheme((prev) => {
-      const next = nextToggledTheme(prev, systemPrefersDark);
-      try {
-        localStorage.setItem(STORAGE_KEY, next);
-      } catch {
-        /* ignore */
-      }
-      return next;
-    });
-  }, [systemPrefersDark]);
+      setUserTheme((prev) => {
+        const next = nextTheme(prev ?? theme);
+        try {
+          localStorage.setItem(STORAGE_KEY, next);
+        } catch {
+          /* ignore */
+        }
+        return next;
+      });
+  }, [theme]);
 
   return (
     <ThemeContext.Provider value={{ theme, toggle, mounted }}>
