@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { DEFAULT_CHANNELS, loadChannelPreferences, saveChannelPreferences, mockNotifications, type NotificationPreference } from '../notification-preferences-utils';
+import { ListState } from '../../components/ListState';
+import { GenericPageSkeleton } from '../../components/LoadingSkeleton';
 
 export default function NotificationCenterPage() {
   const [notifications, setNotifications] = useState(mockNotifications);
@@ -55,14 +57,6 @@ export default function NotificationCenterPage() {
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 py-8 px-4">
       <div className="max-w-4xl mx-auto">
@@ -97,21 +91,23 @@ export default function NotificationCenterPage() {
         </div>
 
         {activeTab === 'inbox' && (
-          <div className="space-y-4">
-            {unreadCount > 0 && (
-              <button
-                onClick={handleMarkAllAsRead}
-                className="text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium"
-              >
-                Mark all as read
-              </button>
-            )}
-            {notifications.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-zinc-500 dark:text-zinc-400">No notifications yet</p>
-              </div>
-            ) : (
-              notifications.map(notification => (
+          <ListState
+            {...(loading
+              ? { state: 'loading', skeleton: <GenericPageSkeleton variant="list" rows={5} /> }
+              : notifications.length === 0
+              ? { state: 'empty', message: 'No notifications yet' }
+              : { state: 'success' })}
+          >
+            <div className="space-y-4">
+              {unreadCount > 0 && (
+                <button
+                  onClick={handleMarkAllAsRead}
+                  className="text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                >
+                  Mark all as read
+                </button>
+              )}
+              {notifications.map(notification => (
                 <div
                   key={notification.id}
                   onClick={() => handleMarkAsRead(notification.id)}
@@ -140,13 +136,18 @@ export default function NotificationCenterPage() {
                     )}
                   </div>
                 </div>
-              ))
-            )}
-          </div>
+              ))}
+            </div>
+          </ListState>
         )}
 
         {activeTab === 'preferences' && (
-          <div className="space-y-6">
+          <ListState
+            {...(loading
+              ? { state: 'loading', skeleton: <GenericPageSkeleton variant="cards" rows={3} /> }
+              : { state: 'success' })}
+          >
+            <div className="space-y-6">
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
               Customize your notification preferences for each channel
             </p>
@@ -222,7 +223,8 @@ export default function NotificationCenterPage() {
                 </div>
               );
             })}
-          </div>
+            </div>
+          </ListState>
         )}
       </div>
     </div>

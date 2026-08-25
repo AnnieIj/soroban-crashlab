@@ -44,42 +44,7 @@ function formatTimestamp(ts: number): string {
   return new Date(ts).toISOString().replace('T', ' ').slice(0, 23) + 'Z';
 }
 
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
-function LoadingSkeleton() {
-  return (
-    <div role="status" aria-label="Loading logs" className="space-y-2 animate-pulse">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="skeleton h-8 w-full" />
-      ))}
-      <span className="sr-only">Loading…</span>
-    </div>
-  );
-}
-
-function ErrorState({ onRetry }: { onRetry: () => void }) {
-  return (
-    <div role="alert" className="flex flex-col items-center gap-4 py-16 text-center">
-      <p className="text-meta">Failed to load logs. Check your connection and try again.</p>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="btn-primary text-xs sm:text-sm"
-      >
-        Retry
-      </button>
-    </div>
-  );
-}
-
-function EmptyState() {
-  return (
-    <p className="text-center py-16 text-meta">
-      No log entries match the current filters.
-    </p>
-  );
-}
+import { ListState } from '../../components/ListState';
 
 // ---------------------------------------------------------------------------
 // Main page
@@ -187,72 +152,66 @@ export default function LogViewerPage() {
       >
         <h2 id="log-table-heading" className="sr-only">Log entries</h2>
 
-        {dataState === 'loading' && (
-          <div className="card-padding">
-            <LoadingSkeleton />
+        <ListState
+          {...(dataState === 'loading'
+            ? { state: 'loading' }
+            : dataState === 'error'
+            ? { state: 'error', message: 'Failed to load logs. Check your connection and try again.', onRetry: handleRetry }
+            : visible.length === 0
+            ? { state: 'empty', message: 'No log entries match the current filters.' }
+            : { state: 'success' })}
+        >
+          {/* Status bar */}
+          <div className="px-4 py-2" style={{ background: 'var(--bg)', borderBottom: '1px solid var(--border-color)' }}>
+            <span className="text-meta">Showing {visible.length} of {entries.length} entries</span>
           </div>
-        )}
 
-        {dataState === 'error' && (
-          <ErrorState onRetry={handleRetry} />
-        )}
-
-        {dataState === 'success' && visible.length === 0 && <EmptyState />}
-
-        {dataState === 'success' && visible.length > 0 && (
-          <>
-            {/* Status bar */}
-            <div className="px-4 py-2" style={{ background: 'var(--bg)', borderBottom: '1px solid var(--border-color)' }}>
-              <span className="text-meta">Showing {visible.length} of {entries.length} entries</span>
-            </div>
-
-            {/* Log table */}
-            <div className="table-responsive">
-              <table
-                className="data-table w-full text-xs sm:text-sm font-mono"
-                aria-label="Log entries"
-              >
-                <thead>
-                  <tr>
-                    <th scope="col" className="w-24 sm:w-52">Timestamp</th>
-                    <th scope="col" className="w-14 sm:w-20">Level</th>
-                    <th scope="col" className="hidden sm:table-cell w-32">Source</th>
-                    <th scope="col">Message</th>
+          {/* Log table */}
+          <div className="table-responsive">
+            <table
+              className="data-table w-full text-xs sm:text-sm font-mono"
+              aria-label="Log entries"
+            >
+              <thead>
+                <tr>
+                  <th scope="col" className="w-24 sm:w-52">Timestamp</th>
+                  <th scope="col" className="w-14 sm:w-20">Level</th>
+                  <th scope="col" className="hidden sm:table-cell w-32">Source</th>
+                  <th scope="col">Message</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map((entry, index) => (
+                  <tr
+                    key={entry.id}
+                    id={logEntryAnchorId(entry)}
+                    {...getRowProps(index)}
+                    aria-label={`Log entry ${entry.level} from ${entry.source}`}
+                  >
+                    <td className="text-meta whitespace-nowrap text-[10px] sm:text-xs">
+                      <a
+                        href={logEntryAnchorHref(entry)}
+                        className="link text-[10px] sm:text-xs"
+                        aria-label={`Anchor for log entry at ${formatTimestamp(entry.timestamp)}`}
+                      >
+                        {formatTimestamp(entry.timestamp)}
+                      </a>
+                    </td>
+                    <td>
+                      <LogSeverityBadge level={entry.level} />
+                    </td>
+                    <td className="hidden sm:table-cell" style={{ color: '#0A66C2' }}>
+                      {entry.source}
+                    </td>
+                    <td className="break-all text-[11px] sm:text-sm">
+                      {entry.message}
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {visible.map((entry, index) => (
-                    <tr
-                      key={entry.id}
-                      id={logEntryAnchorId(entry)}
-                      {...getRowProps(index)}
-                      aria-label={`Log entry ${entry.level} from ${entry.source}`}
-                    >
-                      <td className="text-meta whitespace-nowrap text-[10px] sm:text-xs">
-                        <a
-                          href={logEntryAnchorHref(entry)}
-                          className="link text-[10px] sm:text-xs"
-                          aria-label={`Anchor for log entry at ${formatTimestamp(entry.timestamp)}`}
-                        >
-                          {formatTimestamp(entry.timestamp)}
-                        </a>
-                      </td>
-                      <td>
-                        <LogSeverityBadge level={entry.level} />
-                      </td>
-                      <td className="hidden sm:table-cell" style={{ color: '#0A66C2' }}>
-                        {entry.source}
-                      </td>
-                      <td className="break-all text-[11px] sm:text-sm">
-                        {entry.message}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </ListState>
       </section>
     </div>
   );
