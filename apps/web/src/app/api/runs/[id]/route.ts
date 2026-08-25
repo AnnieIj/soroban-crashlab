@@ -4,6 +4,7 @@ import type { FuzzingRun } from '@/app/types';
 import { withRouteErrorHandling } from '@/lib/route-handler';
 import { errorResponse, status } from '@/lib/api-response-utils';
 import { withFixtureCaching } from '@/lib/fixture-caching';
+import { API_FETCH_TIMEOUT_MS } from '@/lib/timeouts';
 
 export function findRunById(id: string): FuzzingRun | undefined {
   return buildMockRuns().find((r) => r.id === id);
@@ -23,10 +24,10 @@ export const GET = withRouteErrorHandling(
     if (runsApiUrl) {
       const upstream = await fetch(
         `${runsApiUrl}/runs/${encodeURIComponent(id)}`,
-        {
+{
           headers: { Accept: 'application/json' },
           cache: 'no-store',
-          signal: AbortSignal.timeout(10_000),
+          signal: AbortSignal.timeout(API_FETCH_TIMEOUT_MS),
         },
       );
       if (upstream.status === 404) {
