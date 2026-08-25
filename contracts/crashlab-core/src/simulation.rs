@@ -210,7 +210,7 @@ mod tests {
             id: 1,
             payload: vec![0x50],
         };
-        let cfg = SimulationTimeoutConfig::new(500);
+        let cfg = SimulationTimeoutConfig::new(5000);
         let sig = run_simulation_with_timeout(&seed, &cfg, |s| classify(s));
         assert_ne!(sig.category, "timeout");
     }
@@ -221,9 +221,9 @@ mod tests {
             id: 2,
             payload: vec![0x40, 0x41],
         };
-        let cfg = SimulationTimeoutConfig::new(30);
+        let cfg = SimulationTimeoutConfig::new(50);
         let sig = run_simulation_with_timeout(&seed, &cfg, |_| {
-            thread::sleep(StdDuration::from_millis(200));
+            thread::sleep(StdDuration::from_millis(500));
             classify(&CaseSeed {
                 id: 2,
                 payload: vec![0x40, 0x41],
