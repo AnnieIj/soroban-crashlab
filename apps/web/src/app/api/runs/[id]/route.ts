@@ -3,6 +3,7 @@ import { buildMockRuns } from '@/app/mockRuns';
 import type { FuzzingRun } from '@/app/types';
 import { withRouteErrorHandling } from '@/lib/route-handler';
 import { errorResponse, status } from '@/lib/api-response-utils';
+import { withFixtureCaching } from '@/lib/fixture-caching';
 
 export function findRunById(id: string): FuzzingRun | undefined {
   return buildMockRuns().find((r) => r.id === id);
@@ -10,7 +11,7 @@ export function findRunById(id: string): FuzzingRun | undefined {
 
 export const GET = withRouteErrorHandling(
   'GET /api/runs/[id]',
-  async (_request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
+  async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
     const { id } = await params;
 
     if (!id) {
@@ -42,6 +43,6 @@ export const GET = withRouteErrorHandling(
     if (!run) {
       return errorResponse('Run not found', status.notFound);
     }
-    return NextResponse.json(run, { headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' } });
+    return withFixtureCaching(request, run);
   },
 );
