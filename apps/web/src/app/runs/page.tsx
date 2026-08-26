@@ -15,6 +15,7 @@ import {
 import { FuzzingRun } from '../types';
 import { fetchRuns } from '../../lib/api-client';
 import { LoadingSpinner } from '../../components/LoadingSkeleton';
+import { ListState } from '../../components/ListState';
 
 const BulkActionsForRuns = dynamic(() => import('../add-bulk-actions-for-runs'), {
   loading: () => <LoadingSpinner />,
@@ -119,56 +120,31 @@ export default function RunsPage() {
         </div>
       </div>
 
-      {dataState === 'loading' && (
-        <div role="status" aria-live="polite" className="card card-padding">
-          <div className="space-y-3 sm:space-y-4">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="flex gap-2 sm:gap-4">
-                <div className="skeleton h-4 w-16 sm:w-20" />
-                <div className="skeleton h-4 w-12 sm:w-16" />
-                <div className="skeleton h-4 w-10 sm:w-12" />
-                <div className="skeleton h-4 w-12 sm:w-16" />
-                <div className="skeleton h-4 w-16 sm:w-24" />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {dataState === 'error' && (
-        <div role="alert" className="card card-padding text-center py-8 sm:py-12" style={{ borderLeft: '4px solid #CC1016' }}>
-          <span className="text-2xl sm:text-3xl mb-2 sm:mb-3 block">⚠</span>
-          <p className="font-semibold" style={{ color: '#CC1016' }}>Failed to load fuzzing runs</p>
-          <p className="text-meta mt-1 mb-3 sm:mb-4">Check your connection and try again.</p>
-          <button
-            type="button"
-            onClick={() => setFetchAttempt((n) => n + 1)}
-            className="btn-primary text-xs sm:text-sm"
-          >
-            Retry
-          </button>
-        </div>
-      )}
-
-      {dataState === 'success' && (
-        <>
-          <BulkActionsForRuns
-            selectedRuns={selectedRuns}
-            onAction={handleBulkAction}
-            onClearSelection={() => setSelectedRunIds(new Set())}
-          />
-          <VirtualizedRunTable
-            runs={runs}
-            viewportHeight={600}
-            visibleColumns={RUN_TABLE_COLUMNS}
-            onSelectRun={goToRun}
-            onViewReport={(run) => goToRun(run.id)}
-            selectedRunIds={selectedRunIds}
-            onToggleRunSelection={handleToggleRunSelection}
-            onToggleAllRunsSelection={handleToggleAllRunsSelection}
-          />
-        </>
-      )}
+      <ListState
+        {...(dataState === 'loading'
+          ? { state: 'loading' }
+          : dataState === 'error'
+          ? { state: 'error', message: 'Failed to load fuzzing runs', onRetry: () => setFetchAttempt((n) => n + 1) }
+          : runs.length === 0
+          ? { state: 'empty', message: 'No fuzzing runs found.' }
+          : { state: 'success' })}
+      >
+        <BulkActionsForRuns
+          selectedRuns={selectedRuns}
+          onAction={handleBulkAction}
+          onClearSelection={() => setSelectedRunIds(new Set())}
+        />
+        <VirtualizedRunTable
+          runs={runs}
+          viewportHeight={600}
+          visibleColumns={RUN_TABLE_COLUMNS}
+          onSelectRun={goToRun}
+          onViewReport={(run) => goToRun(run.id)}
+          selectedRunIds={selectedRunIds}
+          onToggleRunSelection={handleToggleRunSelection}
+          onToggleAllRunsSelection={handleToggleAllRunsSelection}
+        />
+      </ListState>
     </div>
   );
 }

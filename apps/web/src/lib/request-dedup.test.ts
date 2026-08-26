@@ -140,14 +140,22 @@ describe('dedupedFetchJson', () => {
       expect(fetchMock).toHaveBeenCalledTimes(2);
     });
 
-    it('is a coalescer, not a cache: a settled request is refetched', async () => {
+    /*
+     * This assertion was inverted by #1409. It previously read "is a
+     * coalescer, not a cache: a settled request is refetched" and expected two
+     * fetches here. A settled entry now serves a 30s grace window so remount
+     * bursts reuse the outcome, which is exactly what the second call is. The
+     * post-grace half of the contract is asserted in the grace-window block
+     * below, where advancing past the window does produce a second fetch.
+     */
+    it('serves a settled entry to an immediate repeat call without refetching', async () => {
       const { dedupedFetchJson } = await loadModule();
       fetchMock.mockResolvedValue(jsonResponse({ total: 1 }));
 
       await dedupedFetchJson('/api/runs');
       await dedupedFetchJson('/api/runs');
 
-      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
     it('shares a rejection with every concurrent caller', async () => {
@@ -282,6 +290,164 @@ describe('dedupedFetchJson', () => {
 
       expect(signalOfCall(fetchMock).aborted).toBe(true);
       void pending.catch(() => {});
+    });
+  });
+
+  /**
+   * Settled-entry grace window (#1409).
+   *
+   * These run on a fake clock so the 30s window is exercised without the suite
+   * actually waiting 30s. `AbortSignal.timeout` uses Node-internal timers that
+   * `vi.useFakeTimers` does not intercept, and every request here settles
+   * before the clock is advanced, so the two never interact.
+   */
+  describe('settled-entry grace window', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('serves a late awaiter inside the window from the settled entry', async () => {
+      const { dedupedFetchJson, SETTLED_GRACE_MS } = await loadModule();
+      fetchMock.mockResolvedValue(jsonResponse({ total: 4 }));
+
+      await dedupedFetchJson('/api/runs');
+      vi.advanceTimersByTime(SETTLED_GRACE_MS - 1);
+
+      await expect(dedupedFetchJson('/api/runs')).resolves.toEqual({ total: 4 });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('refetches once the window has elapsed', async () => {
+      const { dedupedFetchJson, SETTLED_GRACE_MS } = await loadModule();
+      fetchMock.mockResolvedValue(jsonResponse({ total: 4 }));
+
+      await dedupedFetchJson('/api/runs');
+      vi.advanceTimersByTime(SETTLED_GRACE_MS);
+
+      await dedupedFetchJson('/api/runs');
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('evicts the entry when the window expires', async () => {
+      const { dedupedFetchJson, __dedupeEntryCount, SETTLED_GRACE_MS } = await loadModule();
+      fetchMock.mockResolvedValue(jsonResponse({}));
+
+      await dedupedFetchJson('/api/runs');
+      expect(__dedupeEntryCount()).toBe(1);
+
+      vi.advanceTimersByTime(SETTLED_GRACE_MS);
+      expect(__dedupeEntryCount()).toBe(0);
+    });
+
+    it('does not extend the window when a cache hit lands inside it', async () => {
+      const { dedupedFetchJson, __dedupeEntryCount, SETTLED_GRACE_MS } = await loadModule();
+      fetchMock.mockResolvedValue(jsonResponse({}));
+
+      await dedupedFetchJson('/api/runs');
+      vi.advanceTimersByTime(SETTLED_GRACE_MS - 1_000);
+      await dedupedFetchJson('/api/runs');
+
+      // The window runs from settlement, not from last access — a hot key must
+      // still age out rather than being kept alive by traffic.
+      vi.advanceTimersByTime(1_000);
+      expect(__dedupeEntryCount()).toBe(0);
+    });
+
+    it('never holds a rejected request for the grace window', async () => {
+      const { dedupedFetchJson, __dedupeEntryCount } = await loadModule();
+      fetchMock.mockRejectedValue(new Error('network down'));
+
+      await expect(dedupedFetchJson('/api/runs')).rejects.toThrow('network down');
+
+      // Evicted immediately, with no timer pending: a transient blip must not
+      // be sticky for 30s.
+      expect(__dedupeEntryCount()).toBe(0);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('unrefs the eviction timer so a pending window cannot hold Node open', async () => {
+      const { dedupedFetchJson } = await loadModule();
+      fetchMock.mockResolvedValue(jsonResponse({}));
+      const unref = vi.fn();
+      const setTimeoutSpy = vi
+        .spyOn(globalThis, 'setTimeout')
+        .mockReturnValue({ unref } as unknown as ReturnType<typeof setTimeout>);
+
+      await dedupedFetchJson('/api/runs');
+
+      expect(setTimeoutSpy).toHaveBeenCalledTimes(1);
+      expect(unref).toHaveBeenCalledTimes(1);
+      setTimeoutSpy.mockRestore();
+    });
+
+    it('leaves no timer behind once every window has expired', async () => {
+      const { dedupedFetchJson, SETTLED_GRACE_MS } = await loadModule();
+      fetchMock.mockResolvedValue(jsonResponse({}));
+
+      await Promise.all([
+        dedupedFetchJson('/api/runs?page=1'),
+        dedupedFetchJson('/api/runs?page=2'),
+        dedupedFetchJson('/api/runs?page=3'),
+      ]);
+      expect(vi.getTimerCount()).toBe(3);
+
+      vi.advanceTimersByTime(SETTLED_GRACE_MS);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+  });
+
+  /**
+   * The retention regression this bounds: filter combinations multiply query
+   * strings, so a long session issues thousands of distinct keys.
+   */
+  describe('bounded retention under load', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('collapses to zero after 5k unique queries age out', async () => {
+      const { dedupedFetchJson, __dedupeEntryCount, SETTLED_GRACE_MS } = await loadModule();
+      fetchMock.mockResolvedValue(jsonResponse({}));
+
+      const QUERIES = 5_000;
+      await Promise.all(
+        Array.from({ length: QUERIES }, (_, i) => dedupedFetchJson(`/api/runs?f=${i}`)),
+      );
+
+      // Peak: every key is inside its grace window.
+      expect(__dedupeEntryCount()).toBe(QUERIES);
+      expect(fetchMock).toHaveBeenCalledTimes(QUERIES);
+
+      vi.advanceTimersByTime(SETTLED_GRACE_MS);
+
+      expect(__dedupeEntryCount()).toBe(0);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('keeps retention flat when the same keys recur across windows', async () => {
+      const { dedupedFetchJson, __dedupeEntryCount, SETTLED_GRACE_MS } = await loadModule();
+      fetchMock.mockResolvedValue(jsonResponse({}));
+
+      // Ten passes over the same 100 keys: without eviction this would grow
+      // without bound, since each pass re-registers every key.
+      for (let pass = 0; pass < 10; pass += 1) {
+        await Promise.all(
+          Array.from({ length: 100 }, (_, i) => dedupedFetchJson(`/api/runs?f=${i}`)),
+        );
+        expect(__dedupeEntryCount()).toBe(100);
+        vi.advanceTimersByTime(SETTLED_GRACE_MS);
+        expect(__dedupeEntryCount()).toBe(0);
+      }
+
+      expect(fetchMock).toHaveBeenCalledTimes(1_000);
     });
   });
 });
