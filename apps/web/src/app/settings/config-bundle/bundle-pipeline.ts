@@ -6,6 +6,7 @@
  * leaving storage half-updated.
  */
 
+import { recordAuditEvent } from '../../../lib/audit/audit-sink';
 import { diffBundle, type BundleDiff } from './bundle-diff';
 import type { ConfigBundleGateway } from './bundle-gateway';
 import { migrateBundle } from './bundle-migrations';
@@ -68,6 +69,15 @@ export function commitImport(gateway: ConfigBundleGateway, bundle: ConfigBundle)
 
   try {
     gateway.write(validation.bundle);
+    recordAuditEvent({
+      action: 'config.bundle.import',
+      target: `bundle v${validation.bundle.version}`,
+      metadata: {
+        alertRules: validation.bundle.sections.alertRules.length,
+        channels: validation.bundle.sections.channels.length,
+        filterPresets: validation.bundle.sections.filterPresets.length,
+      },
+    });
     return { ok: true };
   } catch (error) {
     return {

@@ -10,6 +10,7 @@
  * outbound request stays with the delivery worker.
  */
 
+import { recordAuditEvent } from './audit/audit-sink';
 import type { WebhookDeliveryRequest } from './webhook-delivery-worker';
 
 /** Retention policy. Pinned so the sweep and its test cannot drift apart. */
@@ -199,7 +200,14 @@ export class DeadLetterQueue {
       this.now().getTime(),
       this.retentionMs,
     );
-    if (evicted.length > 0) this.gateway.save(kept);
+    if (evicted.length > 0) {
+      this.gateway.save(kept);
+      recordAuditEvent({
+        action: 'dlq.purge',
+        target: 'webhook-dead-letter-queue',
+        metadata: { evictedCount: evicted.length, retentionMs: this.retentionMs },
+      });
+    }
     return evicted.length;
   }
 
@@ -234,6 +242,11 @@ export class DeadLetterQueue {
 
       if (outcome.ok) {
         this.gateway.save(this.gateway.load().filter((candidate) => candidate.id !== entryId));
+        recordAuditEvent({
+          action: 'dlq.replay',
+          target: entry.endpoint,
+          metadata: { entryId, attempt, eventType: entry.eventType },
+        });
         return { status: 'replayed', entryId, idempotencyKey };
       }
 

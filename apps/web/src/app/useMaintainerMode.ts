@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { recordAuditEvent } from '../lib/audit/audit-sink';
 
 const STORAGE_KEY = 'crashlab:maintainer-mode';
 
@@ -67,6 +68,7 @@ export function useMaintainerMode(): {
           console.warn('localStorage quota exceeded, maintainer mode will not persist');
         }
       }
+      recordAuditEvent({ action: 'rbac.change', target: 'maintainer-mode', metadata: { enabled: next } });
       window.dispatchEvent(new Event('maintainer-mode-change'));
       return next;
     });
