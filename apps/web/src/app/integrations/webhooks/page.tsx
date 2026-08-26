@@ -18,12 +18,20 @@ export default function WebhooksPage() {
           <h2 className="text-sm font-bold text-purple-900 dark:text-purple-200">Webhook Delivery & Retry Dashboard</h2>
           <p className="text-xs text-purple-700 dark:text-purple-300">View real-time delivery logs, inspect failure payloads, and trigger manual retries.</p>
         </div>
-        <Link
-          href="/integrations/webhooks/retry-dashboard"
-          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-xs transition"
-        >
-          Open Retry Dashboard →
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/integrations/webhooks/retry-dashboard"
+            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-xs transition"
+          >
+            Open Retry Dashboard →
+          </Link>
+          <Link
+            href="/integrations/webhooks/dead-letter-queue"
+            className="px-4 py-2 border border-purple-300 dark:border-purple-800 text-purple-700 dark:text-purple-200 font-bold text-xs rounded-xl transition hover:bg-purple-100 dark:hover:bg-purple-900/40"
+          >
+            Dead-letter Queue →
+          </Link>
+        </div>
       </div>
       <IntegrateWebhookManagerForRunEvents />
     </div>

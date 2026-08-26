@@ -14,6 +14,7 @@ import RunSequenceDiagram from './RunSequenceDiagram';
 import { summarizeCallSequence } from './run-sequence-diagram-utils';
 import AddRunReplayHistoryWithTimestamps from '../../add-run-replay-history-with-timestamps';
 import RunMetadataEditorWrapper from './RunMetadataEditorWrapper';
+import RunAnnotationThreads from './annotation-threads/RunAnnotationThreads';
 
 export const dynamic = 'force-dynamic';
 
@@ -177,6 +178,8 @@ export default async function RunDetailPage({ params }: RunDetailPageProps) {
                 <div className="mt-6">
                     <AddRunReplayHistoryWithTimestamps sourceRunId={run.id} />
                 </div>
+
+                <RunAnnotationThreads runId={run.id} />
             </div>
         </div>
     );
