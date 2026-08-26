@@ -13,6 +13,7 @@ import {
   filterDeliveryItems,
 } from '../../../webhook-retry-dashboard-utils';
 import { MOCK_WEBHOOK_DELIVERY_HISTORY } from '../../../../fixtures/webhook-delivery-history';
+import { ListState } from '../../../../components/ListState';
 
 export default function WebhookRetryDashboardComponent() {
   const [items, setItems] = useState<WebhookDeliveryHistoryItem[]>([]);
@@ -162,21 +163,6 @@ export default function WebhookRetryDashboardComponent() {
         </div>
       </div>
 
-      {/* Error Banner */}
-      {error && (
-        <div className="p-4 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 rounded-2xl flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="text-rose-600 dark:text-rose-400 font-bold">⚠️ Error:</span>
-            <p className="text-sm text-rose-700 dark:text-rose-300 font-medium">{error}</p>
-          </div>
-          <button
-            onClick={fetchHistory}
-            className="text-xs font-bold text-rose-600 dark:text-rose-400 hover:underline"
-          >
-            Try Again
-          </button>
-        </div>
-      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -328,53 +314,37 @@ export default function WebhookRetryDashboardComponent() {
       </div>
 
       {/* Main Delivery History Table */}
-      <div className="card overflow-hidden bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
-        <div className="table-responsive">
-          <table className="data-table w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-zinc-50 dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800 text-xs font-semibold text-zinc-500 dark:text-zinc-400">
-                <th className="py-3 px-4">Status</th>
-                <th className="py-3 px-4">Delivery ID & Event</th>
-                <th className="py-3 px-4">Endpoint URL</th>
-                <th className="py-3 px-4">HTTP Status</th>
-                <th className="py-3 px-4">Attempts</th>
-                <th className="py-3 px-4">Timestamp</th>
-                <th className="py-3 px-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800 text-sm">
-              {isLoading ? (
-                Array.from({ length: 4 }).map((_, idx) => (
-                  <tr key={idx}>
-                    <td className="p-4"><div className="h-6 w-20 skeleton" /></td>
-                    <td className="p-4"><div className="h-6 w-32 skeleton" /></td>
-                    <td className="p-4"><div className="h-6 w-48 skeleton" /></td>
-                    <td className="p-4"><div className="h-6 w-16 skeleton" /></td>
-                    <td className="p-4"><div className="h-6 w-12 skeleton" /></td>
-                    <td className="p-4"><div className="h-6 w-24 skeleton" /></td>
-                    <td className="p-4"><div className="h-6 w-20 skeleton ml-auto" /></td>
-                  </tr>
-                ))
-              ) : items.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="py-12 px-4 text-center">
-                    <div className="flex flex-col items-center justify-center space-y-3">
-                      <div className="p-4 bg-zinc-100 dark:bg-zinc-800 rounded-full text-zinc-400">
-                        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                      </div>
-                      <p className="font-bold text-zinc-700 dark:text-zinc-300">No Webhook Deliveries Found</p>
-                      <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-sm">
-                        {searchQuery || statusFilter !== 'all'
-                          ? 'No delivery history records match your search or filter criteria. Try clearing filters.'
-                          : 'No event webhooks have been triggered yet.'}
-                      </p>
-                    </div>
-                  </td>
+      <ListState
+        {...(isLoading
+          ? { state: 'loading' }
+          : error
+          ? { state: 'error', message: error, onRetry: fetchHistory }
+          : items.length === 0
+          ? {
+              state: 'empty',
+              message:
+                searchQuery || statusFilter !== 'all'
+                  ? 'No delivery history records match your search or filter criteria. Try clearing filters.'
+                  : 'No event webhooks have been triggered yet.',
+            }
+          : { state: 'success' })}
+      >
+        <div className="card overflow-hidden bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
+          <div className="table-responsive">
+            <table className="data-table w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-zinc-50 dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800 text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4">Delivery ID & Event</th>
+                  <th className="py-3 px-4">Endpoint URL</th>
+                  <th className="py-3 px-4">HTTP Status</th>
+                  <th className="py-3 px-4">Attempts</th>
+                  <th className="py-3 px-4">Timestamp</th>
+                  <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
-              ) : (
-                items.map((item) => (
+              </thead>
+              <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800 text-sm">
+                {items.map((item) => (
                   <tr
                     key={item.id}
                     className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors"
@@ -464,12 +434,12 @@ export default function WebhookRetryDashboardComponent() {
                       </div>
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      </ListState>
 
       {/* Payload Inspector Modal / Drawer */}
       {selectedPayloadItem && (
