@@ -1,5 +1,5 @@
 name: "Web Setup"
-description: "Checkout, install pnpm/Node, and install dependencies for apps/web"
+description: "Install pnpm/Node and project dependencies for apps/web"
 
 inputs:
   node-version:
@@ -9,8 +9,6 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - uses: actions/checkout@v4
-
     - uses: pnpm/action-setup@v4
 
     - uses: actions/setup-node@v4

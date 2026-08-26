@@ -12,6 +12,7 @@ jobs:
       run:
         working-directory: apps/web
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/web-setup
       - run: pnpm run lint
 
@@ -21,6 +22,7 @@ jobs:
       run:
         working-directory: apps/web
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/web-setup
       - run: pnpm run test
 
@@ -30,6 +32,7 @@ jobs:
       run:
         working-directory: apps/web
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/web-setup
       - run: pnpm run build
 
@@ -96,6 +99,7 @@ jobs:
       run:
         working-directory: apps/web
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/web-setup
 
       # Cache the Playwright browser binaries so repeated runs don't
