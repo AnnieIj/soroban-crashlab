@@ -1,0 +1,25 @@
+name: "Web Setup"
+description: "Checkout, install pnpm/Node, and install dependencies for apps/web"
+
+inputs:
+  node-version:
+    description: "Node.js version"
+    default: "22"
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/checkout@v4
+
+    - uses: pnpm/action-setup@v4
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: pnpm
+        cache-dependency-path: apps/web/pnpm-lock.yaml
+
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile
+      working-directory: apps/web

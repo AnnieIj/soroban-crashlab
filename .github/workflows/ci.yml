@@ -6,22 +6,31 @@ on:
     branches: [main]
 
 jobs:
-  web:
+  web-lint:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     defaults:
       run:
         working-directory: apps/web
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: apps/web/pnpm-lock.yaml
-      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/web-setup
       - run: pnpm run lint
+
+  web-unit:
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: ./.github/actions/web-setup
       - run: pnpm run test
+
+  web-build:
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: ./.github/actions/web-setup
       - run: pnpm run build
 
   core:
@@ -81,24 +90,13 @@ jobs:
       - run: bash -n scripts/contracts/build-soroban-example.sh
 
   e2e:
-    needs: [web]
+    needs: [web-lint, web-unit, web-build]
     runs-on: blacksmith-4vcpu-ubuntu-2404
     defaults:
       run:
         working-directory: apps/web
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: apps/web/pnpm-lock.yaml
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/web-setup
 
       # Cache the Playwright browser binaries so repeated runs don't
       # re-download ~300 MB of Chromium on every job.
@@ -150,7 +148,7 @@ jobs:
           retention-days: 7
 
   regression:
-    needs: [core, web, soroban-example]
+    needs: [core, web-lint, web-unit, web-build, soroban-example]
     runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     defaults:
