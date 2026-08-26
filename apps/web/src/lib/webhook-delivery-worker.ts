@@ -1,4 +1,5 @@
 import { WebhookStore } from './webhook-store';
+import { createDlqEntry, type DlqAttemptNote, type DlqEntry } from './webhook-dlq';
 
 export type WebhookDeliveryStatus = 'queued' | 'delivered' | 'failed';
 
@@ -38,6 +39,12 @@ export interface WebhookDeliveryWorkerOptions {
   now?: () => Date;
   delay?: (ms: number) => Promise<void>;
   onAttempt?: (attempt: WebhookDeliveryAttempt) => void;
+  /**
+   * Called once a delivery fails terminally — retries exhausted, or a status
+   * code that is not worth retrying. The entry carries the request and the
+   * full error timeline so the dead-letter queue can replay it later.
+   */
+  onDeadLetter?: (entry: DlqEntry) => void;
 }
 
 const DEFAULT_MAX_ATTEMPTS = 3;
@@ -93,6 +100,7 @@ export class WebhookDeliveryWorker {
   private readonly now: () => Date;
   private readonly delay: (ms: number) => Promise<void>;
   private readonly onAttempt?: (attempt: WebhookDeliveryAttempt) => void;
+  private readonly onDeadLetter?: (entry: DlqEntry) => void;
   private readonly queue: WebhookDeliveryRequest[] = [];
   private active = false;
   private draining: Promise<void> | null = null;
@@ -108,6 +116,7 @@ export class WebhookDeliveryWorker {
       options.delay ??
       ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
     this.onAttempt = options.onAttempt;
+    this.onDeadLetter = options.onDeadLetter;
   }
 
   enqueue(request: WebhookDeliveryRequest): void {
@@ -191,6 +200,7 @@ export class WebhookDeliveryWorker {
     request: WebhookDeliveryRequest,
   ): Promise<void> {
     const maxAttempts = request.maxAttempts ?? this.maxAttempts;
+    const timeline: DlqAttemptNote[] = [];
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       const result = await this.adapter.deliver(request);
@@ -221,12 +231,47 @@ export class WebhookDeliveryWorker {
         });
       }
 
+      if (!delivered) {
+        timeline.push({
+          attempt,
+          statusCode: result.statusCode,
+          error: result.error ?? 'Delivery failed',
+          at: attemptRecord.deliveredAt,
+        });
+      }
+
       if (!willRetry) {
+        if (!delivered) {
+          this.deadLetter(request, timeline, attempt === maxAttempts, attemptRecord.deliveredAt);
+        }
         return;
       }
 
       await this.delay(this.retryDelayMs(attempt));
     }
+  }
+
+  /**
+   * Hands a terminal failure to the dead-letter queue. `exhausted` separates
+   * "we tried the whole budget" from "this status code was never going to
+   * succeed", which is what the queue's reason filter reads.
+   */
+  private deadLetter(
+    request: WebhookDeliveryRequest,
+    timeline: DlqAttemptNote[],
+    exhausted: boolean,
+    at: string,
+  ): void {
+    if (!this.onDeadLetter) return;
+
+    this.onDeadLetter(
+      createDlqEntry({
+        request,
+        timeline,
+        reason: exhausted ? 'retries-exhausted' : 'non-retryable',
+        now: at,
+      }),
+    );
   }
 
   private shouldRetry(statusCode?: number): boolean {

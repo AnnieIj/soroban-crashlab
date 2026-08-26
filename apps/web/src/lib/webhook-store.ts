@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { WebhookConfig } from '../app/webhook-manager';
 import { WebhookDeliveryRequest } from './webhook-delivery-worker';
+import type { DlqEntry, DlqGateway } from './webhook-dlq';
 
 /**
  * Persistent file-based store for webhook configurations, pending deliveries,
@@ -16,6 +17,7 @@ const DEFAULT_DATA_DIR = path.join(process.cwd(), '.webhook-data');
 const CONFIGS_FILE = 'webhook-configs.json';
 const QUEUE_FILE = 'webhook-delivery-queue.json';
 const DELIVERY_LOG_FILE = 'webhook-delivery-log.json';
+const DLQ_FILE = 'webhook-dead-letter-queue.json';
 
 export interface DeliveryLogEntry {
   webhookId: string;
@@ -30,6 +32,7 @@ export interface WebhookStoreData {
   configs: WebhookConfig[];
   queue: WebhookDeliveryRequest[];
   deliveryLog: DeliveryLogEntry[];
+  deadLetterQueue: DlqEntry[];
 }
 
 export class WebhookStore {
@@ -37,6 +40,7 @@ export class WebhookStore {
   private configs: Map<string, WebhookConfig> = new Map();
   private queue: WebhookDeliveryRequest[] = [];
   private deliveryLog: DeliveryLogEntry[] = [];
+  private deadLetterQueue: DlqEntry[] = [];
   private maxLogSize: number;
 
   constructor(dataDir?: string, maxLogSize: number = 10000) {
@@ -130,16 +134,45 @@ export class WebhookStore {
     this.saveDeliveryLog();
   }
 
+  // ─── Dead-letter queue operations ─────────────────────────────────────
+  //
+  // Terminal delivery failures land here (#1427). Write-through like the rest
+  // of the store, so a silently failing endpoint is still visible after a
+  // restart.
+
+  getDeadLetterQueue(): DlqEntry[] {
+    return [...this.deadLetterQueue];
+  }
+
+  setDeadLetterQueue(entries: readonly DlqEntry[]): void {
+    this.deadLetterQueue = [...entries];
+    this.saveDeadLetterQueue();
+  }
+
+  deadLetterDepth(): number {
+    return this.deadLetterQueue.length;
+  }
+
+  /** Gateway view of the DLQ, for `DeadLetterQueue` to read and write. */
+  dlqGateway(): DlqGateway {
+    return {
+      load: () => this.getDeadLetterQueue(),
+      save: (entries) => this.setDeadLetterQueue(entries),
+    };
+  }
+
   // ─── Bulk / startup ───────────────────────────────────────────────────
 
   loadAll(): void {
     this.configs = new Map();
     this.queue = [];
     this.deliveryLog = [];
+    this.deadLetterQueue = [];
 
     this.loadConfigs();
     this.loadQueue();
     this.loadDeliveryLog();
+    this.loadDeadLetterQueue();
   }
 
   /**
@@ -150,6 +183,7 @@ export class WebhookStore {
       configs: this.getAllConfigs(),
       queue: this.getQueue(),
       deliveryLog: [...this.deliveryLog],
+      deadLetterQueue: this.getDeadLetterQueue(),
     };
   }
 
@@ -206,6 +240,14 @@ export class WebhookStore {
 
   private saveDeliveryLog(): void {
     this.writeJson(DELIVERY_LOG_FILE, this.deliveryLog);
+  }
+
+  private loadDeadLetterQueue(): void {
+    this.deadLetterQueue = this.readJson<DlqEntry[]>(DLQ_FILE, []);
+  }
+
+  private saveDeadLetterQueue(): void {
+    this.writeJson(DLQ_FILE, this.deadLetterQueue);
   }
 }
 
