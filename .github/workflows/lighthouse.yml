@@ -1,0 +1,131 @@
+name: Lighthouse CI
+
+on:
+  pull_request:
+    branches: [main]
+
+# Least privilege: read the code, write exactly one PR comment. No checks,
+# no statuses, no contents:write.
+permissions:
+  contents: read
+  pull-requests: write
+
+# A push to the same PR supersedes the in-flight audit rather than racing it
+# for the sticky comment.
+concurrency:
+  group: lighthouse-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lighthouse:
+    name: Budgets
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build production bundle
+        run: pnpm run build
+
+      # `next start`, not a static dist dir: /runs/:id is server-rendered on
+      # demand and the dashboard fetches /api/runs on mount.
+      - name: Start production server
+        run: |
+          pnpm exec next start -p 3210 &
+          for i in $(seq 1 60); do
+            curl -sf -o /dev/null http://127.0.0.1:3210/ && exit 0
+            sleep 1
+          done
+          echo "server did not become ready in 60s" >&2
+          exit 1
+
+      # Pre-warm so Next's first-hit cost (dynamic segment render, the
+      # dashboard's API fetch) lands outside the measured samples. This was the
+      # largest single source of variance in the baseline study.
+      - name: Pre-warm audited routes
+        run: |
+          for r in / /runs /runs/run-1024 /analytics /api/runs; do
+            curl -s -o /dev/null "http://127.0.0.1:3210$r"
+            curl -s -o /dev/null "http://127.0.0.1:3210$r"
+          done
+
+      - name: Collect and assert budgets
+        id: lhci
+        # Pinned: a Lighthouse minor bump can move scores by more than our
+        # margins, so the version is part of the contract.
+        run: pnpm dlx @lhci/cli@0.15.1 autorun --config=lighthouserc.js
+        continue-on-error: true
+
+      - name: Build score table
+        if: always()
+        run: node scripts/lighthouse-comment.mjs >> "$GITHUB_STEP_SUMMARY"
+
+      # Sticky comment via the first-party script action rather than a
+      # third-party one: one fewer supply-chain dependency to review, and the
+      # find-or-update logic is small enough to read in full.
+      # Non-fatal: on a pull request from a fork GITHUB_TOKEN is read-only, so
+      # this step 403s. The audit still ran and the table is in the job
+      # summary — the budget result must decide the job, not the comment.
+      - name: Post sticky score comment
+        if: always()
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const MARKER = '<!-- lighthouse-ci-budgets -->';
+            const path = 'apps/web/.lighthouseci/comment.md';
+            const report = fs.existsSync(path)
+              ? fs.readFileSync(path, 'utf8')
+              : '## 🚦 Lighthouse budgets\n\n> The audit did not produce a report.';
+            const body = `${MARKER}\n${report}`;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const existing = comments.find((c) => c.body?.startsWith(MARKER));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Stop production server
+        if: always()
+        # pkill by pattern, not the recorded pid: `$!` is pnpm's pid and the
+        # actual next-server runs as its child.
+        run: pkill -f "next start -p 3210" || true
+
+      # Fails the job after the comment is posted, so a red gate always ships
+      # with its explanation attached.
+      - name: Enforce budgets
+        if: steps.lhci.outcome == 'failure'
+        run: |
+          echo "::error::Lighthouse budgets failed — see the PR comment for the per-assertion breakdown."
+          exit 1
