@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMaintainerMode } from '../../../useMaintainerMode';
+import { recordAuditEvent } from '../../../../lib/audit/audit-sink';
 import {
   createLocalAnnotationThreadGateway,
   type AnnotationThreadGateway,
@@ -175,6 +176,8 @@ export default function RunAnnotationThreads({ runId, gateway }: RunAnnotationTh
     const previous = threads;
     const next = resolveThread(previous, thread.id, author, new Date().toISOString());
     if (!commit(previous, next, 'Could not resolve the thread — it was rolled back.')) return;
+
+    recordAuditEvent({ action: 'thread.resolve', target: `${runId}/${thread.id}`, metadata: { author } });
 
     const token = createResolveUndoToken(thread, nowMs());
     setUndoToken(token);

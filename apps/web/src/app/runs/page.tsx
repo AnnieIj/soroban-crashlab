@@ -13,6 +13,16 @@ import {
   toggleRunSelection,
 } from '../runs-bulk-actions-utils';
 import { FuzzingRun } from '../types';
+import { recordAuditEvent } from '../../lib/audit/audit-sink';
+import SavedViewsMenu from '../saved-views/SavedViewsMenu';
+import {
+  createDefaultViewState,
+  decodeViewState,
+  encodeViewState,
+  type ViewState,
+} from '../saved-views/view-state';
+import { applyRunFilters } from '../run-filter-utils';
+import type { RunArea, RunSeverity, RunStatus } from '../types';
 import { fetchRuns } from '../../lib/api-client';
 import { LoadingSpinner } from '../../components/LoadingSkeleton';
 import { ListState } from '../../components/ListState';
@@ -33,6 +43,18 @@ export default function RunsPage() {
   const [runs, setRuns] = useState<FuzzingRun[]>([]);
   const [selectedRunIds, setSelectedRunIds] = useState<Set<string>>(new Set());
   const [fetchAttempt, setFetchAttempt] = useState(0);
+  // Starts at the default so server and client first paint agree; the URL is
+  // read after mount, when `window.location` exists.
+  const [viewState, setViewState] = useState<ViewState>(createDefaultViewState);
+
+  useEffect(() => {
+    queueMicrotask(() => setViewState(decodeViewState(window.location.search)));
+  }, []);
+
+  const applyView = useCallback((next: ViewState) => {
+    setViewState(next);
+    window.history.replaceState(null, '', `${window.location.pathname}?${encodeViewState(next)}`);
+  }, []);
 
   const goToRun = useCallback((runId: string) => {
     router.push(`/runs/${runId}`);
@@ -73,9 +95,26 @@ export default function RunsPage() {
     return () => { cancelled = true; };
   }, [fetchAttempt]);
 
+  const visibleRuns = useMemo(() => {
+    const filtered = applyRunFilters(runs, {
+      status: viewState.filters.status as RunStatus[],
+      area: viewState.filters.area as RunArea[],
+      severity: viewState.filters.severity as RunSeverity[],
+      searchTerm: viewState.search,
+      hasCrash: viewState.filters.hasCrash,
+    });
+
+    const direction = viewState.sort.direction === 'asc' ? 1 : -1;
+    return filtered.slice().sort((a, b) => {
+      const left = String(a[viewState.sort.key as keyof FuzzingRun] ?? '');
+      const right = String(b[viewState.sort.key as keyof FuzzingRun] ?? '');
+      return left.localeCompare(right) * direction;
+    });
+  }, [runs, viewState]);
+
   const selectedRuns = useMemo(
-    () => getSelectedRuns(runs, selectedRunIds),
-    [runs, selectedRunIds],
+    () => getSelectedRuns(visibleRuns, selectedRunIds),
+    [visibleRuns, selectedRunIds],
   );
 
   const handleToggleRunSelection = useCallback((runId: string) => {
@@ -88,6 +127,9 @@ export default function RunsPage() {
 
   const handleBulkAction = useCallback(
     (action: BulkAction, runIds: string[], data?: Record<string, unknown>) => {
+      if (action === 'delete') {
+        recordAuditEvent({ action: 'run.delete', target: 'runs', metadata: { runCount: runIds.length } });
+      }
       setRuns((prev) => applyBulkActionToRuns(prev, action, runIds));
 
       if (action === 'export' || action === 'tag' || action === 'assign') {
@@ -112,8 +154,13 @@ export default function RunsPage() {
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
           {dataState === 'success' && (
-            <span className="chip text-xs sm:text-sm">{runs.length} Total Runs</span>
+            <span className="chip text-xs sm:text-sm">
+              {visibleRuns.length === runs.length
+                ? `${runs.length} Total Runs`
+                : `${visibleRuns.length} of ${runs.length} Runs`}
+            </span>
           )}
+          <SavedViewsMenu state={viewState} onApply={applyView} />
           <Link href="/" className="btn-outline text-xs sm:text-sm px-3 sm:px-6 h-8 sm:h-10">
             Dashboard
           </Link>
@@ -135,7 +182,7 @@ export default function RunsPage() {
           onClearSelection={() => setSelectedRunIds(new Set())}
         />
         <VirtualizedRunTable
-          runs={runs}
+          runs={visibleRuns}
           viewportHeight={600}
           visibleColumns={RUN_TABLE_COLUMNS}
           onSelectRun={goToRun}
