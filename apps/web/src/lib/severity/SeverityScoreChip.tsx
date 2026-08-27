@@ -3,7 +3,6 @@
  * Displays composite score with factor breakdown bars.
  */
 
-import { ScoredCluster, SeverityMismatch, compareSeverity } from './index';
 
 export interface SeverityScoreChipProps {
     scored: {

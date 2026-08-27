@@ -2,7 +2,7 @@
  * Replay Diff Viewer UI - Side-by-side keyed table with field-level diffs.
  */
 
-import { DiffOperation, DiffOperation, DiffResult, filterOperations, summarizeOperations, DiffOpType } from './index';
+import { DiffResult, DiffOpType } from './index';
 
 export interface ReplayDiffViewerProps {
     result: DiffResult;
