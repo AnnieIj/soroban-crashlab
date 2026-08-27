@@ -41,6 +41,10 @@ export interface RunIssueLink {
 export interface FuzzingRun {
     /** Unique identifier for the run */
     id: string;
+    /** Parent run this run was derived from, when replaying a subset of failing seeds */
+    parentId?: string;
+    /** Ordered subset of seed indexes replayed for this lineage child */
+    seedList?: number[];
     /** Current state of the run */
     status: RunStatus;
     /** Product area primarily exercised by the run */
