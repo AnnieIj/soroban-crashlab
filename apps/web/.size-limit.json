@@ -1,12 +1,24 @@
 [
   {
-    "name": "Next.js JS Chunks",
-    "path": ".next/static/chunks/**/*.js",
-    "limit": "250 kB"
+    "name": "route-group: shell",
+    "path": [
+      ".next/static/chunks/main-app-*.js",
+      ".next/static/chunks/webpack-*.js",
+      ".next/static/chunks/app/layout-*.js"
+    ],
+    "gzip": true,
+    "limit": "120 kB"
   },
   {
-    "name": "Next.js CSS",
-    "path": ".next/static/css/**/*.css",
-    "limit": "50 kB"
+    "name": "route-group: analytics-charts",
+    "path": [".next/static/chunks/app/analytics/**/*.js"],
+    "gzip": true,
+    "limit": "170 kB"
+  },
+  {
+    "name": "route-group: editor-grid",
+    "path": [".next/static/chunks/app/**/widget*/**/*.js"],
+    "gzip": true,
+    "limit": "130 kB"
   }
 ]
