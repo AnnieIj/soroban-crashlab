@@ -3,6 +3,7 @@ import { errorResponse, successResponse, status } from '@/lib/api-response-utils
 import { logger } from '@/lib/logger';
 import { withRouteErrorHandling } from '@/lib/route-handler';
 import { sanitizeSearchParams } from '@/lib/sanitize';
+import { withFixtureCaching } from '@/lib/fixture-caching';
 
 export const GET = withRouteErrorHandling('GET /api/runs', async (request: Request) => {
   const { searchParams } = new URL(request.url);
@@ -50,5 +51,6 @@ export const GET = withRouteErrorHandling('GET /api/runs', async (request: Reque
 
   const { buildMockRuns } = await import('@/app/mockRuns');
   const runs = buildMockRuns();
-  return successResponse({ runs }, { total: runs.length });
+  const data = { runs, total: runs.length };
+  return withFixtureCaching(request, data);
 });

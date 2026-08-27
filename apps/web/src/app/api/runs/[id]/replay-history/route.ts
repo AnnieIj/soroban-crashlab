@@ -3,12 +3,13 @@ import { withRouteErrorHandling } from '@/lib/route-handler';
 import { successResponse, errorResponse, status } from '@/lib/api-response-utils';
 import { getMockReplayHistoryForRun } from '@/fixtures/replay-history';
 import { sortReplayHistoryByTimestamp } from '@/app/run-replay-history-utils';
+import { withFixtureCaching } from '@/lib/fixture-caching';
 
 export const runtime = 'nodejs';
 
 export const GET = withRouteErrorHandling(
   'GET /api/runs/[id]/replay-history',
-  async (_request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
+  async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
     const { id } = await params;
 
     if (!id) {
@@ -40,6 +41,7 @@ export const GET = withRouteErrorHandling(
     }
 
     const entries = sortReplayHistoryByTimestamp(getMockReplayHistoryForRun(id), 'desc');
-    return successResponse({ entries }, { total: entries.length });
+    const data = { entries };
+    return withFixtureCaching(request, data);
   },
 );

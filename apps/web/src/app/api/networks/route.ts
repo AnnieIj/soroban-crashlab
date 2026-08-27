@@ -6,8 +6,9 @@ import {
   type NetworkConfig,
 } from "@/app/network-config-utils";
 import { getStore, setStore } from "./_store";
-import { createdResponse, successResponse } from '@/lib/api-response-utils';
+import { createdResponse } from '@/lib/api-response-utils';
 import { jsonError, readJsonBody, withRouteErrorHandling } from "@/lib/route-handler";
+import { withFixtureCaching } from '@/lib/fixture-caching';
 
 function slugify(name: string, existingNetworks: NetworkConfig[]): string {
   const base = name
@@ -27,12 +28,14 @@ function slugify(name: string, existingNetworks: NetworkConfig[]): string {
   return candidate;
 }
 
-export const GET = withRouteErrorHandling("GET /api/networks", async () => {
+export const GET = withRouteErrorHandling("GET /api/networks", async (request: NextRequest) => {
   const store = getStore();
-  return successResponse({
+  const data = {
     networks: store.networks,
     activeNetworkId: store.activeNetworkId,
-  }, { total: store.networks.length });
+    total: store.networks.length,
+  };
+  return withFixtureCaching(request, data);
 });
 
 export const POST = withRouteErrorHandling("POST /api/networks", async (request: NextRequest) => {

@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { withRouteErrorHandling } from '../../../../lib/route-handler';
 import { MOCK_WEBHOOK_DELIVERY_HISTORY, WebhookDeliveryHistoryItem } from '../../../../fixtures/webhook-delivery-history';
 import { filterDeliveryItems, computeDeliveryStats, DeliveryStatusFilter } from '../../../webhook-retry-dashboard-utils';
+import { withFixtureCaching } from '@/lib/fixture-caching';
 
 // In-memory store initialized with fixtures for runtime persistence during session
 let inMemoryHistory: WebhookDeliveryHistoryItem[] = [...MOCK_WEBHOOK_DELIVERY_HISTORY];
@@ -23,9 +24,10 @@ export const GET = withRouteErrorHandling('GET /api/webhooks/history', async (re
   const filtered = filterDeliveryItems(items, statusParam, searchParam);
   const stats = computeDeliveryStats(items);
 
-  return NextResponse.json({
+  const data = {
     items: filtered,
     stats,
     total: filtered.length,
-  });
+  };
+  return withFixtureCaching(request, data);
 });
