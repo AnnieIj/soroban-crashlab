@@ -1,19 +1,11 @@
 /**
- * Target proposer UI - editable descriptor cards for fuzz targets.
+ * Editable fuzz-target descriptor cards for the WASM ingestion page (#1434).
+ *
+ * Materialised from `createTargetProposerComponent()` in
+ * `src/lib/wasm-parse/TargetProposer.tsx`, which only ever returned this
+ * component as a string — the page imported a file that was never written,
+ * which broke the production build.
  */
-
-import { FuzzTargetDescriptor } from './index';
-
-export interface TargetProposerProps {
-    descriptors: FuzzTargetDescriptor[];
-    onUpdate: (descriptors: FuzzTargetDescriptor[]) => void;
-    onCommit: (descriptors: FuzzTargetDescriptor[]) => void;
-}
-
-
-export function createTargetProposerComponent(): string {
-    return `
-// TargetProposer.tsx
 'use client';
 
 import { useState } from 'react';
@@ -33,7 +25,7 @@ export default function TargetProposer({
     const [descriptors, setDescriptors] = useState<FuzzTargetDescriptor[]>(initialDescriptors);
     const [editingIndex, setEditingIndex] = useState<number | null>(null);
 
-    const handleArgChange = (targetIdx: number, argIdx: number, field: keyof ArgTemplate, value: string) => {
+    const handleArgChange = <K extends keyof ArgTemplate>(targetIdx: number, argIdx: number, field: K, value: ArgTemplate[K]) => {
         const newDescriptors = [...descriptors];
         newDescriptors[targetIdx] = {
             ...newDescriptors[targetIdx],
@@ -51,7 +43,7 @@ export default function TargetProposer({
             ...newDescriptors[targetIdx],
             argTemplates: [
                 ...newDescriptors[targetIdx].argTemplates,
-                { name: \`arg\${newDescriptors[targetIdx].argTemplates.length}\`, type: 'i32', template: '0', isGuess: true }
+                { name: `arg${newDescriptors[targetIdx].argTemplates.length}`, type: 'i32', template: '0', isGuess: true }
             ],
         };
         setDescriptors(newDescriptors);
@@ -193,6 +185,4 @@ export default function TargetProposer({
             )}
         </div>
     );
-}
-`;
 }

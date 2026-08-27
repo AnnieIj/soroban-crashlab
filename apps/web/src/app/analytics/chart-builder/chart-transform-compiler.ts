@@ -48,7 +48,7 @@ export function applyFilters(runs: FuzzingRun[], filters?: ChartFilter[]): Fuzzi
   if (!filters || filters.length === 0) return runs;
   return runs.filter((run) =>
     filters.every((filter) => {
-      const fieldValue = (run as Record<string, unknown>)[filter.field];
+      const fieldValue = (run as unknown as Record<string, unknown>)[filter.field];
       if (fieldValue === undefined) return false;
       return FILTER_OPS[filter.op](fieldValue, filter.value as string | number);
     }),

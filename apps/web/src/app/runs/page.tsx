@@ -57,20 +57,6 @@ export default function RunsPage() {
     window.history.replaceState(null, '', `${window.location.pathname}?${encodeViewState(next)}`);
   }, []);
 
-  const goToRun = useCallback((runId: string) => {
-    captureRunListContext(
-      visibleRuns.map((r) => r.id),
-      {
-        status: viewState.filters.status as string[],
-        area: viewState.filters.area as string[],
-        severity: viewState.filters.severity as string[],
-        searchTerm: viewState.search,
-      },
-      viewState.sort,
-    );
-    router.push(`/runs/${runId}`);
-  }, [router, visibleRuns, viewState]);
-
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
@@ -127,6 +113,25 @@ export default function RunsPage() {
     () => getSelectedRuns(visibleRuns, selectedRunIds),
     [visibleRuns, selectedRunIds],
   );
+
+  // Declared after `visibleRuns` because it closes over it: hoisting the
+  // callback above the `useMemo` read the binding in its temporal dead zone.
+  const goToRun = useCallback((runId: string) => {
+    captureRunListContext(
+      visibleRuns.map((r) => r.id),
+      {
+        // The stored context is a flat string map, so multi-select filters are
+        // joined rather than passed through as arrays.
+        status: (viewState.filters.status ?? []).join(','),
+        area: (viewState.filters.area ?? []).join(','),
+        severity: (viewState.filters.severity ?? []).join(','),
+        searchTerm: viewState.search,
+      },
+      viewState.sort,
+    );
+    router.push(`/runs/${runId}`);
+  }, [router, visibleRuns, viewState]);
+
 
   const handleToggleRunSelection = useCallback((runId: string) => {
     setSelectedRunIds((prev) => toggleRunSelection(prev, runId));
