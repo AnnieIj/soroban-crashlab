@@ -8,6 +8,7 @@ import {
   saveWidgetLayoutForProfile,
   writeActiveWidgetLayoutProfileId,
 } from './widget-layout-profile-utils';
+import { getColumnCountForWidth, clampLayoutForTier } from '../../lib/widget-grid';
 
 // Widget types and interfaces
 interface Widget {
@@ -107,7 +108,10 @@ export default function WidgetLayoutEditor() {
       setProfileDraft(activeProfile);
       const parsedLayout = loadWidgetLayoutForProfile<Widget[] | null>(activeProfile, null);
       if (parsedLayout && Array.isArray(parsedLayout)) {
-        setWidgets(parsedLayout);
+        // #1404: clamp persisted 6-col layout when loaded into narrower tier (e.g., 3 cols)
+        const containerWidth = gridRef.current?.clientWidth ?? 1280;
+        const tierCols = getColumnCountForWidth(containerWidth);
+        setWidgets(clampLayoutForTier(parsedLayout, tierCols));
       } else {
         setWidgets(initializeDefaultLayout());
       }
@@ -573,11 +577,25 @@ export default function WidgetLayoutEditor() {
         </div>
       )}
 
-      {/* Layout Grid */}
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+      {/* Layout Grid - #1404: container-query-driven responsive columns */}
+      <style>{`
+        /* Container context - grid responds to its own box, not viewport */
+        .widget-grid-container { container-type: inline-size; }
+        /* Tiers mirroring breakpoints: 640->2, 768->3, 1024->4, 1280->6 cols (identical full-screen) */
+        @container (max-width: 639px) { .widget-grid { --cols: 1; } }
+        @container (min-width: 640px) and (max-width: 767px) { .widget-grid { --cols: 2; } }
+        @container (min-width: 768px) and (max-width: 1023px) { .widget-grid { --cols: 3; } }
+        @container (min-width: 1024px) and (max-width: 1279px) { .widget-grid { --cols: 4; } }
+        @container (min-width: 1280px) { .widget-grid { --cols: 6; } }
+        /* @supports fallback preserves viewport-class behavior on older engines (Firefox ESR) */
+        @supports not (container-type: inline-size) {
+          .widget-grid { --cols: 6; }
+        }
+      `}</style>
+      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden widget-grid-container" style={{ containerType: 'inline-size' } as React.CSSProperties}>
         <div
           ref={gridRef}
-          className="relative bg-gray-50"
+          className="relative bg-gray-50 widget-grid"
           style={{
             width: gridConfig.cols * gridConfig.cellWidth,
             height: gridConfig.rows * gridConfig.cellHeight,
