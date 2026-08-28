@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { RunStatus } from '../../types';
 import { isTerminalStatus } from '../../../lib/run-status';
+import { useRunStream } from './useRunStream';
 
 const POLL_INTERVAL_MS = 5_000;
 
