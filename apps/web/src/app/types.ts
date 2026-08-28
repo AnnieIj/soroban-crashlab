@@ -108,7 +108,6 @@ export interface CorpusStatsTelemetry {
     coveragePct: number;
     uniqueCrashes: number;
     series: CorpusStatPoint[];
->>>>>>> upstream/main
 }
 
 /**
