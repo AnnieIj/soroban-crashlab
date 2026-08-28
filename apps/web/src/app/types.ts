@@ -1,7 +1,13 @@
 /**
  * Status variants for a fuzzing run.
+ *
+ * Defined once in `src/lib/run-status.ts` alongside its label/colour/order
+ * metadata and re-exported here so existing `from './types'` imports keep
+ * working. Do not re-declare the union — see that module.
  */
-export type RunStatus = 'running' | 'completed' | 'failed' | 'cancelled';
+import type { RunStatus } from '../lib/run-status';
+
+export type { RunStatus };
 export type RunArea = 'auth' | 'state' | 'budget' | 'xdr';
 export type RunSeverity = 'low' | 'medium' | 'high' | 'critical';
 
@@ -79,8 +85,29 @@ export interface FuzzingRun {
     artifacts?: Artifact[];
     /** Deterministic replay verification fingerprint */
     replayFingerprint?: import('./replay/fingerprint').ReplayFingerprint;
-    /** Artifacts produced by the run */
-    artifacts?: Artifact[];
+    /** Engine coverage counter time-series telemetry */
+    corpusStats?: CorpusStatPoint[];
+}
+
+/**
+ * Single data point in corpus statistics time-series.
+ */
+export interface CorpusStatPoint {
+    ts: number;
+    corpusSize: number;
+    execsPerSec: number;
+    coveragePct: number;
+}
+
+/**
+ * Aggregated telemetry dataset from fuzzing engine coverage counters.
+ */
+export interface CorpusStatsTelemetry {
+    corpusSize: number;
+    execsPerSec: number;
+    coveragePct: number;
+    uniqueCrashes: number;
+    series: CorpusStatPoint[];
 }
 
 /**

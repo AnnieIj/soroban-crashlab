@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FuzzingRun, RunStatus } from './types';
+import { STATUS_META } from '../lib/run-status';
 import { formatDuration } from './utils/format';
 import { useDataTableKeyboardNav } from './use-data-table-keyboard-nav';
 import type { DataTableRowKeyboardProps } from './use-data-table-keyboard-nav';
@@ -34,9 +35,9 @@ interface VirtualizedRunTableProps {
 
 const StatusBadge = ({ status }: { status: RunStatus }) => (
     <span
-        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border status-badge status-badge-${status}`}
+        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border status-badge ${STATUS_META[status].badgeClass}`}
     >
-        {status.charAt(0).toUpperCase() + status.slice(1)}
+        {STATUS_META[status].label}
     </span>
 );
 

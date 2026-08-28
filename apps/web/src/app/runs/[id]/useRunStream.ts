@@ -20,7 +20,9 @@ export function useRunStream(runId: string, onEvent?: (event: RunStreamEnvelope)
   const eventSourceRef = useRef<EventSource | null>(null);
   const removeListenersRef = useRef<(() => void) | null>(null);
   const onEventRef = useRef(onEvent);
-  onEventRef.current = onEvent;
+  useEffect(() => {
+    onEventRef.current = onEvent;
+  }, [onEvent]);
 
   useEffect(() => {
     let disposed = false;

@@ -12,11 +12,13 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
 export class ApiError extends Error {
   status: number;
+  requiredRole?: string;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, requiredRole?: string) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.requiredRole = requiredRole;
   }
 }
 
@@ -47,11 +49,22 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
     ...options,
   });
   if (!res.ok) {
-    const message = await res
-      .json()
-      .then((body: { error?: string }) => body?.error)
-      .catch(() => undefined);
-    throw new ApiError(res.status, message ?? `API error: ${res.status} ${res.statusText}`);
+    const body = await res.json().catch(() => undefined);
+    const message =
+      typeof body?.error === 'object'
+        ? body.error?.message
+        : body?.error ?? `API error: ${res.status} ${res.statusText}`;
+    const requiredRole =
+      typeof body?.error === 'object' ? body.error?.requiredRole : undefined;
+
+    if (res.status === 403) {
+      const hintMessage = requiredRole
+        ? `Access Denied: Requires '${requiredRole}' role. Please switch to '${requiredRole}' mode.`
+        : message;
+      throw new ApiError(res.status, hintMessage, requiredRole);
+    }
+
+    throw new ApiError(res.status, message);
   }
   if (res.status === 204) {
     return undefined as T;

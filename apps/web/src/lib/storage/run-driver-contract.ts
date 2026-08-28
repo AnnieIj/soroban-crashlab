@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Artifact, FuzzingRun } from '@/app/types';
-import type { RunListOptions, RunStorageDriver } from './run-driver';
+import type { RunStorageDriver } from './run-driver';
 
 export interface RunDriverHarness {
   driver: RunStorageDriver;
