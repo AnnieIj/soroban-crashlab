@@ -25,6 +25,7 @@ import { useDebounce } from "../../lib/useDebounce";
 import { MOCK_LOG_ENTRIES } from "../../fixtures/logs";
 import { useDataTableKeyboardNav } from "../use-data-table-keyboard-nav";
 import LogSeverityBadge from "../../components/LogSeverityBadge";
+import { useRunStream } from "../runs/[id]/useRunStream";
 
 async function fetchLogs(): Promise<LogEntry[]> {
   await new Promise((r) => setTimeout(r, 800));
@@ -59,6 +60,13 @@ export default function LogViewerPage() {
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const [fetchAttempt, setFetchAttempt] = useState(0);
   const [autoscroll, setAutoscroll] = useState(true);
+  useRunStream("run-1001", (envelope) => {
+    if (envelope.event.type !== "LOG_APPEND") return;
+    setEntries((current) => {
+      const known = new Set(current.map((entry) => entry.id));
+      return [...current, ...envelope.event.entries.filter((entry) => !known.has(entry.id))];
+    });
+  });
 
   // Refs for scroll intent tracking
   const scrollContainerRef = useRef<HTMLDivElement>(null);
