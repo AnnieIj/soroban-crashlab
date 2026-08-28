@@ -91,7 +91,8 @@
     "test:i18n": "npx vitest run src/i18n",
     "test:run-status": "npx vitest run src/lib/run-status.test.ts",
     "i18n:generate": "node scripts/generate-i18n-types.mjs",
-    "i18n:extract": "node scripts/extract-messages.mjs"
+    "i18n:extract": "node scripts/extract-messages.mjs",
+    "test:measured-resizer": "npx tsc src/lib/createMeasuredResizer.ts src/lib/createMeasuredResizer.test.ts --module commonjs --target es2020 --rootDir src --outDir build/test-tmp --esModuleInterop && node build/test-tmp/lib/createMeasuredResizer.test.js"
   },
   "dependencies": {
     "@sentry/nextjs": "^10.62.0",
