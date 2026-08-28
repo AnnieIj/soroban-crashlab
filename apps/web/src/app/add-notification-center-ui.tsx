@@ -10,6 +10,7 @@ import {
   pruneDismissedIds,
 } from './notification-feed-utils';
 import { api, type NotificationFeedItem } from '../lib/api-client';
+import { NOTIFICATION_POLL_INTERVAL_MS } from '../lib/timeouts';
 
 export type { NotificationType, NotificationPriority };
 
@@ -31,7 +32,7 @@ interface NotificationCenterProps {
   className?: string;
 }
 
-const POLL_INTERVAL_MS = 30000;
+// NOTIFICATION_POLL_INTERVAL_MS is imported from lib/timeouts
 
 function mapFeedItemToNotification(item: NotificationFeedItem): Notification {
   const priorityMap: Record<string, NotificationPriority> = {
@@ -84,7 +85,7 @@ export default function NotificationCenter({ className = '' }: NotificationCente
     queueMicrotask(() => {
       void fetchNotifications();
     });
-    intervalRef.current = setInterval(fetchNotifications, POLL_INTERVAL_MS);
+    intervalRef.current = setInterval(fetchNotifications, NOTIFICATION_POLL_INTERVAL_MS);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };

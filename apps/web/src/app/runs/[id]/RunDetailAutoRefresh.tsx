@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { RunStatus } from '../../types';
+import { isTerminalStatus } from '../../../lib/run-status';
 
 const POLL_INTERVAL_MS = 5_000;
-const TERMINAL_STATUSES: ReadonlySet<RunStatus> = new Set(['completed', 'failed', 'cancelled']);
 
 interface RunDetailAutoRefreshProps {
   runId: string;
@@ -16,9 +16,15 @@ export default function RunDetailAutoRefresh({ runId, initialStatus }: RunDetail
   const router = useRouter();
   const [status, setStatus] = useState<RunStatus>(initialStatus);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stream = useRunStream(runId, (envelope) => {
+    if (envelope.event.type === 'RUN_STATUS') {
+      setStatus(envelope.event.status);
+      router.refresh();
+    }
+  });
 
   useEffect(() => {
-    if (TERMINAL_STATUSES.has(status)) {
+    if (isTerminalStatus(status)) {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
@@ -54,7 +60,7 @@ export default function RunDetailAutoRefresh({ runId, initialStatus }: RunDetail
   return (
     <span className={`badge badge-${status}`}>
       {status}
-      {!TERMINAL_STATUSES.has(status) && (
+      {!isTerminalStatus(status) && (
         <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
       )}
     </span>
