@@ -62,7 +62,7 @@ export class HttpError extends Error {
   }
 }
 
-const DEFAULT_TIMEOUT_MS = 10_000;
+import { API_FETCH_TIMEOUT_MS } from './timeouts';
 
 /**
  * Drops an entry and cancels any eviction timer still pointing at it, so a
@@ -104,7 +104,7 @@ export function dedupedFetchJson<T>(url: string, signal?: AbortSignal): Promise<
   const existing = inFlightRequests.get(url);
   if (existing) return existing.promise as Promise<T>;
 
-  const timeoutSignal = AbortSignal.timeout(DEFAULT_TIMEOUT_MS);
+  const timeoutSignal = AbortSignal.timeout(API_FETCH_TIMEOUT_MS);
   const combinedSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
 
   const request = fetch(url, { signal: combinedSignal }).then(async (res) => {

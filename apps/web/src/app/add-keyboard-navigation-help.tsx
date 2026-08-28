@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { shouldIgnoreGlobalShortcut } from '../lib/is-editable-target';
 
 /**
  * Keyboard Navigation Help Component
@@ -17,11 +18,18 @@ export default function AddKeyboardNavigationHelp() {
   }, []);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape' && isOpen) {
+      setIsOpen(false);
+      return;
+    }
+
+    if (shouldIgnoreGlobalShortcut(e)) {
+      return;
+    }
+
     if (e.key === '?' || (e.key === '/' && e.shiftKey)) {
       e.preventDefault();
       toggleModal();
-    } else if (e.key === 'Escape' && isOpen) {
-      setIsOpen(false);
     }
   }, [isOpen, toggleModal]);
 

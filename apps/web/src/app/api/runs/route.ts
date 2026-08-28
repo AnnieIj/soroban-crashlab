@@ -4,6 +4,7 @@ import { logger } from '@/lib/logger';
 import { withRouteErrorHandling } from '@/lib/route-handler';
 import { sanitizeSearchParams } from '@/lib/sanitize';
 import { withFixtureCaching } from '@/lib/fixture-caching';
+import { API_FETCH_TIMEOUT_MS } from '@/lib/timeouts';
 
 export const GET = withRouteErrorHandling('GET /api/runs', async (request: Request) => {
   const { searchParams } = new URL(request.url);
@@ -22,7 +23,7 @@ export const GET = withRouteErrorHandling('GET /api/runs', async (request: Reque
       );
       const fetchPromise = fetch(`${apiUrl}/api/runs${qs ? `?${qs}` : ''}`, {
         cache: 'no-store',
-        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+signal: AbortSignal.timeout(API_FETCH_TIMEOUT_MS),
       });
 
       const res = await Promise.race([fetchPromise, timeoutPromise]);

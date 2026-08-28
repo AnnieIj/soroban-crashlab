@@ -3,6 +3,7 @@ import { WebhookConfig, RunEventType } from '@/app/webhook-manager';
 import { jsonError, readJsonBody, withRouteErrorHandling } from '@/lib/route-handler';
 import { getWebhookStore } from '@/lib/webhook-store';
 import { validateWebhookApiKey } from '@/lib/api-key-auth';
+import { WEBHOOK_DELIVERY_TIMEOUT_MS } from '@/lib/timeouts';
 
 const VALID_PROTOCOLS = new Set(['http:', 'https:']);
 
@@ -141,7 +142,7 @@ export const POST = withRouteErrorHandling('POST /api/webhooks', async (request:
   const stored: WebhookConfig = {
     ...result,
     maxRetries: result.maxRetries ?? 3,
-    timeoutMs: result.timeoutMs ?? 5000,
+    timeoutMs: result.timeoutMs ?? WEBHOOK_DELIVERY_TIMEOUT_MS,
   };
   store.setConfig(stored);
 

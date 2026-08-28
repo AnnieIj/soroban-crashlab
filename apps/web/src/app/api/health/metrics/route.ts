@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createPrometheusMetricsExportDependencies } from "../../../../lib/integrations/prometheus-adapter";
+import { PROMETHEUS_FETCH_TIMEOUT_MS } from "../../../../lib/timeouts";
 
 /**
  * GET /api/health/metrics
@@ -16,7 +17,7 @@ export async function GET() {
       process.env.PROMETHEUS_ENDPOINT || "http://localhost:9090";
     const prometheusHealthPath =
       process.env.PROMETHEUS_HEALTH_PATH || "/-/healthy";
-    const timeoutMs = parseInt(process.env.PROMETHEUS_TIMEOUT_MS || "5000", 10);
+    const timeoutMs = parseInt(process.env.PROMETHEUS_TIMEOUT_MS || String(PROMETHEUS_FETCH_TIMEOUT_MS), 10);
 
     // Create the Prometheus adapter with real configuration
     const adapter = createPrometheusMetricsExportDependencies({
