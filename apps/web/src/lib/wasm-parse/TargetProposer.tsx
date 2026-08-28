@@ -2,13 +2,14 @@
  * Target proposer UI - editable descriptor cards for fuzz targets.
  */
 
+import { FuzzTargetDescriptor } from './index';
+
 export interface TargetProposerProps {
     descriptors: FuzzTargetDescriptor[];
     onUpdate: (descriptors: FuzzTargetDescriptor[]) => void;
     onCommit: (descriptors: FuzzTargetDescriptor[]) => void;
 }
 
-import { FuzzTargetDescriptor, ArgTemplate } from './index';
 
 export function createTargetProposerComponent(): string {
     return `

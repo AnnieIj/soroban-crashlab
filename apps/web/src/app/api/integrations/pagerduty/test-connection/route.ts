@@ -11,6 +11,7 @@
 
 import { NextResponse } from 'next/server';
 import { isIntegrationKeyReachable } from '../../../../integrate-pagerduty-alert-integration-utils';
+import { PAGERDUTY_FETCH_TIMEOUT_MS } from '../../../../../lib/timeouts';
 
 const PD_EVENTS_API_URL = 'https://events.pagerduty.com/v2/enqueue';
 
@@ -52,7 +53,7 @@ export async function POST(request: Request) {
             },
           },
         }),
-        signal: AbortSignal.timeout?.(10_000),
+        signal: AbortSignal.timeout?.(PAGERDUTY_FETCH_TIMEOUT_MS),
       });
 
       if (pdResponse.ok || pdResponse.status === 202) {

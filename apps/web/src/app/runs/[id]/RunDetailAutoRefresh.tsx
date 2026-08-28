@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { RunStatus } from '../../types';
+import { useRunStream } from './useRunStream';
 
 const POLL_INTERVAL_MS = 5_000;
 const TERMINAL_STATUSES: ReadonlySet<RunStatus> = new Set(['completed', 'failed', 'cancelled']);
@@ -16,6 +17,12 @@ export default function RunDetailAutoRefresh({ runId, initialStatus }: RunDetail
   const router = useRouter();
   const [status, setStatus] = useState<RunStatus>(initialStatus);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stream = useRunStream(runId, (envelope) => {
+    if (envelope.event.type === 'RUN_STATUS') {
+      setStatus(envelope.event.status);
+      router.refresh();
+    }
+  });
 
   useEffect(() => {
     if (TERMINAL_STATUSES.has(status)) {
@@ -54,6 +61,7 @@ export default function RunDetailAutoRefresh({ runId, initialStatus }: RunDetail
   return (
     <span className={`badge badge-${status}`}>
       {status}
+      {stream.connected && <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" aria-label="Live updates" />}
       {!TERMINAL_STATUSES.has(status) && (
         <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
       )}

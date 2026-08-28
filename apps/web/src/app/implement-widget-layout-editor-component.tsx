@@ -8,7 +8,7 @@ import {
   saveWidgetLayoutForProfile,
   writeActiveWidgetLayoutProfileId,
 } from './widget-layout-profile-utils';
-import { getColumnCountForWidth, clampLayoutForTier } from '../../lib/widget-grid';
+import { getColumnCountForWidth, clampLayoutForTier } from '@/lib/widget-grid';
 
 // Widget types and interfaces
 interface Widget {

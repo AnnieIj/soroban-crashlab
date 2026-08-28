@@ -5,6 +5,10 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   web-lint:
     runs-on: blacksmith-4vcpu-ubuntu-2404
@@ -89,6 +93,10 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v4
+      - name: Check external head origins
+        run: |
+          node scripts/check-external-origins.mjs --self-test
+          node scripts/check-external-origins.mjs
       - run: bash -n scripts/backlog-freshness-review.sh
       - run: bash -n scripts/contracts/build-soroban-example.sh
 
