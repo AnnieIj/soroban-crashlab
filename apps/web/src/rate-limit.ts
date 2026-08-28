@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { checkRbacPermission } from './lib/rbac';
 
 interface RateLimitBucket {
   count: number;
@@ -30,6 +31,11 @@ globalForRateLimit.crashlabApiRateLimitBuckets = buckets;
 export function proxy(request: NextRequest): NextResponse {
   if (request.method === 'OPTIONS') {
     return NextResponse.next();
+  }
+
+  const rbacDenial = checkRbacPermission(request);
+  if (rbacDenial) {
+    return rbacDenial;
   }
 
   const now = Date.now();

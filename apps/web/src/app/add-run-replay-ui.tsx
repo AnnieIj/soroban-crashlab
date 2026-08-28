@@ -7,6 +7,7 @@ import AddRunReplayHistoryWithTimestamps, {
   recordRunReplayHistoryEntry,
 } from "./add-run-replay-history-with-timestamps";
 import OperationProgressIndicator from "../components/OperationProgressIndicator";
+import { REPLAY_TIMEOUT_MS } from "../lib/timeouts";
 
 /**
  * Issue #275: Add Run replay UI
@@ -47,7 +48,7 @@ const DEFAULT_CONFIG: ReplayConfig = {
   customSeeds: "",
   debugMode: false,
   captureTraces: true,
-  timeoutMs: 30000,
+  timeoutMs: REPLAY_TIMEOUT_MS,
 };
 
 interface AddRunReplayUiProps {

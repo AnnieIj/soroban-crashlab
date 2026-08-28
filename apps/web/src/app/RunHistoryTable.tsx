@@ -1,6 +1,7 @@
 'use client';
 
 import { FuzzingRun, RunStatus } from './types';
+import { STATUS_META } from '../lib/run-status';
 import AddReplayFromUiAction from './add-replay-from-ui-action';
 import { useDataTableKeyboardNav } from './use-data-table-keyboard-nav';
 import TruncatedCell from '@/components/TruncatedCell';
@@ -30,7 +31,7 @@ const StatusBadge = ({ status }: { status: RunStatus }) => {
     const isRunning = status === 'running';
     return (
         <span
-            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border status-badge status-badge-${status}`}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border status-badge ${STATUS_META[status].badgeClass}`}
         >
             {isRunning && (
                 <span
@@ -41,7 +42,7 @@ const StatusBadge = ({ status }: { status: RunStatus }) => {
                     <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-current" />
                 </span>
             )}
-            {status.charAt(0).toUpperCase() + status.slice(1)}
+            {STATUS_META[status].label}
         </span>
     );
 };

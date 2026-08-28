@@ -18,6 +18,15 @@
 }
 
 @theme {
+  /*
+   * Typography tokens. `--font-source-sans` / `--font-jetbrains-mono` are
+   * emitted by `next/font` (see src/app/fonts.ts) on the <html> element, so
+   * the self-hosted faces back the Tailwind `font-sans` / `font-mono`
+   * utilities as well as the hand-written component classes below.
+   */
+  --font-sans: var(--font-source-sans), system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, monospace;
+
   --color-primary: #0A66C2;
   --color-primary-hover: #004182;
   --color-secondary: #915907;
@@ -97,7 +106,7 @@
 }
 
 html {
-  font-family: 'Source Sans 3', system-ui, -apple-system, sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background: var(--bg);
@@ -190,7 +199,7 @@ html.theme-ready body {
 }
 
 .code-text {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
 }
 
@@ -224,7 +233,7 @@ html.theme-ready body {
   color: #FFFFFF;
   font-size: 16px;
   font-weight: 600;
-  font-family: 'Source Sans 3', sans-serif;
+  font-family: var(--font-sans);
   border: none;
   border-radius: 9999px;
   cursor: pointer;
@@ -257,7 +266,7 @@ html.theme-ready body {
   color: #0A66C2;
   font-size: 16px;
   font-weight: 600;
-  font-family: 'Source Sans 3', sans-serif;
+  font-family: var(--font-sans);
   border: 1px solid #0A66C2;
   border-radius: 9999px;
   cursor: pointer;
@@ -285,7 +294,7 @@ html.theme-ready body {
   color: #0A66C2;
   font-size: 16px;
   font-weight: 600;
-  font-family: 'Source Sans 3', sans-serif;
+  font-family: var(--font-sans);
   border: none;
   border-radius: 9999px;
   cursor: pointer;
@@ -308,7 +317,7 @@ html.theme-ready body {
   height: 40px;
   padding: 0 12px;
   font-size: 14px;
-  font-family: 'Source Sans 3', sans-serif;
+  font-family: var(--font-sans);
   color: var(--text-primary);
   background: var(--input-bg);
   border: 1px solid var(--input-border);
