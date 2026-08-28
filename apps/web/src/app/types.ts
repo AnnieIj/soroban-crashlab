@@ -1,7 +1,13 @@
 /**
  * Status variants for a fuzzing run.
+ *
+ * Defined once in `src/lib/run-status.ts` alongside its label/colour/order
+ * metadata and re-exported here so existing `from './types'` imports keep
+ * working. Do not re-declare the union — see that module.
  */
-export type RunStatus = 'running' | 'completed' | 'failed' | 'cancelled';
+import type { RunStatus } from '../lib/run-status';
+
+export type { RunStatus };
 export type RunArea = 'auth' | 'state' | 'budget' | 'xdr';
 export type RunSeverity = 'low' | 'medium' | 'high' | 'critical';
 

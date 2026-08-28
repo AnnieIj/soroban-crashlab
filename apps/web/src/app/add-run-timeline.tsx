@@ -1,31 +1,11 @@
 'use client';
 
 import React, { useMemo, useState, useRef, useCallback, useEffect } from 'react';
-import type { FuzzingRun, RunStatus } from './types';
+import type { FuzzingRun } from './types';
+import { RUN_STATUSES, STATUS_META } from '../lib/run-status';
 import { dedupeRunsById } from './run-timeline-utils';
 
 type DataState = 'loading' | 'error' | 'success';
-
-const STATUS_COLORS: Record<RunStatus, string> = {
-  completed: 'bg-emerald-500 shadow-emerald-500/20',
-  failed: 'bg-rose-500 shadow-rose-500/20',
-  running: 'bg-blue-500 shadow-blue-500/20',
-  cancelled: 'bg-zinc-500 shadow-zinc-500/20',
-};
-
-const STATUS_HOVER_COLORS: Record<RunStatus, string> = {
-  completed: 'hover:bg-emerald-400',
-  failed: 'hover:bg-rose-400',
-  running: 'hover:bg-blue-400',
-  cancelled: 'hover:bg-zinc-400',
-};
-
-const STATUS_FOCUS_COLORS: Record<RunStatus, string> = {
-  completed: 'focus:ring-emerald-500',
-  failed: 'focus:ring-rose-500',
-  running: 'focus:ring-blue-500',
-  cancelled: 'focus:ring-zinc-500',
-};
 
 interface RunTimelineProps {
   runs: FuzzingRun[];
@@ -289,9 +269,9 @@ export default function AddRunTimeline({
         </div>
         
         <div className="hidden lg:flex items-center gap-4 text-xs font-bold text-zinc-400" role="list" aria-label="Status legend">
-          {Object.entries(STATUS_COLORS).map(([status, color]) => (
+          {RUN_STATUSES.map((status) => (
             <div key={status} className="flex items-center gap-2" role="listitem">
-              <div className={`h-2 w-2 rounded-full ${color.split(' ')[0]}`} aria-hidden="true" />
+              <div className={`h-2 w-2 rounded-full ${STATUS_META[status].solidClass.split(' ')[0]}`} aria-hidden="true" />
               <span className="capitalize">{status}</span>
             </div>
           ))}
@@ -331,7 +311,7 @@ export default function AddRunTimeline({
                 <button
                   ref={(el) => { if (el) runBlockRefs.current.set(run.id, el); }}
                   type="button"
-                  className={`absolute h-full rounded-full transition-all duration-300 flex items-center px-2 md:px-4 overflow-hidden border-2 border-transparent shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-zinc-950 ${STATUS_COLORS[run.status]} ${STATUS_HOVER_COLORS[run.status]} ${STATUS_FOCUS_COLORS[run.status]}`}
+                  className={`absolute h-full rounded-full transition-all duration-300 flex items-center px-2 md:px-4 overflow-hidden border-2 border-transparent shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-zinc-950 ${STATUS_META[run.status].solidClass} ${STATUS_META[run.status].solidHoverClass} ${STATUS_META[run.status].solidFocusClass}`}
                   style={{ left: `${left}%`, width: `${width}%` }}
                   onClick={() => onSelectRun(run.id)}
                   onKeyDown={(e) => handleKeyDown(e, run.id, index)}
@@ -396,9 +376,9 @@ export default function AddRunTimeline({
       </div>
       
       <div className="lg:hidden mt-4 flex flex-wrap items-center gap-3 text-xs font-bold text-zinc-400" role="list" aria-label="Status legend">
-        {Object.entries(STATUS_COLORS).map(([status, color]) => (
+        {RUN_STATUSES.map((status) => (
           <div key={status} className="flex items-center gap-2" role="listitem">
-            <div className={`h-2 w-2 rounded-full ${color.split(' ')[0]}`} aria-hidden="true" />
+            <div className={`h-2 w-2 rounded-full ${STATUS_META[status].solidClass.split(' ')[0]}`} aria-hidden="true" />
             <span className="capitalize">{status}</span>
           </div>
         ))}

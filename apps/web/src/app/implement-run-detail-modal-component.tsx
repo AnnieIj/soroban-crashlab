@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useState, useEffect } from 'react';
-import { FuzzingRun, RunStatus, RunArea, RunSeverity } from './types';
+import { FuzzingRun, RunArea, RunSeverity } from './types';
+import { getStatusMeta } from '../lib/run-status';
 import { simulateSeedReplay } from './replay';
 import { generateMarkdownReport } from './report-utils';
 import ReportModal from './ReportModal';
@@ -35,16 +36,6 @@ const formatDuration = (ms: number): string => {
         return `${minutes}m ${seconds % 60}s`;
     } else {
         return `${seconds}s`;
-    }
-};
-
-const getStatusColor = (status: RunStatus): string => {
-    switch (status) {
-        case 'running': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
-        case 'completed': return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
-        case 'failed': return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300';
-        case 'cancelled': return 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300';
-        default: return 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300';
     }
 };
 
@@ -149,7 +140,7 @@ export default function RunDetailModal({ isOpen, onClose, run, onReplayComplete 
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div className="space-y-2">
                                 <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Status</p>
-                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(run.status)}`}>
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusMeta(run.status).pillClass}`}>
                                     {run.status}
                                 </span>
                             </div>
