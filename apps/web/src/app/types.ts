@@ -73,6 +73,29 @@ export interface FuzzingRun {
     tags?: string[];
     /** Deterministic replay verification fingerprint */
     replayFingerprint?: import('./replay/fingerprint').ReplayFingerprint;
+    /** Engine coverage counter time-series telemetry */
+    corpusStats?: CorpusStatPoint[];
+}
+
+/**
+ * Single data point in corpus statistics time-series.
+ */
+export interface CorpusStatPoint {
+    ts: number;
+    corpusSize: number;
+    execsPerSec: number;
+    coveragePct: number;
+}
+
+/**
+ * Aggregated telemetry dataset from fuzzing engine coverage counters.
+ */
+export interface CorpusStatsTelemetry {
+    corpusSize: number;
+    execsPerSec: number;
+    coveragePct: number;
+    uniqueCrashes: number;
+    series: CorpusStatPoint[];
 }
 
 /**
