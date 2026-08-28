@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useMaintainerMode } from './useMaintainerMode';
+import { createMeasuredResizer } from '../lib/createMeasuredResizer';
 import {
   loadWidgetLayoutForProfile,
   readActiveWidgetLayoutProfileId,
@@ -87,6 +88,12 @@ export default function WidgetLayoutEditor() {
   const [profileId, setProfileId] = useState('default');
   const [profileDraft, setProfileDraft] = useState('default');
   const gridRef = useRef<HTMLDivElement>(null);
+  const [measuredGrid, setMeasuredGrid] = useState<LayoutGrid>({
+    cols: 6,
+    rows: 8,
+    cellWidth: 200,
+    cellHeight: 150,
+  });
 
   // Load saved layout on component mount / profile change
   useEffect(() => {
@@ -120,15 +127,26 @@ export default function WidgetLayoutEditor() {
     loadLayout();
   }, []);
 
-  const gridConfig: LayoutGrid = useMemo(
-    () => ({
-      cols: 6,
-      rows: 8,
-      cellWidth: 200,
-      cellHeight: 150,
-    }),
-    [],
-  );
+  // Debounced, rAF-aligned resize measurement (#1392). Recomputes cell metrics
+  // on container resize in the measured (grid) path only; freeform mode relies
+  // on CSS auto-flow and is intentionally untouched (partitioned ownership).
+  useEffect(() => {
+    const el = gridRef.current;
+    if (!el) return;
+    const resizer = createMeasuredResizer(() => {
+      if (layoutMode !== 'grid') return;
+      const rect = el.getBoundingClientRect();
+      const cols = 6;
+      const rows = 8;
+      const cellWidth = rect.width > 0 ? Math.floor(rect.width / cols) : 200;
+      const cellHeight = rect.height > 240 ? Math.floor(rect.height / rows) : 150;
+      setMeasuredGrid({ cols, rows, cellWidth, cellHeight });
+    });
+    resizer.observe(el);
+    return () => resizer.disconnect();
+  }, [layoutMode]);
+
+  const gridConfig: LayoutGrid = useMemo(() => measuredGrid, [measuredGrid]);
 
   const saveLayout = useCallback(() => {
     saveWidgetLayoutForProfile(profileId, widgets);

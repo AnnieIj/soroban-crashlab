@@ -3,10 +3,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { RunStatus } from '../../types';
-import { useRunStream } from './useRunStream';
+import { isTerminalStatus } from '../../../lib/run-status';
 
 const POLL_INTERVAL_MS = 5_000;
-const TERMINAL_STATUSES: ReadonlySet<RunStatus> = new Set(['completed', 'failed', 'cancelled']);
 
 interface RunDetailAutoRefreshProps {
   runId: string;
@@ -25,7 +24,7 @@ export default function RunDetailAutoRefresh({ runId, initialStatus }: RunDetail
   });
 
   useEffect(() => {
-    if (TERMINAL_STATUSES.has(status)) {
+    if (isTerminalStatus(status)) {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
@@ -61,8 +60,7 @@ export default function RunDetailAutoRefresh({ runId, initialStatus }: RunDetail
   return (
     <span className={`badge badge-${status}`}>
       {status}
-      {stream.connected && <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" aria-label="Live updates" />}
-      {!TERMINAL_STATUSES.has(status) && (
+      {!isTerminalStatus(status) && (
         <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
       )}
     </span>
