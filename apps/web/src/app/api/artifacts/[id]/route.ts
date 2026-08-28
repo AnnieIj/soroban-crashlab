@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  getArtifactById,
-  deleteArtifactById,
-} from '@/lib/artifact-fs-adapter';
+import { selectArtifactRepository } from '@/lib/storage/artifact-repository';
 import { jsonError, withRouteErrorHandling } from '@/lib/route-handler';
 import { recordAuditEvent } from '@/lib/audit/audit-sink';
 
@@ -15,7 +12,7 @@ export const GET = withRouteErrorHandling(
       return jsonError('Artifact ID is required', 400);
     }
 
-    const result = await getArtifactById(id);
+    const result = await selectArtifactRepository().get(id);
 
     if (!result) {
       return jsonError('Artifact not found', 404);
@@ -44,7 +41,7 @@ export const DELETE = withRouteErrorHandling(
       return jsonError('Artifact ID is required', 400);
     }
 
-    const deleted = await deleteArtifactById(id);
+    const deleted = await selectArtifactRepository().delete(id);
 
     if (!deleted) {
       return jsonError('Artifact not found', 404);

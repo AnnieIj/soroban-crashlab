@@ -41,6 +41,10 @@ export interface RunIssueLink {
 export interface FuzzingRun {
     /** Unique identifier for the run */
     id: string;
+    /** Parent run this run was derived from, when replaying a subset of failing seeds */
+    parentId?: string;
+    /** Ordered subset of seed indexes replayed for this lineage child */
+    seedList?: number[];
     /** Current state of the run */
     status: RunStatus;
     /** Product area primarily exercised by the run */
@@ -71,8 +75,12 @@ export interface FuzzingRun {
     annotations?: string[];
     /** User-defined tags for triage and filtering */
     tags?: string[];
+    /** Artifacts produced by this run, when available. */
+    artifacts?: Artifact[];
     /** Deterministic replay verification fingerprint */
     replayFingerprint?: import('./replay/fingerprint').ReplayFingerprint;
+    /** Artifacts produced by the run */
+    artifacts?: Artifact[];
 }
 
 /**
