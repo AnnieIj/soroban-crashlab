@@ -1,0 +1,51 @@
+name: storage-driver-minio
+
+# Runs the StorageDriver contract suite against a real S3-compatible server
+# (#1433). Kept out of the main CI job so routine PRs do not pay the container
+# cost — the mocked-S3 path in `storage-driver.test.ts` covers the same
+# contract there. This runs nightly and on demand.
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+
+    services:
+      minio:
+        image: bitnami/minio:latest
+        ports:
+          - 9000:9000
+        env:
+          MINIO_ROOT_USER: crashlabtest
+          MINIO_ROOT_PASSWORD: crashlabtestsecret
+        options: >-
+          --health-cmd "curl -f http://localhost:9000/minio/health/live"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      CRASHLAB_STORAGE_DRIVER: s3
+      CRASHLAB_S3_ENDPOINT: http://127.0.0.1:9000
+      CRASHLAB_S3_REGION: us-east-1
+      CRASHLAB_S3_BUCKET: crashlab-artifacts
+      CRASHLAB_S3_ACCESS_KEY_ID: crashlabtest
+      CRASHLAB_S3_SECRET_ACCESS_KEY: crashlabtestsecret
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: Run the storage contract suite against MinIO
+        run: pnpm exec vitest run src/lib/storage/minio-contract.test.ts

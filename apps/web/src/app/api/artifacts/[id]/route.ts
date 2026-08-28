@@ -4,6 +4,7 @@ import {
   deleteArtifactById,
 } from '@/lib/artifact-fs-adapter';
 import { jsonError, withRouteErrorHandling } from '@/lib/route-handler';
+import { recordAuditEvent } from '@/lib/audit/audit-sink';
 
 export const GET = withRouteErrorHandling(
   'GET /api/artifacts/[id]',
@@ -48,6 +49,8 @@ export const DELETE = withRouteErrorHandling(
     if (!deleted) {
       return jsonError('Artifact not found', 404);
     }
+
+    recordAuditEvent({ action: 'artifact.delete', target: id });
 
     return NextResponse.json({
       success: true,

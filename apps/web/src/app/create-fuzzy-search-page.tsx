@@ -1,9 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { fetchRuns } from '../lib/api-client';
 import { FuzzingRun } from './types';
 import { fuzzySearch, getSearchableFieldLabels, type FuzzySearchResult } from './fuzzy-search-utils';
+import { searchRuns, usesGrammar } from './search/grammar/compiler';
+import { caretLine, type QueryError } from './search/grammar/lexer';
+import { suggestFields } from './search/grammar/fields';
 
 type PageState = 'loading' | 'success' | 'error';
 
@@ -22,6 +25,8 @@ export default function CreateFuzzySearchPage() {
   const [query, setQuery] = useState('');
   const [searchResults, setSearchResults] = useState<FuzzySearchResult[]>([]);
   const [showFieldHelp, setShowFieldHelp] = useState(false);
+  const [queryError, setQueryError] = useState<QueryError | null>(null);
+  const [hintIndex, setHintIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<number | null>(null);
 
@@ -42,9 +47,22 @@ export default function CreateFuzzySearchPage() {
 
   const handleSearch = useCallback((value: string) => {
     setQuery(value);
+    setHintIndex(0);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = window.setTimeout(() => {
-      setSearchResults(fuzzySearch(runs, value));
+      // Plain text keeps the existing fuzzy behaviour; only a query that
+      // actually uses the grammar goes through the parser.
+      if (!usesGrammar(value)) {
+        setQueryError(null);
+        setSearchResults(fuzzySearch(runs, value));
+        return;
+      }
+
+      const outcome = searchRuns(runs, value);
+      setQueryError(outcome.error ?? null);
+      setSearchResults(
+        outcome.runs.map((run) => ({ run, score: 1, matchedFields: [] })),
+      );
     }, 150);
   }, [runs]);
 
@@ -55,6 +73,46 @@ export default function CreateFuzzySearchPage() {
   }, []);
 
   const fieldLabels = useMemo(() => getSearchableFieldLabels(), []);
+
+  // The token under the cursor, when it is a bare word that could become a
+  // field name (`stat` → `status:`).
+  const activeFieldPrefix = useMemo(() => {
+    const lastToken = query.split(/\s+/).at(-1) ?? '';
+    if (!lastToken || lastToken.includes(':') || /[()<>"]/.test(lastToken)) return '';
+    return lastToken.replace(/^-/, '');
+  }, [query]);
+
+  const fieldHints = useMemo(
+    () => (activeFieldPrefix ? suggestFields(activeFieldPrefix).slice(0, 6) : []),
+    [activeFieldPrefix],
+  );
+
+  const applyHint = useCallback((fieldName: string) => {
+    const parts = query.split(/(\s+)/);
+    const lastIndex = parts.length - 1;
+    const negated = (parts[lastIndex] ?? '').startsWith('-');
+    parts[lastIndex] = `${negated ? '-' : ''}${fieldName}:`;
+    const next = parts.join('');
+    setQuery(next);
+    setHintIndex(0);
+    inputRef.current?.focus();
+  }, [query]);
+
+  const handleKeyDown = useCallback((event: KeyboardEvent<HTMLInputElement>) => {
+    if (fieldHints.length === 0) return;
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setHintIndex((index) => (index + 1) % fieldHints.length);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setHintIndex((index) => (index - 1 + fieldHints.length) % fieldHints.length);
+    } else if (event.key === 'Tab' || event.key === 'Enter') {
+      event.preventDefault();
+      applyHint(fieldHints[hintIndex].name);
+    } else if (event.key === 'Escape') {
+      setHintIndex(0);
+    }
+  }, [fieldHints, hintIndex, applyHint]);
 
   const handleRetry = useCallback(() => {
     setPageState('loading');
@@ -102,12 +160,63 @@ export default function CreateFuzzySearchPage() {
                 type="search"
                 value={query}
                 onChange={(e) => handleSearch(e.target.value)}
-                placeholder="Search runs by ID, status, area, signature, tags..."
+                onKeyDown={handleKeyDown}
+                placeholder="status:failed area:auth fee>100 since 2026 — or just type"
+                role="combobox"
+                aria-expanded={fieldHints.length > 0}
+                aria-controls="search-field-hints"
                 className="w-full pl-12 pr-4 py-3 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A66C2]"
                 autoFocus
                 aria-label="Search runs"
               />
             </div>
+            {fieldHints.length > 0 && (
+              <ul
+                id="search-field-hints"
+                role="listbox"
+                aria-label="Field name suggestions"
+                className="absolute z-10 mt-1 w-full max-w-md overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+              >
+                {fieldHints.map((field, index) => (
+                  <li key={field.name}>
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={index === hintIndex}
+                      onClick={() => applyHint(field.name)}
+                      className={`flex w-full items-baseline justify-between px-3 py-2 text-left text-xs ${
+                        index === hintIndex
+                          ? 'bg-[#0A66C2] text-white'
+                          : 'text-zinc-700 dark:text-zinc-300'
+                      }`}
+                    >
+                      <span className="font-mono font-semibold">{field.name}:</span>
+                      <span className="opacity-70">{field.description}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {queryError && (
+              <div
+                role="alert"
+                className="mt-2 rounded-xl border border-rose-300 bg-rose-50 p-3 dark:border-rose-900 dark:bg-rose-950/40"
+              >
+                <p className="text-xs font-semibold text-rose-700 dark:text-rose-300">
+                  {queryError.message}
+                </p>
+                <pre className="mt-1 overflow-x-auto font-mono text-[11px] leading-tight text-rose-700 dark:text-rose-300">
+                  {caretLine(query, queryError.position)}
+                </pre>
+                {queryError.expected.length > 0 && (
+                  <p className="mt-1 text-[11px] text-rose-600 dark:text-rose-400">
+                    Expected: {queryError.expected.slice(0, 8).join(', ')}
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="flex items-center justify-between mt-2 text-xs text-meta">
               <span>{runs.length} runs indexed</span>
               <button

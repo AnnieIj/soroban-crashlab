@@ -7,7 +7,7 @@ export interface FilterPreset {
   updatedAt: string;
 }
 
-const PRESETS_STORAGE_KEY = 'crashlab:saved-filter-presets:v1';
+export const PRESETS_STORAGE_KEY = 'crashlab:saved-filter-presets:v1';
 
 export function readPresets(): FilterPreset[] {
   if (typeof window === 'undefined') return [];
