@@ -1,18 +1,24 @@
-'use client';
+"use client";
 
-import { memo, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
-import { FuzzingRun, RunArea, RunSeverity } from '../types';
-import { FilterBar } from './FilterBar';
-import { CrashTrendChart } from './CrashTrendChart';
-import { fetchRuns } from '../../lib/api-client';
+import { memo, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { FuzzingRun, RunArea, RunSeverity } from "../types";
+import { FilterBar } from "./FilterBar";
+import { CrashTrendChart } from "./CrashTrendChart";
+import { AnomalySensitivityToggle } from "./AnomalySensitivityToggle";
+import { fetchRuns } from "../../lib/api-client";
 import {
   transformRunsToCrashEvents,
   bucketByDay,
   buildChartData,
   extractSignatureMetadata,
   isChartDataEmpty,
-} from '../utils/trendAggregation';
+} from "../utils/trendAggregation";
+import {
+  AnomalySensitivity,
+  buildDailyRateSeries,
+  detectAnomalies,
+} from "../utils/trendAnomaly";
 
 /**
  * Crash Signature Frequency Trend page.
@@ -22,20 +28,32 @@ import {
  */
 export default function CrashTrendPage() {
   const [runs, setRuns] = useState<FuzzingRun[]>([]);
-  const [_dataState, setDataState] = useState<'loading' | 'success' | 'error'>('loading');
+  const [_dataState, setDataState] = useState<"loading" | "success" | "error">(
+    "loading",
+  );
 
   useEffect(() => {
     let cancelled = false;
     fetchRuns()
-      .then((data) => { if (!cancelled) { setRuns(data.runs ?? []); setDataState('success'); } })
-      .catch(() => { if (!cancelled) setDataState('error'); });
-    return () => { cancelled = true; };
+      .then((data) => {
+        if (!cancelled) {
+          setRuns(data.runs ?? []);
+          setDataState("success");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setDataState("error");
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
-
 
   // Filter state
   const [selectedAreas, setSelectedAreas] = useState<RunArea[]>([]);
-  const [selectedSeverities, setSelectedSeverities] = useState<RunSeverity[]>([]);
+  const [selectedSeverities, setSelectedSeverities] = useState<RunSeverity[]>(
+    [],
+  );
   const [selectedSignatures, setSelectedSignatures] = useState<string[]>([]);
 
   // Aggregate and filter data reactively
@@ -52,7 +70,7 @@ export default function CrashTrendPage() {
 
     // Step 4: Extract signatures from filtered data
     const sigMetadata = extractSignatureMetadata(
-      Array.from(buckets.values()).flat()
+      Array.from(buckets.values()).flat(),
     );
 
     // Step 5: Build chart data with signature filter
@@ -68,7 +86,7 @@ export default function CrashTrendPage() {
   // Determine which signatures are in the filtered data
   const availableSignaturesFiltered = useMemo(() => {
     return availableSignatures.filter((sig) =>
-      chartData.some((point) => point[sig.signature] !== undefined)
+      chartData.some((point) => point[sig.signature] !== undefined),
     );
   }, [availableSignatures, chartData]);
 
@@ -86,7 +104,21 @@ export default function CrashTrendPage() {
   const isEmpty = isChartDataEmpty(chartData);
   const hasNoRuns = runs.length === 0;
 
-  const totalCrashes = useMemo(() => calculateTotalCrashes(chartData), [chartData]);
+  // Per-view anomaly sensitivity (maps to the detector's k multiplier).
+  const [sensitivity, setSensitivity] = useState<AnomalySensitivity>("medium");
+
+  // Statistical anomaly detection over the daily crash-rate series.
+  // Detection is deliberately run on the day TOTAL across the selected
+  // signatures: that is the "crash rate" a maintainer eyeballs for spikes.
+  const anomalyResult = useMemo(() => {
+    const series = buildDailyRateSeries(chartData, effectiveSelectedSignatures);
+    return detectAnomalies(series, { sensitivity });
+  }, [chartData, effectiveSelectedSignatures, sensitivity]);
+
+  const totalCrashes = useMemo(
+    () => calculateTotalCrashes(chartData),
+    [chartData],
+  );
 
   return (
     <div className="min-h-screen bg-white dark:bg-zinc-950">
@@ -98,21 +130,31 @@ export default function CrashTrendPage() {
               href="/"
               className="inline-flex items-center gap-1.5 text-sm text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 mb-4 transition"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M10 19l-7-7m0 0l7-7m-7 7h18"
+                />
               </svg>
               Back to Dashboard
             </Link>
             <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">
-            Crash Signature Trends
-          </h1>
-          <p className="text-zinc-600 dark:text-zinc-400">
-            Visualize crash signature frequency over time across fuzzing runs.
-            Filter by area, severity, and specific signatures to focus on
-            trends that matter.
-          </p>
+              Crash Signature Trends
+            </h1>
+            <p className="text-zinc-600 dark:text-zinc-400">
+              Visualize crash signature frequency over time across fuzzing runs.
+              Filter by area, severity, and specific signatures to focus on
+              trends that matter.
+            </p>
+          </div>
         </div>
-      </div>
 
         {/* No data state */}
         {hasNoRuns ? (
@@ -153,9 +195,26 @@ export default function CrashTrendPage() {
               </div>
             ) : (
               <div className="space-y-4">
+                {/* Anomaly controls: sensitivity preset for this view */}
+                <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+                  <AnomalySensitivityToggle
+                    value={sensitivity}
+                    onChange={setSensitivity}
+                    flagCount={anomalyResult.flags.length}
+                  />
+
+                  {/* Cold-start honesty: say what is missing, do not pretend. */}
+                  {anomalyResult.coldStart.active && (
+                    <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
+                      {anomalyResult.coldStart.message}
+                    </p>
+                  )}
+                </div>
+
                 <CrashTrendChart
                   data={chartData}
                   selectedSignatures={effectiveSelectedSignatures}
+                  anomalyFlags={anomalyResult.flags}
                 />
 
                 {/* Summary stats */}
@@ -193,7 +252,13 @@ export default function CrashTrendPage() {
  * one of the four cards) doesn't force the other, unchanged cards to
  * re-render as well.
  */
-const StatCard = memo(function StatCard({ label, value }: { label: string; value: string }) {
+const StatCard = memo(function StatCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
   return (
     <div className="p-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg">
       <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">
@@ -209,15 +274,16 @@ const StatCard = memo(function StatCard({ label, value }: { label: string; value
 /**
  * Calculate total crashes across all chart data points.
  */
-function calculateTotalCrashes(chartData: Record<string, string | number>[]): number {
+function calculateTotalCrashes(
+  chartData: Record<string, string | number>[],
+): number {
   let total = 0;
   for (const point of chartData) {
     for (const [key, value] of Object.entries(point)) {
-      if (key !== 'date' && typeof value === 'number') {
+      if (key !== "date" && typeof value === "number") {
         total += value;
       }
     }
   }
   return total;
 }
-
