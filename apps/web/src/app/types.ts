@@ -85,8 +85,6 @@ export interface FuzzingRun {
     artifacts?: Artifact[];
     /** Deterministic replay verification fingerprint */
     replayFingerprint?: import('./replay/fingerprint').ReplayFingerprint;
-    /** Artifacts produced by the run */
-    artifacts?: Artifact[];
 }
 
 /**
