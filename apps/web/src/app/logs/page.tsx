@@ -62,9 +62,10 @@ export default function LogViewerPage() {
   const [autoscroll, setAutoscroll] = useState(true);
   useRunStream("run-1001", (envelope) => {
     if (envelope.event.type !== "LOG_APPEND") return;
+    const logEvent = envelope.event;
     setEntries((current) => {
       const known = new Set(current.map((entry) => entry.id));
-      return [...current, ...envelope.event.entries.filter((entry) => !known.has(entry.id))];
+      return [...current, ...logEvent.entries.filter((entry) => !known.has(entry.id))];
     });
   });
 
