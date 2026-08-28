@@ -24,6 +24,11 @@ import {
   selectChartRuns,
   summarizeChartRows,
 } from './add-run-comparison-charts-utils';
+import {
+  FEE_Y_DOMAIN,
+  formatMalformedFeeCaption,
+  sanitizeFeeSeries,
+} from './resource-fee-utils';
 
 type ComparisonProps = {
   runs: FuzzingRun[];
@@ -114,18 +119,27 @@ export default function AddRunComparisonCharts({ runs, dataState, onRetry }: Com
   const [chartType, setChartType] = useState<ChartType>('bar');
 
   const chartRuns = useMemo(() => selectChartRuns(runs), [runs]);
-  const baselineRun = chartRuns.find((run) => run.id === baselineRunId) ?? chartRuns[chartRuns.length - 1] ?? null;
-  const selectedRun = chartRuns.find((run) => run.id === selectedRunId) ?? chartRuns[0] ?? null;
+  const feeSanitization = useMemo(
+    () => (metric === 'minResourceFee' ? sanitizeFeeSeries(chartRuns) : { clean: chartRuns, dropped: { count: 0, ids: [] as string[] } }),
+    [chartRuns, metric],
+  );
+  const sanitizedChartRuns = feeSanitization.clean;
+  const feeCaption = formatMalformedFeeCaption(feeSanitization.dropped.count);
+  const feeCaptionTooltip = feeSanitization.dropped.ids.join(', ');
+  const yDomain = metric === 'minResourceFee' ? FEE_Y_DOMAIN : undefined;
+  const baselineRun =
+    sanitizedChartRuns.find((run) => run.id === baselineRunId) ?? sanitizedChartRuns[sanitizedChartRuns.length - 1] ?? null;
+  const selectedRun = sanitizedChartRuns.find((run) => run.id === selectedRunId) ?? sanitizedChartRuns[0] ?? null;
   const metricConfig = METRICS.find((item) => item.key === metric) ?? METRICS[0];
   const stateMessage = getChartsStateMessage(dataState, chartRuns.length);
 
   const comparisonData = useMemo(() => {
     if (!baselineRun) return [];
-    return buildChartRows(chartRuns, metric, baselineRun.id).map((row) => ({
+    return buildChartRows(sanitizedChartRuns, metric, baselineRun.id).map((row) => ({
       ...row,
       selected: selectedRun ? row.id === selectedRun.id : false,
     }));
-  }, [baselineRun, chartRuns, metric, selectedRun]);
+  }, [baselineRun, sanitizedChartRuns, metric, selectedRun]);
 
   const selectedComparison = comparisonData.find((entry) => entry.id === selectedRun?.id) ?? comparisonData[0];
 
@@ -310,7 +324,7 @@ export default function AddRunComparisonCharts({ runs, dataState, onRetry }: Com
                   <BarChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-zinc-200 dark:stroke-zinc-800" />
                     <XAxis dataKey="id" tick={{ fontSize: 11 }} angle={-20} textAnchor="end" height={50} />
-                    <YAxis tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} domain={yDomain} allowDecimals={false} />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: 'var(--tooltip-bg, white)',
@@ -323,6 +337,15 @@ export default function AddRunComparisonCharts({ runs, dataState, onRetry }: Com
                     <Bar dataKey="value" fill="#3b82f6" name={metricConfig.label} radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
+                {feeCaption && (
+                  <figcaption className="mt-3 text-xs text-amber-700 dark:text-amber-300" title={feeCaptionTooltip}>
+                    {feeCaption}
+                    <span className="ml-1 font-normal" title={feeCaptionTooltip}>
+                      ({feeSanitization.dropped.ids.slice(0, 6).join(', ')}
+                      {feeSanitization.dropped.ids.length > 6 ? ` +${feeSanitization.dropped.ids.length - 6} more` : ''})
+                    </span>
+                  </figcaption>
+                )}
               </div>
             )}
 
@@ -332,7 +355,7 @@ export default function AddRunComparisonCharts({ runs, dataState, onRetry }: Com
                   <LineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-zinc-200 dark:stroke-zinc-800" />
                     <XAxis dataKey="id" tick={{ fontSize: 11 }} angle={-20} textAnchor="end" height={50} />
-                    <YAxis tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} domain={yDomain} allowDecimals={false} />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: 'var(--tooltip-bg, white)',
@@ -345,6 +368,15 @@ export default function AddRunComparisonCharts({ runs, dataState, onRetry }: Com
                     <Line type="monotone" dataKey="value" stroke="#3b82f6" name={metricConfig.label} dot={{ r: 4 }} strokeWidth={2} />
                   </LineChart>
                 </ResponsiveContainer>
+                {feeCaption && (
+                  <figcaption className="mt-3 text-xs text-amber-700 dark:text-amber-300" title={feeCaptionTooltip}>
+                    {feeCaption}
+                    <span className="ml-1 font-normal" title={feeCaptionTooltip}>
+                      ({feeSanitization.dropped.ids.slice(0, 6).join(', ')}
+                      {feeSanitization.dropped.ids.length > 6 ? ` +${feeSanitization.dropped.ids.length - 6} more` : ''})
+                    </span>
+                  </figcaption>
+                )}
               </div>
             )}
 
@@ -354,7 +386,7 @@ export default function AddRunComparisonCharts({ runs, dataState, onRetry }: Com
                   <ScatterChart margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-zinc-200 dark:stroke-zinc-800" />
                     <XAxis dataKey="delta" tick={{ fontSize: 12 }} name="Delta %" />
-                    <YAxis dataKey="value" tick={{ fontSize: 12 }} name={metricConfig.label} />
+                    <YAxis dataKey="value" tick={{ fontSize: 12 }} name={metricConfig.label} domain={yDomain} allowDecimals={false} />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: 'var(--tooltip-bg, white)',
@@ -368,6 +400,15 @@ export default function AddRunComparisonCharts({ runs, dataState, onRetry }: Com
                     <Scatter data={chartData} fill="#3b82f6" name={metricConfig.label} />
                   </ScatterChart>
                 </ResponsiveContainer>
+                {feeCaption && (
+                  <figcaption className="mt-3 text-xs text-amber-700 dark:text-amber-300" title={feeCaptionTooltip}>
+                    {feeCaption}
+                    <span className="ml-1 font-normal" title={feeCaptionTooltip}>
+                      ({feeSanitization.dropped.ids.slice(0, 6).join(', ')}
+                      {feeSanitization.dropped.ids.length > 6 ? ` +${feeSanitization.dropped.ids.length - 6} more` : ''})
+                    </span>
+                  </figcaption>
+                )}
               </div>
             )}
 

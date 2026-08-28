@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import { FuzzingRun, RunStatus, RunSeverity } from "./types";
+import { assertNeverStatus } from "../lib/run-status";
 import { useDataTableKeyboardNav } from "./use-data-table-keyboard-nav";
 import TruncatedCell from "@/components/TruncatedCell";
 import {
@@ -43,32 +44,46 @@ const formatDuration = (ms: number): string => {
   return parts.join(" ");
 };
 
+/**
+ * Outline treatment, local to this table.
+ *
+ * UPGRADE POINT: fold into `STATUS_META.badgeClass` with the design-token
+ * consolidation. Typed as a full `Record` so a new lifecycle stage fails the
+ * build here rather than rendering an unstyled badge.
+ */
+const OUTLINE_STYLES: Record<RunStatus, string> = {
+  running:
+    "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800",
+  completed:
+    "bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800",
+  failed:
+    "bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800",
+  cancelled:
+    "bg-zinc-100 text-zinc-600 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700",
+};
+
+/** Leading dot colour. Exhaustive: a new status breaks the build at the default branch. */
+function statusDotClass(status: RunStatus): string {
+  switch (status) {
+    case "running":
+      return "animate-pulse bg-blue-500";
+    case "completed":
+      return "bg-green-500";
+    case "failed":
+      return "bg-red-500";
+    case "cancelled":
+      return "bg-zinc-400";
+    default:
+      return assertNeverStatus(status);
+  }
+}
+
 const StatusBadge = ({ status }: { status: RunStatus }) => {
-  const styles = {
-    running:
-      "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800",
-    completed:
-      "bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800",
-    failed:
-      "bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800",
-    cancelled:
-      "bg-zinc-100 text-zinc-600 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700",
-  };
   return (
     <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-widest ${styles[status]}`}
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-widest ${OUTLINE_STYLES[status]}`}
     >
-      <span
-        className={`w-1 h-1 rounded-full mr-1.5 ${
-          status === "running"
-            ? "animate-pulse bg-blue-500"
-            : status === "completed"
-              ? "bg-green-500"
-              : status === "failed"
-                ? "bg-red-500"
-                : "bg-zinc-400"
-        }`}
-      />
+      <span className={`w-1 h-1 rounded-full mr-1.5 ${statusDotClass(status)}`} />
       {status}
     </span>
   );
