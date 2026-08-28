@@ -12,6 +12,7 @@
 import { NextResponse } from 'next/server';
 import { buildDedupKey } from '../../../../integrate-pagerduty-alert-integration-utils';
 import type { TriggerAlertPayload } from '../../../../../lib/integrations/pagerduty-adapter';
+import { PAGERDUTY_FETCH_TIMEOUT_MS } from '../../../../../lib/timeouts';
 
 const PD_EVENTS_API_URL = 'https://events.pagerduty.com/v2/enqueue';
 
@@ -62,7 +63,7 @@ export async function POST(request: Request) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(pdPayload),
-        signal: AbortSignal.timeout?.(10_000),
+        signal: AbortSignal.timeout?.(PAGERDUTY_FETCH_TIMEOUT_MS),
       });
 
       if (pdResponse.ok || pdResponse.status === 202) {

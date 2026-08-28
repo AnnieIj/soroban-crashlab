@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { buildMockRuns } from '@/app/mockRuns';
 import type { FuzzingRun } from '@/app/types';
 import { withRouteErrorHandling } from '@/lib/route-handler';
 import { errorResponse, status } from '@/lib/api-response-utils';
 import { withFixtureCaching } from '@/lib/fixture-caching';
+import { API_FETCH_TIMEOUT_MS } from '@/lib/timeouts';
+import { selectRunStorageDriver } from '@/lib/storage';
 
-export function findRunById(id: string): FuzzingRun | undefined {
-  return buildMockRuns().find((r) => r.id === id);
+export async function findRunById(id: string): Promise<FuzzingRun | undefined> {
+  return (await selectRunStorageDriver().getRun(id)) ?? undefined;
 }
 
 export const GET = withRouteErrorHandling(
@@ -23,10 +24,10 @@ export const GET = withRouteErrorHandling(
     if (runsApiUrl) {
       const upstream = await fetch(
         `${runsApiUrl}/runs/${encodeURIComponent(id)}`,
-        {
+{
           headers: { Accept: 'application/json' },
           cache: 'no-store',
-          signal: AbortSignal.timeout(10_000),
+          signal: AbortSignal.timeout(API_FETCH_TIMEOUT_MS),
         },
       );
       if (upstream.status === 404) {
@@ -39,7 +40,7 @@ export const GET = withRouteErrorHandling(
       return NextResponse.json(data, { headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' } });
     }
 
-    const run = findRunById(id);
+    const run = await findRunById(id);
     if (!run) {
       return errorResponse('Run not found', status.notFound);
     }
