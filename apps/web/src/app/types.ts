@@ -187,6 +187,7 @@ export interface Artifact {
     size: number;
     /** ISO 8601 timestamp */
     updatedAt: string;
+    createdAt?: string;
     runId?: string;
     content_hash?: string;
     /**
