@@ -14,6 +14,8 @@ import RunSequenceDiagram from './RunSequenceDiagram';
 import { summarizeCallSequence } from './run-sequence-diagram-utils';
 import AddRunReplayHistoryWithTimestamps from '../../add-run-replay-history-with-timestamps';
 import RunMetadataEditorWrapper from './RunMetadataEditorWrapper';
+import RunAnnotationThreads from './annotation-threads/RunAnnotationThreads';
+import SwipeNavigationWrapper from '../swipe/SwipeNavigationWrapper';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,6 +45,7 @@ export default async function RunDetailPage({ params }: RunDetailPageProps) {
     const callSequenceSummary = summarizeCallSequence(callSequence);
 
     return (
+        <SwipeNavigationWrapper currentRunId={id}>
         <div className="px-6 md:px-8 max-w-5xl mx-auto w-full py-14">
             <BreadcrumbNav
                 segments={[
@@ -177,7 +180,10 @@ export default async function RunDetailPage({ params }: RunDetailPageProps) {
                 <div className="mt-6">
                     <AddRunReplayHistoryWithTimestamps sourceRunId={run.id} />
                 </div>
+
+                <RunAnnotationThreads runId={run.id} />
             </div>
         </div>
+        </SwipeNavigationWrapper>
     );
 }

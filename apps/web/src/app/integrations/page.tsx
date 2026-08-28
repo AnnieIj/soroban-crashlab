@@ -2,6 +2,10 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { MOCK_DLQ_ENTRIES } from '@/fixtures/webhook-dlq';
+
+/** Dead-letter depth, so a silently failing endpoint is visible here (#1427). */
+const DEAD_LETTER_DEPTH = MOCK_DLQ_ENTRIES.length;
 
 type Integration = {
   id: string;
@@ -11,6 +15,8 @@ type Integration = {
   href: string;
   status: 'available' | 'coming-soon';
   category: string;
+  /** Count surfaced next to the card's status chip when non-zero. */
+  badge?: number;
 };
 
 const INTEGRATIONS: Integration[] = [
@@ -130,7 +136,8 @@ const INTEGRATIONS: Integration[] = [
     ),
     href: '/integrations/webhooks',
     status: 'available',
-    category: 'Notifications'
+    category: 'Notifications',
+    badge: DEAD_LETTER_DEPTH
   },
   {
     id: 'pagerduty',
@@ -249,9 +256,19 @@ export default function IntegrationsHub() {
                         <h3 className="text-lg font-bold text-zinc-900 dark:text-white">
                           {integration.title}
                         </h3>
-                        <span className="inline-block mt-2 px-2 py-1 text-xs font-semibold uppercase tracking-widest rounded-full bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300">
-                          Active
-                        </span>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <span className="inline-block px-2 py-1 text-xs font-semibold uppercase tracking-widest rounded-full bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300">
+                            Active
+                          </span>
+                          {integration.badge ? (
+                            <span
+                              title={`${integration.badge} dead-lettered ${integration.badge === 1 ? 'delivery' : 'deliveries'}`}
+                              className="inline-block px-2 py-1 text-xs font-semibold uppercase tracking-widest rounded-full bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300"
+                            >
+                              {integration.badge} dead-lettered
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
                     
