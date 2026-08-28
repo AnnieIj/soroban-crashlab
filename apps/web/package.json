@@ -15,11 +15,6 @@
     "test:corpus-stats": "npx vitest run src/lib/utils/downsampler.test.ts src/app/dashboard/CorpusStatsPanel.test.ts",
     "test:rbac": "npx vitest run src/lib/rbac.test.ts",
     "test:triage-pipeline": "npx vitest run src/app/triage/triage-pipeline-utils.test.ts",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
-    "test:api-tokens": "npx vitest run src/lib/storage/api-token-store.test.ts",
-    "test:coverage": "vitest run --coverage",
->>>>>>> 28eda18 (feat: implement scoped API token management with expiry tracking)
     "test:request-dedup": "vitest run src/lib/request-dedup.test.ts",
     "test:annotation-threads": "vitest run annotation-threads",
     "test:slack-interactivity": "vitest run slack-interactivity",
