@@ -15,6 +15,7 @@
     "test:corpus-stats": "npx vitest run src/lib/utils/downsampler.test.ts src/app/dashboard/CorpusStatsPanel.test.ts",
     "test:rbac": "npx vitest run src/lib/rbac.test.ts",
     "test:triage-pipeline": "npx vitest run src/app/triage/triage-pipeline-utils.test.ts",
+    "test:notification-read-state": "npx tsc src/app/notification-read-state-utils.ts src/app/notification-read-state-utils.test.ts --module commonjs --target es2020 --rootDir src --outDir build/test-tmp --esModuleInterop && node build/test-tmp/app/notification-read-state-utils.test.js",
     "test:request-dedup": "vitest run src/lib/request-dedup.test.ts",
     "test:annotation-threads": "vitest run annotation-threads",
     "test:slack-interactivity": "vitest run slack-interactivity",
