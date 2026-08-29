@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import type { Artifact, ContentType } from "./types";
 import { formatSize } from "./utils/format";
+import { absoluteShort } from "./utils/datetime";
 import { triggerBrowserDownload } from "./utils/browser-download";
 import {
   detectContentType,
@@ -41,18 +42,11 @@ type ContentLoadState = "idle" | "loading" | "success" | "error";
 
 
 /**
- * formatDate — formats an ISO 8601 timestamp using Intl.DateTimeFormat.
- * Falls back to the raw string if parsing fails.
+ * formatDate — formats an ISO 8601 timestamp using utils/datetime.absoluteShort.
+ * Kept as a named export for backward-compatibility with existing consumers.
  */
 export function formatDate(iso: string): string {
-  try {
-    return new Intl.DateTimeFormat("en-US", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(new Date(iso));
-  } catch {
-    return iso;
-  }
+  return absoluteShort(iso);
 }
 
 /**
