@@ -52,7 +52,6 @@ const getStatusCodeColor = (code: number): string => {
 };
 
 const formatDate = (isoString: string): string => absoluteShort(isoString);
-};
 
 const getStatusCodeCategory = (code: number): string => {
   if (code >= 400 && code < 500) return 'Client Error';

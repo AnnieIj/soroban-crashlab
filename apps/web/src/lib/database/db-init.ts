@@ -103,7 +103,7 @@ class Database {
       logger.info('Vercel Postgres connection validated', {
         pool_max: this.config.connectionPool?.max,
       });
-    } catch (error) {
+    } catch {
       throw new Error('Invalid Vercel Postgres connection string');
     }
   }
@@ -119,7 +119,7 @@ class Database {
         pool_min: this.config.connectionPool?.min,
         pool_max: this.config.connectionPool?.max,
       });
-    } catch (error) {
+    } catch {
       throw new Error('Invalid PostgreSQL connection string');
     }
   }

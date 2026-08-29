@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { logger } from '@/lib/logger';
+import { NextRequest } from 'next/server';
+import { proxy } from './rate-limit';
 
 const CORRELATION_ID_HEADER = 'x-correlation-id';
 
 export function middleware(request: NextRequest) {
-  const response = NextResponse.next();
+  const response = proxy(request);
 
   // Add correlation ID for request tracking
   const correlationId = request.headers.get(CORRELATION_ID_HEADER) || generateCorrelationId();

@@ -20,7 +20,7 @@
  *     module is parsed — cannot import this gateway).
  */
 
-import { defineBooleanStorage, defineJsonStorage, defineStringStorage } from './local-storage';
+import { defineJsonStorage, defineStringStorage } from './local-storage';
 
 // ── Theme persistence (exemplar 1) ────────────────────────────────────────────
 // Key matches THEME_STORAGE_KEY in theme-provider-utils.ts
