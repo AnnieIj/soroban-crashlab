@@ -211,6 +211,32 @@ describe('api-client', () => {
     });
   });
 
+  describe('fetchLatestOnly', () => {
+    it('automatically aborts older requests when called again', async () => {
+      const { fetchLatestOnly } = await loadModule();
+
+      const mockFetcher = vi.fn((query: string, signal: AbortSignal) => {
+        return new Promise<string>((resolve, reject) => {
+          const timer = setTimeout(() => resolve(`result:${query}`), 50);
+          signal.addEventListener('abort', () => {
+            clearTimeout(timer);
+            const err = new Error('The operation was aborted');
+            err.name = 'AbortError';
+            reject(err);
+          });
+        });
+      });
+
+      const latestFetcher = fetchLatestOnly(mockFetcher);
+
+      const promise1 = latestFetcher('query-1');
+      const promise2 = latestFetcher('query-2');
+
+      await expect(promise1).rejects.toThrow('The operation was aborted');
+      await expect(promise2).resolves.toBe('result:query-2');
+    });
+  });
+
   describe('ApiError', () => {
     it('carries the status code and a readable name', async () => {
       const { ApiError } = await loadModule();

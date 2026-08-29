@@ -59,10 +59,11 @@ export default function RunsPage() {
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
     const load = async () => {
       setDataState('loading');
       try {
-        const data = await fetchRuns();
+        const data = await fetchRuns(controller.signal);
         if (!cancelled) {
           const sorted = (data.runs ?? []).slice().sort((a: FuzzingRun, b: FuzzingRun) => {
             const ta = a.queuedAt ?? a.startedAt ?? '';
@@ -72,8 +73,10 @@ export default function RunsPage() {
           setRuns(sorted);
           setDataState('success');
         }
-      } catch {
-        if (!cancelled) setDataState('error');
+      } catch (err: unknown) {
+        if (!cancelled && (err as Error)?.name !== 'AbortError') {
+          setDataState('error');
+        }
       }
     };
     void load();
@@ -87,9 +90,9 @@ export default function RunsPage() {
 
     return () => {
       cancelled = true;
+      controller.abort();
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-    return () => { cancelled = true; };
   }, [fetchAttempt]);
 
   const visibleRuns = useMemo(() => {

@@ -7,6 +7,7 @@ import { api } from '../lib/api-client';
 import type { Artifact } from './types';
 import { MOCK_ARTIFACTS } from '../fixtures/artifacts';
 import { formatSize } from './utils/format';
+import { absoluteShort } from './utils/datetime';
 
 export type { Artifact };
 
@@ -287,7 +288,7 @@ export default function ArtifactExplorer() {
                     </td>
                     <td className="px-6 py-5">
                       <div className="text-sm text-zinc-600 dark:text-zinc-400 font-medium whitespace-nowrap">
-                        {new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(artifact.updatedAt))}
+                        {absoluteShort(artifact.updatedAt)}
                       </div>
                     </td>
                     <td className="px-6 py-5 text-right pr-8">
