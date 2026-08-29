@@ -43,7 +43,7 @@ function unwrapApiPayload<T>(json: unknown): T {
   return json as T;
 }
 
-async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+async function apiFetch<T>(path: string, options?: RequestInit & { signal?: AbortSignal }): Promise<T> {
   const res = await fetch(apiUrl(path), {
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     ...options,
@@ -98,64 +98,74 @@ export const api = {
     get: (id: string, signal?: AbortSignal) =>
       dedupedFetchJson<FuzzingRun>(apiUrl(`/runs/${encodeURIComponent(id)}`), signal),
     issues: {
-      list: (runId: string) =>
+      list: (runId: string, signal?: AbortSignal) =>
         apiFetch<{ runId: string; issues: RunIssueLink[] }>(
           `/runs/${encodeURIComponent(runId)}/issues`,
+          { signal },
         ),
-      add: (runId: string, link: RunIssueLink) =>
+      add: (runId: string, link: RunIssueLink, signal?: AbortSignal) =>
         apiFetch<{ runId: string; issues: RunIssueLink[] }>(
           `/runs/${encodeURIComponent(runId)}/issues`,
-          { method: 'POST', body: JSON.stringify(link) },
+          { method: 'POST', body: JSON.stringify(link), signal },
         ),
-      remove: (runId: string, href: string) =>
+      remove: (runId: string, href: string, signal?: AbortSignal) =>
         apiFetch<{ runId: string; issues: RunIssueLink[] }>(
           `/runs/${encodeURIComponent(runId)}/issues`,
-          { method: 'DELETE', body: JSON.stringify({ href }) },
+          { method: 'DELETE', body: JSON.stringify({ href }), signal },
         ),
     },
     tags: {
-      list: (runId: string) =>
-        apiFetch<{ runId: string; tags: string[] }>(`/runs/${encodeURIComponent(runId)}/tags`),
-      add: (runId: string, tag: string) =>
+      list: (runId: string, signal?: AbortSignal) =>
+        apiFetch<{ runId: string; tags: string[] }>(`/runs/${encodeURIComponent(runId)}/tags`, {
+          signal,
+        }),
+      add: (runId: string, tag: string, signal?: AbortSignal) =>
         apiFetch<{ runId: string; tags: string[] }>(`/runs/${encodeURIComponent(runId)}/tags`, {
           method: 'POST',
           body: JSON.stringify({ tag }),
+          signal,
         }),
-      remove: (runId: string, tag: string) =>
+      remove: (runId: string, tag: string, signal?: AbortSignal) =>
         apiFetch<{ runId: string; tags: string[] }>(`/runs/${encodeURIComponent(runId)}/tags`, {
           method: 'DELETE',
           body: JSON.stringify({ tag }),
+          signal,
         }),
     },
     annotations: {
-      list: (runId: string) =>
+      list: (runId: string, signal?: AbortSignal) =>
         apiFetch<{ runId: string; annotations: string[] }>(
           `/runs/${encodeURIComponent(runId)}/annotations`,
+          { signal },
         ),
-      add: (runId: string, text: string) =>
+      add: (runId: string, text: string, signal?: AbortSignal) =>
         apiFetch<{ runId: string; annotations: string[] }>(
           `/runs/${encodeURIComponent(runId)}/annotations`,
-          { method: 'POST', body: JSON.stringify({ text }) },
+          { method: 'POST', body: JSON.stringify({ text }), signal },
         ),
-      remove: (runId: string, index: number) =>
+      remove: (runId: string, index: number, signal?: AbortSignal) =>
         apiFetch<{ runId: string; annotations: string[] }>(
           `/runs/${encodeURIComponent(runId)}/annotations`,
-          { method: 'DELETE', body: JSON.stringify({ index }) },
+          { method: 'DELETE', body: JSON.stringify({ index }), signal },
         ),
     },
   },
   analytics: {
-    trends: () =>
-      apiFetch<{ trends: CrashTrendPoint[]; signatures: SignatureFrequency[] }>('/runs/trends'),
-    events: () => apiFetch<{ events: CrashEvent[] }>('/runs/events'),
+    trends: (signal?: AbortSignal) =>
+      apiFetch<{ trends: CrashTrendPoint[]; signatures: SignatureFrequency[] }>('/runs/trends', {
+        signal,
+      }),
+    events: (signal?: AbortSignal) =>
+      apiFetch<{ events: CrashEvent[] }>('/runs/events', { signal }),
   },
   artifacts: {
-    list: () =>
+    list: (signal?: AbortSignal) =>
       apiFetch<{ artifacts: ArtifactMetadata[]; total: number }>('/artifacts', {
         cache: 'no-store',
+        signal,
       }),
-    download: async (id: string): Promise<Blob> => {
-      const res = await fetch(apiUrl(`/artifacts/${encodeURIComponent(id)}`));
+    download: async (id: string, signal?: AbortSignal): Promise<Blob> => {
+      const res = await fetch(apiUrl(`/artifacts/${encodeURIComponent(id)}`), { signal });
       if (!res.ok) {
         const message = await res
           .json()
@@ -165,31 +175,55 @@ export const api = {
       }
       return res.blob();
     },
-    remove: (id: string) =>
+    remove: (id: string, signal?: AbortSignal) =>
       apiFetch<{ success: boolean; message: string }>(`/artifacts/${encodeURIComponent(id)}`, {
         method: 'DELETE',
+        signal,
       }),
   },
   campaigns: {
-    create: (config: CampaignConfig) =>
+    create: (config: CampaignConfig, signal?: AbortSignal) =>
       apiFetch<{ campaign: Record<string, unknown> }>('/campaigns', {
         method: 'POST',
         body: JSON.stringify(config),
+        signal,
       }),
   },
   notifications: {
-    list: () => apiFetch<{ notifications: NotificationFeedItem[]; total: number }>('/notifications'),
+    list: (signal?: AbortSignal) =>
+      apiFetch<{ notifications: NotificationFeedItem[]; total: number }>('/notifications', {
+        signal,
+      }),
   },
   webhooks: {
-    list: () => apiFetch<{ webhooks: unknown[] }>('/webhooks'),
+    list: (signal?: AbortSignal) =>
+      apiFetch<{ webhooks: unknown[] }>('/webhooks', { signal }),
   },
   integrations: {
-    list: () => apiFetch<{ integrations: unknown[] }>('/integrations'),
+    list: (signal?: AbortSignal) =>
+      apiFetch<{ integrations: unknown[] }>('/integrations', { signal }),
   },
 };
 
 export async function fetchRuns(signal?: AbortSignal): Promise<{ runs: FuzzingRun[]; total: number }> {
   return api.runs.list(signal);
+}
+
+/**
+ * Helper modeling only-latest-matters: returns a wrapped function where newer
+ * invocations automatically abort any previous in-flight invocation.
+ */
+export function fetchLatestOnly<T, Args extends unknown[]>(
+  fn: (...args: [...Args, AbortSignal]) => Promise<T>,
+): (...args: Args) => Promise<T> {
+  let controller: AbortController | null = null;
+  return (...args: Args): Promise<T> => {
+    if (controller) {
+      controller.abort();
+    }
+    controller = new AbortController();
+    return fn(...args, controller.signal);
+  };
 }
 
 /**

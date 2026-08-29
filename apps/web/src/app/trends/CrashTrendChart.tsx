@@ -141,6 +141,7 @@ export function CrashTrendChart({
 
           {/* Tooltip on hover — extended with the anomaly explanation card */}
           <Tooltip
+            position={{ x: -120, y: 10 }}
             content={<TrendTooltip flagsByDate={flagsByDate} />}
             cursor={{ fill: "rgba(0, 0, 0, 0.05)" }}
           />

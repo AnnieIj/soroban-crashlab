@@ -16,6 +16,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   const requestedAfter = new URL(request.url).searchParams.get('after') ?? request.headers.get('Last-Event-ID') ?? '0';
   const after = Math.max(0, Number(requestedAfter) || 0);
+  // `updatedAt` is the correct field on the Artifact interface (types.ts). Using
+  // `createdAt` here was a prior bug that broke the TypeScript build on main.
   const artifact: Artifact = { id: `${id}-live-log`, name: 'live-run.log', type: 'log', size: 0, updatedAt: new Date(0).toISOString() };
   const events: RunStreamPayload[] = [
     { type: 'RUN_STATUS', status: 'running', metrics: { seedCount: run.seedCount + 128, duration: run.duration + 1000 } },
