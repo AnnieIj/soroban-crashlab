@@ -58,12 +58,12 @@ export default function RunsPage() {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
     const load = async () => {
       setDataState('loading');
       try {
-        const data = await fetchRuns();
-        if (!cancelled) {
+        const data = await fetchRuns(controller.signal);
+        if (!controller.signal.aborted) {
           const sorted = (data.runs ?? []).slice().sort((a: FuzzingRun, b: FuzzingRun) => {
             const ta = a.queuedAt ?? a.startedAt ?? '';
             const tb = b.queuedAt ?? b.startedAt ?? '';
@@ -72,24 +72,25 @@ export default function RunsPage() {
           setRuns(sorted);
           setDataState('success');
         }
-      } catch {
-        if (!cancelled) setDataState('error');
+      } catch (err) {
+        if (!controller.signal.aborted && (err as Error)?.name !== 'AbortError') {
+          setDataState('error');
+        }
       }
     };
     void load();
 
     const handleVisibility = () => {
-      if (!cancelled && document.visibilityState === 'visible') {
+      if (!controller.signal.aborted && document.visibilityState === 'visible') {
         void load();
       }
     };
     document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
-      cancelled = true;
+      controller.abort();
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-    return () => { cancelled = true; };
   }, [fetchAttempt]);
 
   const visibleRuns = useMemo(() => {

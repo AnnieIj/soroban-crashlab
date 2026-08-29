@@ -57,6 +57,7 @@ export default function NotificationCenter({ className = '' }: NotificationCente
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
+  const [mounted, setMounted] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -64,6 +65,15 @@ export default function NotificationCenter({ className = '' }: NotificationCente
   const dismissedIdsRef = useRef<Set<string>>(new Set());
 
   const prefs = loadPreferences();
+
+  // Gate client-only relative timestamps until after hydration so the server
+  // prerender and the hydrated client cannot disagree near minute boundaries.
+  useEffect(() => {
+    // Matching the established pattern in NavBar: flipping a mounted flag once
+    // here is intentional so client-only rendering can begin.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
+  }, []);
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -228,6 +238,16 @@ export default function NotificationCenter({ className = '' }: NotificationCente
     return `${days}d ago`;
   };
 
+  const formatAbsolute = (timestamp: Date) =>
+    timestamp.toLocaleString('en-US', {
+      timeZone: 'UTC',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
   return (
     <div className={`relative ${className}`}>
       {/* Notification Bell Button */}
@@ -363,9 +383,15 @@ export default function NotificationCenter({ className = '' }: NotificationCente
                           </p>
                           
                           <div className="flex items-center justify-between mt-2">
-                            <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                              {formatTimestamp(notification.timestamp)}
-                            </span>
+                            <time
+                              dateTime={notification.timestamp.toISOString()}
+                              title={formatAbsolute(notification.timestamp)}
+                              className="text-xs text-zinc-500 dark:text-zinc-400"
+                            >
+                              {mounted
+                                ? formatTimestamp(notification.timestamp)
+                                : formatAbsolute(notification.timestamp)}
+                            </time>
                             
                             <div className="flex items-center gap-2">
                               {!notification.read && (

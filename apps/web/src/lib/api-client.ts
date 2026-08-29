@@ -88,6 +88,13 @@ export interface NotificationFeedItem {
   read: boolean;
 }
 
+/** Optional per-call options shared by GET helpers. Signal lets a caller
+ * abort an in-flight request (e.g. when its component unmounts or a
+ * parameter changes). */
+export interface FetchOptions {
+  signal?: AbortSignal;
+}
+
 export const api = {
   runs: {
     // GETs are deduped: several routes (dashboard, runs list, trends, triage,
@@ -98,9 +105,10 @@ export const api = {
     get: (id: string, signal?: AbortSignal) =>
       dedupedFetchJson<FuzzingRun>(apiUrl(`/runs/${encodeURIComponent(id)}`), signal),
     issues: {
-      list: (runId: string) =>
+      list: (runId: string, options?: FetchOptions) =>
         apiFetch<{ runId: string; issues: RunIssueLink[] }>(
           `/runs/${encodeURIComponent(runId)}/issues`,
+          options ? { signal: options.signal } : undefined,
         ),
       add: (runId: string, link: RunIssueLink) =>
         apiFetch<{ runId: string; issues: RunIssueLink[] }>(
@@ -114,8 +122,8 @@ export const api = {
         ),
     },
     tags: {
-      list: (runId: string) =>
-        apiFetch<{ runId: string; tags: string[] }>(`/runs/${encodeURIComponent(runId)}/tags`),
+      list: (runId: string, options?: FetchOptions) =>
+        apiFetch<{ runId: string; tags: string[] }>(`/runs/${encodeURIComponent(runId)}/tags`, options ? { signal: options.signal } : undefined),
       add: (runId: string, tag: string) =>
         apiFetch<{ runId: string; tags: string[] }>(`/runs/${encodeURIComponent(runId)}/tags`, {
           method: 'POST',
@@ -128,9 +136,10 @@ export const api = {
         }),
     },
     annotations: {
-      list: (runId: string) =>
+      list: (runId: string, options?: FetchOptions) =>
         apiFetch<{ runId: string; annotations: string[] }>(
           `/runs/${encodeURIComponent(runId)}/annotations`,
+          options ? { signal: options.signal } : undefined,
         ),
       add: (runId: string, text: string) =>
         apiFetch<{ runId: string; annotations: string[] }>(
@@ -178,7 +187,11 @@ export const api = {
       }),
   },
   notifications: {
-    list: () => apiFetch<{ notifications: NotificationFeedItem[]; total: number }>('/notifications'),
+    list: (options?: FetchOptions) =>
+      apiFetch<{ notifications: NotificationFeedItem[]; total: number }>(
+        '/notifications',
+        options ? { signal: options.signal } : undefined,
+      ),
   },
   webhooks: {
     list: () => apiFetch<{ webhooks: unknown[] }>('/webhooks'),
