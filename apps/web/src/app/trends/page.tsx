@@ -2,10 +2,18 @@
 
 import { memo, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { FuzzingRun, RunArea, RunSeverity } from "../types";
 import { FilterBar } from "./FilterBar";
-import { CrashTrendChart } from "./CrashTrendChart";
 import { AnomalySensitivityToggle } from "./AnomalySensitivityToggle";
+import { TrendsChartSkeleton } from "../../components/LoadingSkeleton";
+
+// Lazy-load the recharts bundle (~90 KB gzipped). Only analytics/trends routes
+// pay the chart cost; dashboard/runs/settings pages are excluded from this chunk.
+const CrashTrendChart = dynamic(
+  () => import("./CrashTrendChart").then((m) => ({ default: m.CrashTrendChart })),
+  { loading: () => <TrendsChartSkeleton />, ssr: false }
+);
 import { fetchRuns } from "../../lib/api-client";
 import {
   transformRunsToCrashEvents,
