@@ -26,6 +26,8 @@
     "test:search-grammar": "vitest run search-grammar",
     "test:saved-views": "vitest run saved-views",
     "test:api-client": "vitest run src/lib/api-client.test.ts",
+    "test:api-error-mapper": "vitest run src/lib/api-error-mapper.test.ts",
+    "test:widget-layout-editor": "vitest run src/app/implement-widget-layout-editor-component.test.ts",
     "test:sentry-client": "npx vitest run src/lib/integrations/sentry-client.test.ts",
     "test:script-style": "vitest run src/test/script-style-tests.test.ts",
     "test:sanitize": "vitest run src/lib/sanitize.test.ts",

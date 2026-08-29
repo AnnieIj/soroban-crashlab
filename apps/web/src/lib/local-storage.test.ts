@@ -5,13 +5,11 @@
  */
 
 import {
-  defineStorage,
   defineBooleanStorage,
   defineJsonStorage,
   defineStringStorage,
   setStorageErrorHandler,
   REGISTERED_KEYS,
-  type StorageEntry,
 } from './local-storage';
 
 // ── Simulated localStorage ────────────────────────────────────────────────────
