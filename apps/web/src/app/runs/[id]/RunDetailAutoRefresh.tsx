@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { RunStatus } from '../../types';
 import { isTerminalStatus } from '../../../lib/run-status';
+import { useRunStream } from './useRunStream';
 
 const POLL_INTERVAL_MS = 5_000;
 
@@ -16,7 +17,7 @@ export default function RunDetailAutoRefresh({ runId, initialStatus }: RunDetail
   const router = useRouter();
   const [status, setStatus] = useState<RunStatus>(initialStatus);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const stream = useRunStream(runId, (envelope) => {
+  useRunStream(runId, (envelope) => {
     if (envelope.event.type === 'RUN_STATUS') {
       setStatus(envelope.event.status);
       router.refresh();

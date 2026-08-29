@@ -92,7 +92,7 @@ const hostileDataAssertions = () => {
   // Test case 1: Field with comma
   const runWithComma = makeRun({ id: 'run, with, commas' });
   const csvWithComma = buildRunsCsv([runWithComma], ['id', 'status']);
-  const [headerComma, dataComma] = csvWithComma.split('\n');
+  const [, dataComma] = csvWithComma.split('\n');
   const fieldsComma = parseCSVLine(dataComma);
   assert.equal(fieldsComma[0], 'run, with, commas', 'comma in field should round-trip');
   assert.equal(fieldsComma[1], 'completed', 'status field should remain intact');
@@ -107,7 +107,6 @@ const hostileDataAssertions = () => {
   // Test case 3: Field with newline
   const runWithNewline = makeRun({ status: 'failed\nwith details' as any });
   const csvWithNewline = buildRunsCsv([runWithNewline], ['id', 'status']);
-  const lines = csvWithNewline.split('\n');
   // With newline in data, we need to parse the entire CSV (not just split by \n)
   // For this simple test, we verify the CSV is well-formed by checking quote escaping
   assert.ok(csvWithNewline.includes('"failed\nwith details"'), 'newline should be quoted');
@@ -118,7 +117,6 @@ const hostileDataAssertions = () => {
   const csvComplex = buildRunsCsv([runComplex], ['area']);
   // Don't split on \n since the data itself contains newlines
   // Just parse the CSV directly
-  const linesComplex = csvComplex.split('\n');
   // The first line is the header, the second should have the complex payload (now quoted)
   assert.ok(
     csvComplex.includes('"Error: ""invalid"", context\nline 2\nline 3"'),
