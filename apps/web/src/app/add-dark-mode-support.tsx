@@ -4,9 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import {
   nextTheme,
   parseStoredTheme,
-  THEME_STORAGE_KEY,
   type Theme,
 } from "./theme-provider-utils";
+import { themeStore } from "../lib/storage-registry";
 
 function applyTheme(theme: Theme) {
   if (typeof document === "undefined") return;
@@ -15,7 +15,7 @@ function applyTheme(theme: Theme) {
 
 function readTheme(): Theme {
   if (typeof window === "undefined") return "light";
-  const stored = parseStoredTheme(localStorage.getItem(THEME_STORAGE_KEY));
+  const stored = parseStoredTheme(themeStore.get());
   if (stored) return stored;
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
@@ -37,11 +37,7 @@ export default function DarkModeToggle() {
   const toggle = useCallback(() => {
     setTheme((current) => {
       const next = nextTheme(current);
-      try {
-        localStorage.setItem(THEME_STORAGE_KEY, next);
-      } catch {
-        /* ignore */
-      }
+      themeStore.set(next);
       applyTheme(next);
       return next;
     });
