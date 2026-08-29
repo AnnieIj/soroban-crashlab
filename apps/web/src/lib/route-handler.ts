@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { logger } from './logger';
+import { checkRequestSize, RequestSizeLimitConfig } from './request-size-limits';
 
 /**
  * Standard error envelope returned by API routes: { error: string }.
@@ -37,6 +38,55 @@ export function withRouteErrorHandling<Args extends unknown[]>(
       return await handler(...args);
     } catch (error) {
       logger.error(`${routeLabel} failed`, { error });
+      return jsonError(fallbackMessage, 500);
+    }
+  };
+}
+
+/**
+ * Wraps a route handler with request size limit checking and structured logging.
+ * Ensures requests respect configured size limits and logs structured trace data.
+ */
+export function withSizeLimitAndLogging<Args extends unknown[]>(
+  routeLabel: string,
+  handler: (...args: Args) => Promise<NextResponse>,
+  sizeConfig?: RequestSizeLimitConfig,
+  fallbackMessage = 'An unexpected error occurred.',
+): (...args: Args) => Promise<NextResponse> {
+  return async (...args: Args) => {
+    const request = args[0] as Request | undefined;
+    const startTime = Date.now();
+
+    try {
+      // Check request size limits
+      if (request) {
+        const sizeCheckError = checkRequestSize(request, sizeConfig);
+        if (sizeCheckError) {
+          const duration = Date.now() - startTime;
+          logger.info(`${routeLabel} rejected (size limit)`, {
+            status: 413,
+            duration_ms: duration,
+            content_length: request.headers.get('content-length'),
+          });
+          return sizeCheckError;
+        }
+      }
+
+      const response = await handler(...args);
+      const duration = Date.now() - startTime;
+
+      logger.info(`${routeLabel} completed`, {
+        status: response.status,
+        duration_ms: duration,
+      });
+
+      return response;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      logger.error(`${routeLabel} failed`, {
+        error,
+        duration_ms: duration,
+      });
       return jsonError(fallbackMessage, 500);
     }
   };

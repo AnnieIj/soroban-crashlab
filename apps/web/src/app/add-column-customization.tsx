@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { columnSettingsStore } from '../lib/storage-registry';
 
 export type ColumnId = 'id' | 'status' | 'area' | 'severity' | 'duration' | 'seedCount' | 'cpuInstructions' | 'memoryBytes' | 'minResourceFee' | 'report';
 
@@ -22,25 +23,17 @@ const ALL_COLUMNS: { id: ColumnId; label: string }[] = [
   { id: 'report', label: 'Report Link' },
 ];
 
-const STORAGE_KEY = 'crashlab:column-settings:v1';
-
 export default function ColumnCustomization({ visibleColumns, onChange }: ColumnCustomizationProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const columnRefs = useRef<(HTMLLabelElement | null)[]>([]);
 
+
   // Load initial settings from localStorage on mount
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved) as ColumnId[];
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          onChange(parsed);
-        }
-      } catch (e) {
-        console.error('Failed to parse column settings', e);
-      }
+    const parsed = columnSettingsStore.get();
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      onChange(parsed as ColumnId[]);
     }
   }, [onChange]);
 
@@ -63,7 +56,7 @@ export default function ColumnCustomization({ visibleColumns, onChange }: Column
     await new Promise(resolve => setTimeout(resolve, 300));
     
     onChange(next);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    columnSettingsStore.set(next);
     setIsLoading(false);
   };
 

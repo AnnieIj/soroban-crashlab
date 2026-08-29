@@ -11,8 +11,10 @@ import {
 } from './widget-layout-profile-utils';
 import { getColumnCountForWidth, clampLayoutForTier } from '@/lib/widget-grid';
 
+import { logger } from '../lib/logger';
+
 // Widget types and interfaces
-interface Widget {
+export interface Widget {
   id: string;
   type: "chart" | "metric" | "table" | "alert" | "status" | "custom";
   title: string;
@@ -22,7 +24,7 @@ interface Widget {
   visible: boolean;
 }
 
-interface LayoutGrid {
+export interface LayoutGrid {
   cols: number;
   rows: number;
   cellWidth: number;
@@ -69,12 +71,52 @@ const WIDGET_TEMPLATES: Omit<Widget, "id" | "position">[] = [
 ];
 
 // Widget size configurations
-const WIDGET_SIZES = {
+export const WIDGET_SIZES = {
   small: { width: 1, height: 1 },
   medium: { width: 2, height: 1 },
   large: { width: 2, height: 2 },
   xlarge: { width: 3, height: 2 },
 };
+
+export function clampToGrid(
+  pos: { x: number; y: number },
+  size: { width: number; height: number },
+  grid: { cols: number; rows: number },
+): { x: number; y: number } {
+  const maxX = Math.max(0, grid.cols - size.width);
+  const maxY = Math.max(0, grid.rows - size.height);
+
+  const rawX = Math.round(Number.isFinite(pos.x) ? pos.x : 0);
+  const rawY = Math.round(Number.isFinite(pos.y) ? pos.y : 0);
+
+  return {
+    x: Math.max(0, Math.min(rawX, maxX)),
+    y: Math.max(0, Math.min(rawY, maxY)),
+  };
+}
+
+export function healLayout<
+  T extends {
+    id: string;
+    size: 'small' | 'medium' | 'large' | 'xlarge';
+    position: { x: number; y: number };
+  },
+>(widgets: T[], grid: { cols: number; rows: number }): T[] {
+  return widgets.map((widget) => {
+    const sizeConfig = WIDGET_SIZES[widget.size] || { width: 1, height: 1 };
+    const healedPos = clampToGrid(widget.position, sizeConfig, grid);
+
+    if (healedPos.x !== widget.position.x || healedPos.y !== widget.position.y) {
+      logger.warn('Healed off-grid widget layout position', {
+        widgetId: widget.id,
+        oldPos: widget.position,
+        newPos: healedPos,
+      });
+      return { ...widget, position: healedPos };
+    }
+    return widget;
+  });
+}
 
 export default function WidgetLayoutEditor() {
   const { isMaintainer } = useMaintainerMode();
@@ -106,7 +148,7 @@ export default function WidgetLayoutEditor() {
           y: Math.floor(index / 3) * 2,
         },
       }));
-      return defaultWidgets;
+      return healLayout(defaultWidgets, measuredGrid);
     };
 
     const loadLayout = () => {
@@ -118,14 +160,15 @@ export default function WidgetLayoutEditor() {
         // #1404: clamp persisted 6-col layout when loaded into narrower tier (e.g., 3 cols)
         const containerWidth = gridRef.current?.clientWidth ?? 1280;
         const tierCols = getColumnCountForWidth(containerWidth);
-        setWidgets(clampLayoutForTier(parsedLayout, tierCols));
+        const clampedTier = clampLayoutForTier(parsedLayout, tierCols);
+        setWidgets(healLayout(clampedTier, { cols: tierCols, rows: measuredGrid.rows }));
       } else {
         setWidgets(initializeDefaultLayout());
       }
     };
 
     loadLayout();
-  }, []);
+  }, [measuredGrid]);
 
   // Debounced, rAF-aligned resize measurement (#1392). Recomputes cell metrics
   // on container resize in the measured (grid) path only; freeform mode relies
@@ -242,29 +285,30 @@ export default function WidgetLayoutEditor() {
     (e: MouseEvent) => {
       if (!draggedWidget || !gridRef.current) return;
 
-      const gridRect = gridRef.current.getBoundingClientRect();
-      const x = Math.max(
-        0,
-        Math.min(
-          Math.floor(
-            (e.clientX - gridRect.left - dragOffset.x) / gridConfig.cellWidth,
-          ),
-          gridConfig.cols - 1,
-        ),
-      );
-      const y = Math.max(
-        0,
-        Math.min(
-          Math.floor(
-            (e.clientY - gridRect.top - dragOffset.y) / gridConfig.cellHeight,
-          ),
-          gridConfig.rows - 1,
-        ),
-      );
+      const widget = widgets.find((w) => w.id === draggedWidget);
+      if (!widget) return;
 
-      updateWidget(draggedWidget, { position: { x, y } });
+      const gridRect = gridRef.current.getBoundingClientRect();
+      const sizeConfig = WIDGET_SIZES[widget.size] || { width: 1, height: 1 };
+
+      if (layoutMode === 'grid') {
+        const rawX = (e.clientX - gridRect.left - dragOffset.x) / gridConfig.cellWidth;
+        const rawY = (e.clientY - gridRect.top - dragOffset.y) / gridConfig.cellHeight;
+        const clampedPos = clampToGrid({ x: rawX, y: rawY }, sizeConfig, gridConfig);
+        updateWidget(draggedWidget, { position: clampedPos });
+      } else {
+        // Freeform mode: clamp against measured container rect keeping widget fully inside (unzoomed CSS pixels)
+        const maxPixelX = Math.max(0, gridRect.width - sizeConfig.width * gridConfig.cellWidth);
+        const maxPixelY = Math.max(0, gridRect.height - sizeConfig.height * gridConfig.cellHeight);
+        const clampedPixelX = Math.max(0, Math.min(e.clientX - gridRect.left - dragOffset.x, maxPixelX));
+        const clampedPixelY = Math.max(0, Math.min(e.clientY - gridRect.top - dragOffset.y, maxPixelY));
+        const gridX = Math.round(clampedPixelX / gridConfig.cellWidth);
+        const gridY = Math.round(clampedPixelY / gridConfig.cellHeight);
+        const clampedPos = clampToGrid({ x: gridX, y: gridY }, sizeConfig, gridConfig);
+        updateWidget(draggedWidget, { position: clampedPos });
+      }
     },
-    [draggedWidget, dragOffset, gridConfig],
+    [draggedWidget, dragOffset, gridConfig, layoutMode, widgets],
   );
 
   const handleMouseUp = useCallback(() => {
