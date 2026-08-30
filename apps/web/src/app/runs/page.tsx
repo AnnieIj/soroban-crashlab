@@ -191,7 +191,17 @@ export default function RunsPage() {
           : dataState === 'error'
           ? { state: 'error', message: 'Failed to load fuzzing runs', onRetry: () => setFetchAttempt((n) => n + 1) }
           : runs.length === 0
-          ? { state: 'empty', message: 'No fuzzing runs found.' }
+          ? {
+              state: 'empty',
+              type: 'runs',
+              message: 'No fuzzing runs found',
+              description: 'No fuzzing campaigns or runs have been recorded yet. Trigger a run from the dashboard or launch a fuzzing session to view results.',
+              action: (
+                <Link href="/" className="btn-primary text-xs sm:text-sm px-4 py-2 inline-flex items-center">
+                  Back to Dashboard
+                </Link>
+              ),
+            }
           : { state: 'success' })}
       >
         <BulkActionsForRuns

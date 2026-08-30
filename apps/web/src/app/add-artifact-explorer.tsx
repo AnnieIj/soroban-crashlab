@@ -8,6 +8,7 @@ import type { Artifact } from './types';
 import { MOCK_ARTIFACTS } from '../fixtures/artifacts';
 import { formatSize } from './utils/format';
 import { absoluteShort } from './utils/datetime';
+import { EmptyStateIllustration } from '../components/EmptyStateIllustration';
 
 export type { Artifact };
 
@@ -332,15 +333,21 @@ export default function ArtifactExplorer() {
                 ))}
                 {filteredArtifacts.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-6 py-24 text-center">
-                      <div className="flex flex-col items-center gap-2">
-                        <div className="p-4 bg-zinc-50 dark:bg-zinc-900/50 rounded-full text-zinc-300">
-                          <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                          </svg>
+                    <td colSpan={6} className="px-6 py-16 text-center">
+                      <div className="flex flex-col items-center gap-3">
+                        <EmptyStateIllustration variant="artifacts" size="sm" />
+                        <div className="font-semibold text-zinc-900 dark:text-zinc-100 text-sm">
+                          No artifacts found
                         </div>
-                        <span className="text-zinc-500 font-medium">No artifacts found matching your search criteria.</span>
-                        <button onClick={() => {setSearch(''); setFilter('all');}} className="text-blue-600 dark:text-blue-400 text-sm font-bold hover:underline underline-offset-4">Reset Filters</button>
+                        <span className="text-zinc-500 text-xs max-w-sm">
+                          No artifacts match your search query or type filter criteria.
+                        </span>
+                        <button
+                          onClick={() => {setSearch(''); setFilter('all');}}
+                          className="mt-2 text-blue-600 dark:text-blue-400 text-xs font-bold hover:underline underline-offset-4"
+                        >
+                          Reset Filters
+                        </button>
                       </div>
                     </td>
                   </tr>
