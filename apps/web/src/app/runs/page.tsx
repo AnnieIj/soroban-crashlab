@@ -27,6 +27,7 @@ import type { RunArea, RunSeverity, RunStatus } from '../types';
 import { fetchRuns } from '../../lib/api-client';
 import { LoadingSpinner } from '../../components/LoadingSkeleton';
 import { ListState } from '../../components/ListState';
+import { PageHeader } from '../../components/PageHeader';
 
 const BulkActionsForRuns = dynamic(() => import('../add-bulk-actions-for-runs'), {
   loading: () => <LoadingSpinner />,
@@ -164,27 +165,25 @@ export default function RunsPage() {
 
   return (
     <div className="container-full page-padding fade-in">
-      <div className="flex items-center justify-between mb-4 sm:mb-6">
-        <div>
-          <h1 className="heading-page">Fuzzing Runs</h1>
-          <p className="text-meta mt-0.5 sm:mt-1">
-            Select runs to cancel, retry, delete, export, tag, or assign in bulk
-          </p>
-        </div>
-        <div className="flex items-center gap-2 sm:gap-3">
-          {dataState === 'success' && (
-            <span className="chip text-xs sm:text-sm">
-              {visibleRuns.length === runs.length
-                ? `${runs.length} Total Runs`
-                : `${visibleRuns.length} of ${runs.length} Runs`}
-            </span>
-          )}
-          <SavedViewsMenu state={viewState} onApply={applyView} />
-          <Link href="/" className="btn-outline text-xs sm:text-sm px-3 sm:px-6 h-8 sm:h-10">
-            Dashboard
-          </Link>
-        </div>
-      </div>
+      <PageHeader
+        title="Fuzzing Runs"
+        description="Select runs to cancel, retry, delete, export, tag, or assign in bulk"
+        actions={
+          <>
+            {dataState === 'success' && (
+              <span className="chip text-xs sm:text-sm">
+                {visibleRuns.length === runs.length
+                  ? `${runs.length} Total Runs`
+                  : `${visibleRuns.length} of ${runs.length} Runs`}
+              </span>
+            )}
+            <SavedViewsMenu state={viewState} onApply={applyView} />
+            <Link href="/" className="btn-outline text-xs sm:text-sm px-3 sm:px-6 h-8 sm:h-10">
+              Dashboard
+            </Link>
+          </>
+        }
+      />
 
       <ListState
         {...(dataState === 'loading'
