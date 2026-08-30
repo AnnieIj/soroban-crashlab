@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import {
   type NotificationPreferences as Prefs,
   type NotificationType,
   type NotificationPriority,
   type DigestFrequency,
   DEFAULT_PREFERENCES,
+  getQuietHoursPreviewText,
   validatePreferences,
   loadPreferences,
   savePreferences,
@@ -14,22 +15,12 @@ import {
   setMinPriority,
   setDigestFrequency,
 } from './notification-preferences-utils';
+import { useTranslations } from '../i18n/context';
+import type { MessageKey } from '../i18n/generated/keys';
 
 const NOTIFICATION_TYPES: NotificationType[] = ['info', 'success', 'warning', 'error'];
 const PRIORITIES: NotificationPriority[] = ['low', 'medium', 'high', 'critical'];
-const DIGEST_OPTIONS: { value: DigestFrequency; label: string }[] = [
-  { value: 'realtime', label: 'Real-time' },
-  { value: 'hourly', label: 'Hourly digest' },
-  { value: 'daily', label: 'Daily digest' },
-  { value: 'never', label: 'Never' },
-];
-
-const TYPE_LABELS: Record<NotificationType, string> = {
-  info: 'Information',
-  success: 'Success',
-  warning: 'Warning',
-  error: 'Error',
-};
+const DIGEST_OPTIONS: DigestFrequency[] = ['realtime', 'hourly', 'daily', 'never'];
 
 const TYPE_COLORS: Record<NotificationType, string> = {
   info: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
@@ -38,11 +29,27 @@ const TYPE_COLORS: Record<NotificationType, string> = {
   error: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
 };
 
-const PRIORITY_LABELS: Record<NotificationPriority, string> = {
-  low: 'Low',
-  medium: 'Medium',
-  high: 'High',
-  critical: 'Critical',
+// Explicit per-value key maps (rather than dynamic `types.${type}` lookups)
+// so a typo is a compile error against the generated `MessageKey` union.
+const TYPE_KEYS: Record<NotificationType, MessageKey> = {
+  info: 'notifications.types.info',
+  success: 'notifications.types.success',
+  warning: 'notifications.types.warning',
+  error: 'notifications.types.error',
+};
+
+const PRIORITY_KEYS: Record<NotificationPriority, MessageKey> = {
+  low: 'notifications.priority.low',
+  medium: 'notifications.priority.medium',
+  high: 'notifications.priority.high',
+  critical: 'notifications.priority.critical',
+};
+
+const DIGEST_KEYS: Record<DigestFrequency, MessageKey> = {
+  realtime: 'notifications.digest.realtime',
+  hourly: 'notifications.digest.hourly',
+  daily: 'notifications.digest.daily',
+  never: 'notifications.digest.never',
 };
 
 interface NotificationPreferencesPageProps {
@@ -52,16 +59,12 @@ interface NotificationPreferencesPageProps {
 export default function NotificationPreferencesPage({
   className = '',
 }: NotificationPreferencesPageProps) {
-  const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFERENCES);
-  const [loaded, setLoaded] = useState(false);
+  const { t } = useTranslations();
+  const [prefs, setPrefs] = useState<Prefs>(() => loadPreferences());
+  const [loaded] = useState(true);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-
-  useEffect(() => {
-    setPrefs(loadPreferences());
-    setLoaded(true);
-  }, []);
 
   const handleSave = useCallback(async () => {
     setIsSaving(true);
@@ -80,11 +83,11 @@ export default function NotificationPreferencesPage({
       savePreferences(prefs);
       setSaved(true);
     } catch {
-      setError('Failed to save preferences.');
+      setError(t('notifications.preferences.saveFailedMessage'));
     } finally {
       setIsSaving(false);
     }
-  }, [prefs]);
+  }, [prefs, t]);
 
   const handleReset = useCallback(() => {
     setPrefs({ ...DEFAULT_PREFERENCES });
@@ -135,10 +138,10 @@ export default function NotificationPreferencesPage({
     <div className={className}>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-          Notification Preferences
+          {t('notifications.preferences.title')}
         </h1>
         <p className="text-zinc-500 dark:text-zinc-400 mt-1 text-sm">
-          Configure which notifications you receive and how they are delivered.
+          {t('notifications.preferences.subtitle')}
         </p>
       </div>
 
@@ -146,7 +149,7 @@ export default function NotificationPreferencesPage({
         <div className="mb-6 p-4 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
           <div className="w-2 h-2 rounded-full bg-green-500" />
           <p className="text-sm font-medium text-green-800 dark:text-green-200">
-            Preferences saved successfully.
+            {t('notifications.preferences.savedMessage')}
           </p>
         </div>
       )}
@@ -164,10 +167,13 @@ export default function NotificationPreferencesPage({
         {/* Notification Types */}
         <section className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6">
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50 mb-1">
-            Notification Types
+            {t('notifications.types.title')}
           </h2>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
-            Choose which types of notifications to display in your notification center.
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-1">
+            {t('notifications.types.subtitle')}
+          </p>
+          <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-4">
+            {t('notifications.preferences.enabledTypesCount', { count: prefs.enabledTypes.length })}
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {NOTIFICATION_TYPES.map((type) => (
@@ -182,7 +188,7 @@ export default function NotificationPreferencesPage({
                 aria-pressed={prefs.enabledTypes.includes(type)}
               >
                 <span className={`w-2 h-2 rounded-full ${TYPE_COLORS[type].split(' ')[0]}`} />
-                {TYPE_LABELS[type]}
+                {t(TYPE_KEYS[type])}
               </button>
             ))}
           </div>
@@ -191,10 +197,10 @@ export default function NotificationPreferencesPage({
         {/* Minimum Priority */}
         <section className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6">
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50 mb-1">
-            Minimum Priority
+            {t('notifications.priority.title')}
           </h2>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
-            Only show notifications at or above this priority level.
+            {t('notifications.priority.subtitle')}
           </p>
           <div className="flex flex-wrap gap-2">
             {PRIORITIES.map((priority) => (
@@ -208,7 +214,7 @@ export default function NotificationPreferencesPage({
                 }`}
                 aria-pressed={prefs.minPriority === priority}
               >
-                {PRIORITY_LABELS[priority]}
+                {t(PRIORITY_KEYS[priority])}
               </button>
             ))}
           </div>
@@ -217,24 +223,24 @@ export default function NotificationPreferencesPage({
         {/* Digest Frequency */}
         <section className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6">
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50 mb-1">
-            Digest Frequency
+            {t('notifications.digest.title')}
           </h2>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
-            How often would you like to receive notification summaries?
+            {t('notifications.digest.subtitle')}
           </p>
           <div className="flex flex-wrap gap-2">
             {DIGEST_OPTIONS.map((option) => (
               <button
-                key={option.value}
-                onClick={() => handleSetDigest(option.value)}
+                key={option}
+                onClick={() => handleSetDigest(option)}
                 className={`px-4 py-2 rounded-lg border transition-all text-sm font-medium ${
-                  prefs.digestFrequency === option.value
+                  prefs.digestFrequency === option
                     ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 shadow-sm'
                     : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-600'
                 }`}
-                aria-pressed={prefs.digestFrequency === option.value}
+                aria-pressed={prefs.digestFrequency === option}
               >
-                {option.label}
+                {t(DIGEST_KEYS[option])}
               </button>
             ))}
           </div>
@@ -243,19 +249,19 @@ export default function NotificationPreferencesPage({
         {/* Delivery Channels */}
         <section className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6">
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50 mb-1">
-            Delivery Channels
+            {t('notifications.channels.title')}
           </h2>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
-            Choose how notifications are delivered.
+            {t('notifications.channels.subtitle')}
           </p>
           <div className="space-y-4">
             <label className="flex items-center justify-between p-3 rounded-lg border border-zinc-200 dark:border-zinc-700 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
               <div>
                 <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                  Sound
+                  {t('notifications.channels.soundLabel')}
                 </span>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                  Play a sound when new notifications arrive
+                  {t('notifications.channels.soundDescription')}
                 </p>
               </div>
               <input
@@ -269,10 +275,10 @@ export default function NotificationPreferencesPage({
             <label className="flex items-center justify-between p-3 rounded-lg border border-zinc-200 dark:border-zinc-700 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
               <div>
                 <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                  Desktop Notifications
+                  {t('notifications.channels.desktopLabel')}
                 </span>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                  Show browser notifications for important alerts
+                  {t('notifications.channels.desktopDescription')}
                 </p>
               </div>
               <input
@@ -286,10 +292,10 @@ export default function NotificationPreferencesPage({
             <label className="flex items-center justify-between p-3 rounded-lg border border-zinc-200 dark:border-zinc-700 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
               <div>
                 <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                  Email Notifications
+                  {t('notifications.channels.emailLabel')}
                 </span>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                  Receive email digests based on your frequency setting
+                  {t('notifications.channels.emailDescription')}
                 </p>
               </div>
               <input
@@ -305,15 +311,15 @@ export default function NotificationPreferencesPage({
         {/* Quiet Hours */}
         <section className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6">
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50 mb-1">
-            Quiet Hours
+            {t('notifications.quietHours.title')}
           </h2>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
-            Suppress notifications during specific hours (sound and desktop only).
+            {t('notifications.quietHours.subtitle')}
           </p>
 
           <label className="flex items-center justify-between p-3 rounded-lg border border-zinc-200 dark:border-zinc-700 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors mb-4">
             <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-              Enable Quiet Hours
+              {t('notifications.quietHours.enable')}
             </span>
             <input
               type="checkbox"
@@ -324,37 +330,42 @@ export default function NotificationPreferencesPage({
           </label>
 
           {prefs.quietHoursEnabled && (
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label
-                  htmlFor="quiet-start"
-                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"
-                >
-                  Start Time
-                </label>
-                <input
-                  type="time"
-                  id="quiet-start"
-                  value={prefs.quietHoursStart}
-                  onChange={(e) => handleTimeChange('quietHoursStart', e.target.value)}
-                  className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label
+                    htmlFor="quiet-start"
+                    className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"
+                  >
+                    {t('notifications.quietHours.start')}
+                  </label>
+                  <input
+                    type="time"
+                    id="quiet-start"
+                    value={prefs.quietHoursStart}
+                    onChange={(e) => handleTimeChange('quietHoursStart', e.target.value)}
+                    className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="quiet-end"
+                    className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"
+                  >
+                    {t('notifications.quietHours.end')}
+                  </label>
+                  <input
+                    type="time"
+                    id="quiet-end"
+                    value={prefs.quietHoursEnd}
+                    onChange={(e) => handleTimeChange('quietHoursEnd', e.target.value)}
+                    className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
               </div>
-              <div>
-                <label
-                  htmlFor="quiet-end"
-                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"
-                >
-                  End Time
-                </label>
-                <input
-                  type="time"
-                  id="quiet-end"
-                  value={prefs.quietHoursEnd}
-                  onChange={(e) => handleTimeChange('quietHoursEnd', e.target.value)}
-                  className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+              <p className="text-xs font-medium text-blue-600 dark:text-blue-400">
+                {getQuietHoursPreviewText(prefs.quietHoursStart, prefs.quietHoursEnd)}
+              </p>
             </div>
           )}
         </section>
@@ -370,14 +381,14 @@ export default function NotificationPreferencesPage({
           {isSaving && (
             <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
           )}
-          {isSaving ? 'Saving...' : 'Save Preferences'}
+          {isSaving ? t('notifications.preferences.savingButton') : t('notifications.preferences.saveButton')}
         </button>
         <button
           onClick={handleReset}
           disabled={isSaving}
           className="px-6 py-2.5 border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 rounded-lg font-medium text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors disabled:opacity-50"
         >
-          Reset to Defaults
+          {t('notifications.preferences.resetButton')}
         </button>
       </div>
     </div>

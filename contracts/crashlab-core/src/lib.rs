@@ -1,4 +1,5 @@
 pub mod auth_matrix;
+pub mod cors;
 pub mod health;
 pub mod prng;
 pub mod reproducer;
@@ -19,9 +20,12 @@ pub mod host_runner;
 pub mod rpc_runner;
 
 pub use auth_matrix::{
-
     AuthMode, MatrixReport, ModeResult, collect_mismatched, format_mismatch_summary, run_matrix,
     run_matrix_for_seeds,
+};
+pub use cors::{
+    evaluate_cors, CorsConfig, CorsError, CorsEvaluation, HttpMethod, OriginAllowlist,
+    OriginPattern,
 };
 pub use health::{
     FailureMetrics, HealthMonitor, HealthStatus, HealthSummary, QueueMetrics, ThroughputMetrics,

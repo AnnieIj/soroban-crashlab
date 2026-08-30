@@ -1,10 +1,11 @@
 import type { NextConfig } from "next";
+import path from "path";
 
 const nextConfig: NextConfig = {
-  /* config options here */
   reactCompiler: true,
+  output: "standalone",
   turbopack: {
-    root: __dirname,
+    root: path.resolve(__dirname, "../../"),
   },
   headers: async () => [
     {
@@ -28,7 +29,7 @@ const nextConfig: NextConfig = {
         },
         {
           key: "Permissions-Policy",
-          value: "camera=(), microphone=(), geolocation=()",
+          value: "camera=(), microphone=(), geolocation=(), interest-cohort=()",
         },
         {
           key: "Strict-Transport-Security",
@@ -36,7 +37,21 @@ const nextConfig: NextConfig = {
         },
         {
           key: "Content-Security-Policy",
-          value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' https:; frame-ancestors 'self';",
+          value: [
+            "default-src 'self'",
+            // Next.js emits small inline bootstrapping scripts for hydration.
+            "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+            "style-src 'self' 'unsafe-inline'",
+            "img-src 'self' data: https:",
+            // Fonts are self-hosted via next/font — no Google origins needed.
+            "font-src 'self' data:",
+            "connect-src 'self' https:",
+            "frame-ancestors 'self'",
+            "form-action 'self'",
+            "base-uri 'self'",
+            "object-src 'none'",
+            "upgrade-insecure-requests",
+          ].join("; "),
         },
       ],
     },

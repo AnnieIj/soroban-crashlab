@@ -2,6 +2,14 @@
 
 import React, { useMemo } from "react";
 import { FuzzingRun } from "./types";
+import {
+  RESOURCE_THRESHOLDS,
+  classifyResourceLevel,
+  formatMalformedFeeCaption,
+  groupRunsByContractCall,
+  isExpensiveRun,
+  sanitizeFeeSeries,
+} from "./resource-fee-utils";
 
 export type ResourceFeeInsightDataState = "loading" | "error" | "success";
 
@@ -33,14 +41,7 @@ export interface ResourceMetrics {
   totalRuns: number;
 }
 
-const DEFAULT_THRESHOLDS: ResourceThresholds = {
-  cpuWarning: 1000000, // 1M instructions
-  cpuCritical: 5000000, // 5M instructions
-  memoryWarning: 1000000, // 1MB
-  memoryCritical: 10000000, // 10MB
-  feeWarning: 1000, // 1000 stroops
-  feeCritical: 5000, // 5000 stroops
-};
+const DEFAULT_THRESHOLDS: ResourceThresholds = RESOURCE_THRESHOLDS;
 
 export function computeResourceMetrics(runs: FuzzingRun[]): ResourceMetrics {
   if (runs.length === 0) {
@@ -67,12 +68,7 @@ export function computeResourceMetrics(runs: FuzzingRun[]): ResourceMetrics {
   const avgFee = Math.round(totalFee / runs.length);
   const maxFee = Math.max(...runs.map(run => run.minResourceFee));
 
-  // Find runs that exceed critical thresholds
-  const expensiveRuns = runs.filter(run =>
-    run.cpuInstructions >= DEFAULT_THRESHOLDS.cpuCritical ||
-    run.memoryBytes >= DEFAULT_THRESHOLDS.memoryCritical ||
-    run.minResourceFee >= DEFAULT_THRESHOLDS.feeCritical
-  );
+  const expensiveRuns = runs.filter((run) => isExpensiveRun(run, DEFAULT_THRESHOLDS));
 
   return {
     avgCpu,
@@ -87,9 +83,7 @@ export function computeResourceMetrics(runs: FuzzingRun[]): ResourceMetrics {
 }
 
 function getResourceLevel(value: number, warning: number, critical: number): 'normal' | 'warning' | 'critical' {
-  if (value >= critical) return 'critical';
-  if (value >= warning) return 'warning';
-  return 'normal';
+  return classifyResourceLevel(value, warning, critical);
 }
 
 function formatNumber(num: number): string {
@@ -109,7 +103,29 @@ export function ResourceFeeInsightPanel({
   errorMessage,
   onRunClick,
 }: ResourceFeeInsightProps) {
-  const metrics = useMemo(() => computeResourceMetrics(runs), [runs]);
+  const feeSanitization = useMemo(() => sanitizeFeeSeries(runs), [runs]);
+  const caption = formatMalformedFeeCaption(feeSanitization.dropped.count);
+  const feeSanitizationTooltip = feeSanitization.dropped.ids.join(", ");
+  const metrics = useMemo(() => {
+    // Fee metrics are sanitized (dropped negatives/non-numbers) so charts/tables never
+    // plot impossible values; CPU/memory use the full dataset.
+    if (feeSanitization.dropped.count === 0) return computeResourceMetrics(runs);
+    if (feeSanitization.clean.length === 0) {
+      const base = computeResourceMetrics(runs);
+      return { ...base, avgFee: 0, maxFee: 0 };
+    }
+    const cleanMetrics = computeResourceMetrics(feeSanitization.clean);
+    const fullMetrics = computeResourceMetrics(runs);
+    return {
+      ...fullMetrics,
+      avgFee: cleanMetrics.avgFee,
+      maxFee: cleanMetrics.maxFee,
+    };
+  }, [runs, feeSanitization]);
+  const contractCalls = useMemo(
+    () => groupRunsByContractCall(feeSanitization.clean),
+    [feeSanitization.clean],
+  );
 
   if (dataState === "loading") {
     return (
@@ -264,6 +280,52 @@ export function ResourceFeeInsightPanel({
           </div>
         </div>
       </div>
+
+      {caption && (
+        <figcaption
+          className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-200"
+          title={feeSanitizationTooltip}
+          aria-label={`${caption}: ${feeSanitizationTooltip}`}
+        >
+          {caption}
+          <span className="ml-1 font-normal text-amber-700 dark:text-amber-300" title={feeSanitizationTooltip}>
+            ({feeSanitization.dropped.ids.slice(0, 6).join(", ")}
+            {feeSanitization.dropped.ids.length > 6 ? ` +${feeSanitization.dropped.ids.length - 6} more` : ""})
+          </span>
+        </figcaption>
+      )}
+
+      {contractCalls.length > 0 && (
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-900/30">
+          <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-3">
+            Top Costly Contract Calls
+          </h3>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs uppercase tracking-[0.16em] text-zinc-500">
+                  <th className="pb-2 pr-4">Contract</th>
+                  <th className="pb-2 pr-4">Method</th>
+                  <th className="pb-2 pr-4">Runs</th>
+                  <th className="pb-2 pr-4">Max Fee</th>
+                  <th className="pb-2">Sample Run</th>
+                </tr>
+              </thead>
+              <tbody>
+                {contractCalls.slice(0, 6).map((call) => (
+                  <tr key={`${call.contract}-${call.method}`} className="border-t border-zinc-200 dark:border-zinc-800">
+                    <td className="py-2 pr-4 font-mono">{call.contract}</td>
+                    <td className="py-2 pr-4 font-mono">{call.method}</td>
+                    <td className="py-2 pr-4">{call.runCount}</td>
+                    <td className="py-2 pr-4">{call.maxFee.toLocaleString()}</td>
+                    <td className="py-2 font-mono text-xs">{call.representativeRunId}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Expensive Runs List */}
       {metrics.expensiveRuns.length > 0 && (

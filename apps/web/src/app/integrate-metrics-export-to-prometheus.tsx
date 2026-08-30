@@ -10,6 +10,7 @@ import {
   AreaChart,
   Area
 } from 'recharts';
+import { timeOnly } from './utils/datetime';
 
 /**
  * Issue: Integrate Metrics export to Prometheus
@@ -98,7 +99,7 @@ export default function MetricsExportToPrometheus() {
       if (cancelled) return;
       setLatencyData(prev => {
         const newData = [...prev.slice(1), {
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          time: timeOnly(new Date()),
           value: Math.max(10, Math.min(150, prev[prev.length - 1].value + (Math.random() * 20 - 10)))
         }];
         return newData;
@@ -129,7 +130,7 @@ export default function MetricsExportToPrometheus() {
               body: JSON.stringify({ timestamp: Date.now(), labels: cfg.labels })
             });
             return { accepted: res.ok, pushedSeries: res.ok ? 1 : 0 };
-          } catch (e) {
+          } catch {
             return { accepted: false, pushedSeries: 0 };
           }
         },
@@ -138,7 +139,7 @@ export default function MetricsExportToPrometheus() {
             // Try a lightweight GET to the endpoint to infer reachability
             const res = await fetch(endpoint, { method: 'GET' });
             return { healthy: res.ok, statusCode: res.status };
-          } catch (e) {
+          } catch {
             return { healthy: false, statusCode: 0 };
           }
         }
@@ -146,7 +147,7 @@ export default function MetricsExportToPrometheus() {
 
       const result = await runMetricsExportIntegrationFlow(deps);
       setTestResult(result.success ? 'success' : 'error');
-    } catch (e) {
+    } catch {
       setTestResult('error');
     } finally {
       setIsTesting(false);

@@ -8,6 +8,9 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { formatSize } from './utils/format';
+import { triggerBrowserDownload } from './utils/browser-download';
+import { api } from '../lib/api-client';
 
 // --- Types ---
 
@@ -40,7 +43,8 @@ async function uploadArtifact(file: File): Promise<Artifact> {
     throw new Error(error.error || 'Failed to upload artifact');
   }
 
-  const data = await response.json();
+  const json = await response.json();
+  const data = (json?.data?.artifact ?? json?.artifact ?? json) as Artifact;
   return {
     id: data.id,
     name: data.name,
@@ -55,17 +59,7 @@ async function uploadArtifact(file: File): Promise<Artifact> {
  * GET /api/artifacts
  */
 async function fetchArtifacts(): Promise<Artifact[]> {
-  const response = await fetch('/api/artifacts', {
-    method: 'GET',
-    cache: 'no-store',
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to list artifacts');
-  }
-
-  const data = await response.json();
+  const data = await api.artifacts.list();
   return data.artifacts || [];
 }
 
@@ -74,37 +68,7 @@ async function fetchArtifacts(): Promise<Artifact[]> {
  * GET /api/artifacts/:id
  */
 async function downloadArtifactContent(id: string): Promise<Blob> {
-  const response = await fetch(`/api/artifacts/${id}`, {
-    method: 'GET',
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to download artifact');
-  }
-
-  return await response.blob();
-}
-
-
-// --- Helper Functions ---
-
-function triggerBrowserDownload(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-function formatFileSize(bytes?: number): string {
-  if (bytes === undefined) return 'Unknown size';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return api.artifacts.download(id);
 }
 
 // --- Main Component ---
@@ -217,7 +181,7 @@ export default function ArtifactStorageIntegration() {
       <section className="bg-gray-50 rounded-xl p-6 mb-10 border border-gray-200 shadow-sm">
         <h2 className="text-xl font-semibold mb-4 text-gray-800 flex items-center">
           <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="替代4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
           </svg>
           Upload New Artifact
         </h2>
@@ -227,7 +191,8 @@ export default function ArtifactStorageIntegration() {
             <input 
               type="file" 
               id="artifact-upload"
-              className="sr-only"
+              data-testid="artifact-file-input"
+              className="absolute opacity-0 w-0 h-0 overflow-hidden"
               onChange={handleFileUpload} 
               disabled={isUploading}
             />
@@ -305,7 +270,7 @@ export default function ArtifactStorageIntegration() {
                       <h3 className="text-lg font-semibold text-gray-900">{artifact.name}</h3>
                       <div className="flex items-center gap-3 mt-1">
                         <span className="text-sm text-gray-500 font-medium">
-                          {formatFileSize(artifact.sizeBytes)}
+                          {formatSize(artifact.sizeBytes)}
                         </span>
                         <span className="text-gray-300 text-xs">•</span>
                         <span className="text-sm text-gray-500">

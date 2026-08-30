@@ -1,117 +1,79 @@
-'use client';
+"use client";
 
 /**
  * Log Viewer page – /logs
  * Issue seed #56: Display structured logs from runs with search.
+ * Issue #1352: Smart autoscroll with scroll intent tracking.
  *
  * Features: searchable logs, timestamp anchors, loading/error states,
- * keyboard accessibility, responsive layout.
+ * keyboard accessibility, responsive layout, smart autoscroll.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from "react";
 import {
   filterLogEntries,
   type LogEntry,
-  type LogLevel,
   type LogLevelFilter,
-} from '../log-viewer-utils';
+} from "../log-viewer-utils";
 import {
   logEntryAnchorId,
   logEntryAnchorHref,
   type PageDataState,
-} from './log-viewer-page-utils';
-import { useDebounce } from '../../lib/useDebounce';
-
-// ---------------------------------------------------------------------------
-// Mock data loader (replace with real API call when backend is wired)
-// ---------------------------------------------------------------------------
-const MOCK_ENTRIES: LogEntry[] = [
-  { id: '1', timestamp: Date.now() - 300_000, level: 'info',  source: 'fuzz-worker', message: 'Campaign drive_run started (partition 0/4)' },
-  { id: '2', timestamp: Date.now() - 270_000, level: 'debug', source: 'fuzz-worker', message: 'Mutation stream seeded from case id 0x7a3f' },
-  { id: '3', timestamp: Date.now() - 240_000, level: 'warn',  source: 'rpc',         message: 'RPC latency p95 820ms (threshold 750ms)' },
-  { id: '4', timestamp: Date.now() - 210_000, level: 'info',  source: 'scheduler',   message: 'Checkpoint advanced: next_seed_index=18432' },
-  { id: '5', timestamp: Date.now() - 180_000, level: 'error', source: 'fuzz-worker', message: 'InvariantViolation: balance_nonnegative (signature recorded)' },
-  { id: '6', timestamp: Date.now() - 150_000, level: 'info',  source: 'rpc',         message: 'Replay envelope submitted for run-1012' },
-  { id: '7', timestamp: Date.now() - 120_000, level: 'debug', source: 'scheduler',   message: 'PRNG state commit checkpoint=73728' },
-  { id: '8', timestamp: Date.now() -  90_000, level: 'warn',  source: 'fuzz-worker', message: 'Soft budget warning on contract token (91% instr)' },
-  { id: '9', timestamp: Date.now() -  60_000, level: 'error', source: 'rpc',         message: 'Transient RPC timeout (attempt 2/3)' },
-  { id: '10', timestamp: Date.now() - 30_000, level: 'info',  source: 'scheduler',   message: 'Partition 0/4 complete – 18432 seeds processed' },
-];
+} from "./log-viewer-page-utils";
+import { shouldFollow } from "./scroll-intent-utils";
+import { useDebounce } from "../../lib/useDebounce";
+import { MOCK_LOG_ENTRIES } from "../../fixtures/logs";
+import { useDataTableKeyboardNav } from "../use-data-table-keyboard-nav";
+import LogSeverityBadge from "../../components/LogSeverityBadge";
+import { useRunStream } from "../runs/[id]/useRunStream";
 
 async function fetchLogs(): Promise<LogEntry[]> {
   await new Promise((r) => setTimeout(r, 800));
-  return MOCK_ENTRIES;
+  return MOCK_LOG_ENTRIES;
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 const LEVEL_OPTIONS: { value: LogLevelFilter; label: string }[] = [
-  { value: 'all',   label: 'All'   },
-  { value: 'info',  label: 'Info'  },
-  { value: 'warn',  label: 'Warn'  },
-  { value: 'error', label: 'Error' },
-  { value: 'debug', label: 'Debug' },
+  { value: "all", label: "All" },
+  { value: "info", label: "Info" },
+  { value: "warn", label: "Warn" },
+  { value: "error", label: "Error" },
+  { value: "debug", label: "Debug" },
 ];
 
-const LEVEL_BADGE: Record<LogLevel, string> = {
-  info:  'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800',
-  warn:  'bg-amber-100 text-amber-900 border-amber-200 dark:bg-amber-950/50 dark:text-amber-200 dark:border-amber-800',
-  error: 'bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-800',
-  debug: 'bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700',
-};
-
 function formatTimestamp(ts: number): string {
-  return new Date(ts).toISOString().replace('T', ' ').slice(0, 23) + 'Z';
+  return new Date(ts).toISOString().replace("T", " ").slice(0, 23) + "Z";
 }
 
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
-function LoadingSkeleton() {
-  return (
-    <div role="status" aria-label="Loading logs" className="space-y-2 animate-pulse">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="skeleton h-8 w-full" />
-      ))}
-      <span className="sr-only">Loading…</span>
-    </div>
-  );
-}
-
-function ErrorState({ onRetry }: { onRetry: () => void }) {
-  return (
-    <div role="alert" className="flex flex-col items-center gap-4 py-16 text-center">
-      <p className="text-meta">Failed to load logs. Check your connection and try again.</p>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="btn-primary text-xs sm:text-sm"
-      >
-        Retry
-      </button>
-    </div>
-  );
-}
-
-function EmptyState() {
-  return (
-    <p className="text-center py-16 text-meta">
-      No log entries match the current filters.
-    </p>
-  );
-}
+import { ListState } from "../../components/ListState";
 
 // ---------------------------------------------------------------------------
 // Main page
 // ---------------------------------------------------------------------------
 export default function LogViewerPage() {
-  const [dataState, setDataState] = useState<PageDataState>('loading');
-  const [entries, setEntries] = useState<LogEntry[]>([]);
-  const [levelFilter, setLevelFilter] = useState<LogLevelFilter>('all');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [dataState, setDataState] = useState<PageDataState>("success");
+  const [entries, setEntries] = useState<LogEntry[]>(MOCK_LOG_ENTRIES);
+  const [levelFilter, setLevelFilter] = useState<LogLevelFilter>("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const [fetchAttempt, setFetchAttempt] = useState(0);
+  const [autoscroll, setAutoscroll] = useState(true);
+  useRunStream("run-1001", (envelope) => {
+    if (envelope.event.type !== "LOG_APPEND") return;
+    const logEvent = envelope.event;
+    setEntries((current) => {
+      const known = new Set(current.map((entry) => entry.id));
+      return [...current, ...logEvent.entries.filter((entry) => !known.has(entry.id))];
+    });
+  });
+
+  // Refs for scroll intent tracking
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const distanceFromBottomRef = useRef(0);
+  const scrolledUpRef = useRef(false);
+  const isDraggingRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -119,27 +81,120 @@ export default function LogViewerPage() {
       .then((data) => {
         if (!cancelled) {
           setEntries(data);
-          setDataState('success');
+          setDataState("success");
         }
       })
       .catch(() => {
-        if (!cancelled) setDataState('error');
+        if (!cancelled) setDataState("error");
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [fetchAttempt]);
 
   const handleRetry = () => {
-    setDataState('loading');
+    setDataState("loading");
     setFetchAttempt((n) => n + 1);
   };
 
   const visible = useMemo(
     () =>
-      filterLogEntries(entries, { level: levelFilter, query: debouncedSearchQuery }).sort(
-        (a, b) => a.timestamp - b.timestamp,
-      ),
+      filterLogEntries(entries, {
+        level: levelFilter,
+        query: debouncedSearchQuery,
+      }).sort((a, b) => a.timestamp - b.timestamp),
     [entries, levelFilter, debouncedSearchQuery],
   );
+
+  const { getRowProps } = useDataTableKeyboardNav({
+    rowCount: visible.length,
+    onActivate: (index) => {
+      const entry = visible[index];
+      if (!entry) {
+        return;
+      }
+      const row = document.getElementById(logEntryAnchorId(entry));
+      row?.scrollIntoView({ block: "nearest" });
+      row?.querySelector<HTMLElement>("a")?.focus();
+    },
+  });
+
+  // Track scroll position and intent
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    let lastScrollTop = container.scrollTop;
+    let settleTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+      distanceFromBottomRef.current = distanceFromBottom;
+
+      // Detect upward scroll
+      if (scrollTop < lastScrollTop) {
+        scrolledUpRef.current = true;
+        // Clear previous settle timeout
+        if (settleTimeout) clearTimeout(settleTimeout);
+        // Reset scrolledUp flag after 500ms of no scrolling
+        settleTimeout = setTimeout(() => {
+          if (distanceFromBottom <= 50) {
+            scrolledUpRef.current = false;
+          }
+        }, 500);
+      } else if (distanceFromBottom <= 50) {
+        // User scrolled down to near-bottom - resume following
+        scrolledUpRef.current = false;
+      }
+
+      lastScrollTop = scrollTop;
+    };
+
+    const handlePointerDown = (e: PointerEvent) => {
+      const target = e.target as HTMLElement;
+      // Check if clicking on scrollbar area
+      if (target === container && e.offsetX > container.clientWidth - 20) {
+        isDraggingRef.current = true;
+      }
+    };
+
+    const handlePointerUp = () => {
+      isDraggingRef.current = false;
+    };
+
+    container.addEventListener("scroll", handleScroll);
+    container.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("pointerup", handlePointerUp);
+
+    return () => {
+      container.removeEventListener("scroll", handleScroll);
+      container.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("pointerup", handlePointerUp);
+      if (settleTimeout) clearTimeout(settleTimeout);
+    };
+  }, []);
+
+  // Autoscroll effect - triggered when visible entries change
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container || visible.length === 0) return;
+
+    // Decide whether to scroll based on current intent
+    const follow = shouldFollow({
+      distanceFromBottom: distanceFromBottomRef.current,
+      scrolledUp: scrolledUpRef.current || isDraggingRef.current,
+      autoscroll,
+    });
+
+    if (follow) {
+      // Smooth scroll to bottom
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: "smooth",
+      });
+    }
+  }, [visible, autoscroll]);
 
   return (
     <div className="container-full page-padding fade-in">
@@ -147,14 +202,20 @@ export default function LogViewerPage() {
       <div className="flex items-center justify-between mb-4 sm:mb-6">
         <div>
           <h1 className="heading-page">Log Viewer</h1>
-          <p className="text-meta mt-0.5 sm:mt-1">Structured run logs with search and timestamp anchors</p>
+          <p className="text-meta mt-0.5 sm:mt-1">
+            Structured run logs with search and timestamp anchors
+          </p>
         </div>
       </div>
 
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-3 sm:items-center mb-6">
         {/* Level filter */}
-        <div role="group" aria-label="Filter by log level" className="flex flex-wrap gap-2">
+        <div
+          role="group"
+          aria-label="Filter by log level"
+          className="flex flex-wrap gap-2"
+        >
           {LEVEL_OPTIONS.map((opt) => {
             const active = levelFilter === opt.value;
             return (
@@ -163,11 +224,7 @@ export default function LogViewerPage() {
                 type="button"
                 aria-pressed={active}
                 onClick={() => setLevelFilter(opt.value)}
-                className={
-                  active
-                    ? 'chip chip-active text-xs'
-                    : 'chip text-xs'
-                }
+                className={active ? "chip chip-active text-xs" : "chip text-xs"}
               >
                 {opt.label}
               </button>
@@ -186,6 +243,17 @@ export default function LogViewerPage() {
             className="input-field"
           />
         </label>
+
+        {/* Autoscroll toggle */}
+        <button
+          type="button"
+          onClick={() => setAutoscroll(!autoscroll)}
+          className={autoscroll ? "chip chip-active text-xs" : "chip text-xs"}
+          aria-pressed={autoscroll}
+          aria-label="Toggle autoscroll"
+        >
+          Autoscroll {autoscroll ? "ON" : "OFF"}
+        </button>
       </div>
 
       {/* Content area */}
@@ -193,68 +261,99 @@ export default function LogViewerPage() {
         aria-labelledby="log-table-heading"
         className="card overflow-hidden"
       >
-        <h2 id="log-table-heading" className="sr-only">Log entries</h2>
+        <h2 id="log-table-heading" className="sr-only">
+          Log entries
+        </h2>
 
-        {dataState === 'loading' && (
-          <div className="card-padding">
-            <LoadingSkeleton />
+        <ListState
+          {...(dataState === "loading"
+            ? { state: "loading" }
+            : dataState === "error"
+              ? {
+                  state: "error",
+                  message:
+                    "Failed to load logs. Check your connection and try again.",
+                  onRetry: handleRetry,
+                }
+              : visible.length === 0
+                ? {
+                    state: "empty",
+                    message: "No log entries match the current filters.",
+                  }
+                : { state: "success" })}
+        >
+          {/* Status bar */}
+          <div
+            className="px-4 py-2"
+            style={{
+              background: "var(--bg)",
+              borderBottom: "1px solid var(--border-color)",
+            }}
+          >
+            <span className="text-meta">
+              Showing {visible.length} of {entries.length} entries
+            </span>
           </div>
-        )}
 
-        {dataState === 'error' && (
-          <ErrorState onRetry={handleRetry} />
-        )}
-
-        {dataState === 'success' && visible.length === 0 && <EmptyState />}
-
-        {dataState === 'success' && visible.length > 0 && (
-          <>
-            {/* Status bar */}
-            <div className="px-4 py-2" style={{ background: 'var(--bg)', borderBottom: '1px solid var(--border-color)' }}>
-              <span className="text-meta">Showing {visible.length} of {entries.length} entries</span>
-            </div>
-
-            {/* Log table */}
-            <div className="table-responsive">
-              <table className="data-table w-full text-xs sm:text-sm font-mono">
-                <thead>
-                  <tr>
-                    <th scope="col" className="w-24 sm:w-52">Timestamp</th>
-                    <th scope="col" className="w-14 sm:w-20">Level</th>
-                    <th scope="col" className="hidden sm:table-cell w-32">Source</th>
-                    <th scope="col">Message</th>
+          {/* Log table */}
+          <div
+            ref={scrollContainerRef}
+            className="table-responsive"
+            style={{ maxHeight: "60vh", overflowY: "auto" }}
+          >
+            <table
+              className="data-table w-full text-xs sm:text-sm font-mono"
+              aria-label="Log entries"
+            >
+              <thead>
+                <tr>
+                  <th scope="col" className="w-24 sm:w-52">
+                    Timestamp
+                  </th>
+                  <th scope="col" className="w-14 sm:w-20">
+                    Level
+                  </th>
+                  <th scope="col" className="hidden sm:table-cell w-32">
+                    Source
+                  </th>
+                  <th scope="col">Message</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map((entry, index) => (
+                  <tr
+                    key={entry.id}
+                    id={logEntryAnchorId(entry)}
+                    {...getRowProps(index)}
+                    aria-label={`Log entry ${entry.level} from ${entry.source}`}
+                  >
+                    <td className="text-meta whitespace-nowrap text-[10px] sm:text-xs">
+                      <a
+                        href={logEntryAnchorHref(entry)}
+                        className="link text-[10px] sm:text-xs"
+                        aria-label={`Anchor for log entry at ${formatTimestamp(entry.timestamp)}`}
+                      >
+                        {formatTimestamp(entry.timestamp)}
+                      </a>
+                    </td>
+                    <td>
+                      <LogSeverityBadge level={entry.level} />
+                    </td>
+                    <td
+                      className="hidden sm:table-cell"
+                      style={{ color: "#0A66C2" }}
+                    >
+                      {entry.source}
+                    </td>
+                    <td className="break-all text-[11px] sm:text-sm">
+                      {entry.message}
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {visible.map((entry) => (
-                    <tr key={entry.id} id={logEntryAnchorId(entry)}>
-                      <td className="text-meta whitespace-nowrap text-[10px] sm:text-xs">
-                        <a
-                          href={logEntryAnchorHref(entry)}
-                          className="link text-[10px] sm:text-xs"
-                          aria-label={`Anchor for log entry at ${formatTimestamp(entry.timestamp)}`}
-                        >
-                          {formatTimestamp(entry.timestamp)}
-                        </a>
-                      </td>
-                      <td>
-                        <span className={`text-[9px] sm:text-[10px] uppercase font-bold px-1 sm:px-1.5 py-0.5 rounded border ${LEVEL_BADGE[entry.level]}`}>
-                          {entry.level}
-                        </span>
-                      </td>
-                      <td className="hidden sm:table-cell" style={{ color: '#0A66C2' }}>
-                        {entry.source}
-                      </td>
-                      <td className="break-all text-[11px] sm:text-sm">
-                        {entry.message}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </ListState>
       </section>
     </div>
   );

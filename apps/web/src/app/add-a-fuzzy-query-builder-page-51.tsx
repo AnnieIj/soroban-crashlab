@@ -2,6 +2,8 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FuzzingRun } from './types';
+import { RUN_STATUSES } from '../lib/run-status';
+import { formatDurationCompact } from './utils/format';
 
 /* ── Types ─────────────────────────────────────────────────────────── */
 
@@ -25,7 +27,7 @@ export interface SavedQuery {
 const STORAGE_KEY = 'crashlab-saved-queries';
 
 const FIELD_OPTIONS = [
-  { value: 'status', label: 'Status', type: 'select', options: ['running', 'completed', 'failed', 'cancelled'] },
+  { value: 'status', label: 'Status', type: 'select', options: [...RUN_STATUSES] },
   { value: 'area', label: 'Area', type: 'select', options: ['auth', 'state', 'budget', 'xdr'] },
   { value: 'severity', label: 'Severity', type: 'select', options: ['low', 'medium', 'high', 'critical'] },
   { value: 'duration', label: 'Duration (ms)', type: 'number' },
@@ -98,15 +100,6 @@ function applyFilter(run: FuzzingRun, filter: QueryFilter): boolean {
   }
 }
 
-
-function formatDuration(ms: number): string {
-  const seconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-  if (hours > 0) return `${hours}h ${minutes % 60}m`;
-  if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
-  return `${seconds}s`;
-}
 
 /* ── Component ──────────────────────────────────────────────────────── */
 
@@ -461,7 +454,7 @@ export default function AddAFuzzyQueryBuilderPage51({ runs = [] }: Props) {
                             {run.severity}
                           </span>
                         </td>
-                        <td className="py-2 px-3">{formatDuration(run.duration)}</td>
+                        <td className="py-2 px-3">{formatDurationCompact(run.duration)}</td>
                         <td className="py-2 px-3">{run.seedCount.toLocaleString()}</td>
                       </tr>
                     ))}

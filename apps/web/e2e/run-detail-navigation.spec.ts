@@ -1,4 +1,5 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from './fixtures';
+import type { Page } from '@playwright/test';
 
 const mockRuns = [
   {
@@ -94,7 +95,33 @@ test.describe('Run detail navigation', () => {
 
     await expect(page.getByRole('heading', { name: 'Run Details' })).toBeVisible();
     await expect(page.getByText('ID: run-1002')).toBeVisible();
-    await expect(page.getByRole('link', { name: '← Back to Runs' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Back to Dashboard' })).toBeVisible();
+  });
+
+  test('navigates from dashboard to run detail page on row click', async ({ page }) => {
+    await fulfillRunsListRequest(page, { runs: mockRuns, total: mockRuns.length });
+
+    const runsResponse = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === '/api/runs' && response.status() === 200,
+    );
+
+    await page.goto('/');
+    await runsResponse;
+
+    await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible();
+
+    const targetRow = page.locator('table[aria-label="Recent fuzzing runs"] tbody tr').filter({ hasText: 'run-1002' });
+    await expect(targetRow).toBeVisible();
+    await targetRow.click();
+
+    await expect(page).toHaveURL(/\/runs\/run-1002$/);
+    await expect(page.getByRole('heading', { name: 'Run Details' })).toBeVisible();
+    await expect(page.getByText('ID: run-1002')).toBeVisible();
+
+    await page.getByRole('link', { name: 'Back to Dashboard' }).click();
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible();
   });
 
   test('navigates back from run detail to runs list', async ({ page }) => {
@@ -102,9 +129,9 @@ test.describe('Run detail navigation', () => {
 
     await expect(page.getByRole('heading', { name: 'Run Details' })).toBeVisible();
     await expect(page.getByText('ID: run-1001')).toBeVisible();
-    await expect(page.locator('.badge-failed')).toBeVisible();
+    await expect(page.getByText('Issues found')).toBeVisible();
 
-    await page.getByRole('link', { name: '← Back to Runs' }).click();
+    await page.locator('a.top-nav-link[href="/runs"]').click();
 
     await expect(page).toHaveURL(/\/runs$/);
     await expect(page.getByRole('heading', { name: 'Fuzzing Runs' })).toBeVisible();
@@ -113,9 +140,29 @@ test.describe('Run detail navigation', () => {
   test('links to dashboard from run detail page', async ({ page }) => {
     await openRunFromList(page, 'run-1001');
 
-    await page.locator('a.btn-outline', { hasText: 'Dashboard' }).click();
+    await page.getByRole('link', { name: 'Back to Dashboard' }).click();
 
     await expect(page).toHaveURL(/\/$/);
     await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible();
+  });
+
+  test('handles dashboard connection error when API request fails', async ({ page }) => {
+    await fulfillRunsListRequest(page, { message: 'Internal Server Error' }, 500);
+
+    await page.goto('/');
+    await expect(page.getByText('Connection Error')).toBeVisible();
+    await expect(page.getByText('Could not reach the backend API.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible();
+  });
+
+  test('handles navigation to unknown run detail page gracefully', async ({ page }) => {
+    await fulfillRunsListRequest(page, { runs: mockRuns, total: mockRuns.length });
+
+    await page.goto('/runs/non-existent-run-9999');
+    await page.waitForLoadState('domcontentloaded');
+
+    await expect(page.getByRole('heading', { name: 'Run Details' })).toBeVisible();
+    await expect(page.getByText('ID: non-existent-run-9999')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Back to Dashboard' })).toBeVisible();
   });
 });

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
+import { API_FETCH_TIMEOUT_MS } from '@/lib/timeouts';
 
 interface NotificationFeedItem {
   id: string;
@@ -71,6 +72,7 @@ async function fetchNotificationsFeed(request: NextRequest, feedUrl: string): Pr
       Accept: 'application/json',
     },
     cache: 'no-store',
+    signal: AbortSignal.timeout(API_FETCH_TIMEOUT_MS),
   });
 
   if (!response.ok) {

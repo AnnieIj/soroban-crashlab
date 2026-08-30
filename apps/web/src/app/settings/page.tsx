@@ -1,19 +1,24 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useMaintainerMode } from '../useMaintainerMode';
 import { loadFromStorage } from './api/api-config-utils';
 
+function readActiveUrl(): string {
+  const config = loadFromStorage();
+  return config.backendUrl || process.env.NEXT_PUBLIC_API_URL || '';
+}
+
 export default function SettingsPage() {
   const { isMaintainer, toggle: toggleMaintainer, mounted, storageError } = useMaintainerMode();
-  const [apiUrl, setApiUrl] = useState<string>('');
-  const [isMockData, setIsMockData] = useState<boolean>(true);
+  // Defer localStorage reads until after mount so SSR HTML matches the first client render.
+  const [apiUrl, setApiUrl] = useState('');
+  const [isMockData, setIsMockData] = useState(true);
 
   useEffect(() => {
     queueMicrotask(() => {
-      const config = loadFromStorage();
-      const activeUrl = config.backendUrl || process.env.NEXT_PUBLIC_API_URL || '';
+      const activeUrl = readActiveUrl();
       setApiUrl(activeUrl || 'Not configured (using mock data)');
       setIsMockData(!activeUrl);
     });
@@ -46,6 +51,8 @@ export default function SettingsPage() {
           { href: '/settings/accessibility', title: 'Accessibility', desc: 'Keyboard navigation, screen reader and contrast settings', icon: '◈' },
           { href: '/settings/api', title: 'API Configuration', desc: 'Backend URL, rate limits and connection settings', icon: '⚙' },
           { href: '/settings/notifications', title: 'Notifications', desc: 'Configure notification types, delivery and quiet hours', icon: '◉' },
+          { href: '/settings/network', title: 'Network', desc: 'Manage Stellar RPC and Horizon network endpoints', icon: '◎' },
+          { href: '/settings/config-bundle', title: 'Configuration Bundle', desc: 'Export and import alert rules, channels and filter presets', icon: '⇄' },
         ].map((item) => (
           <Link key={item.href} href={item.href} className="card card-padding card-interactive flex items-start gap-3 sm:gap-4 text-decoration-none">
             <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-base sm:text-lg flex-shrink-0" style={{ background: '#E7F0F9', color: '#0A66C2' }}>
@@ -89,23 +96,22 @@ export default function SettingsPage() {
                 {mounted && isMaintainer ? 'Currently active' : 'Currently disabled'}
               </p>
             </div>
-            {mounted && (
-              <button
-                onClick={toggleMaintainer}
-                className="relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:ring-offset-2"
-                style={{
-                  background: isMaintainer ? '#0A66C2' : '#E0DFDC',
-                }}
-                role="switch"
-                aria-checked={isMaintainer}
-                aria-label="Toggle maintainer mode"
-              >
-                <span
-                  className="inline-block h-5 w-5 transform rounded-full bg-white transition-transform shadow-sm"
-                  style={{ transform: isMaintainer ? 'translateX(24px)' : 'translateX(3px)' }}
-                />
-              </button>
-            )}
+            <button
+              onClick={toggleMaintainer}
+              className="relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#0A66C2] focus:ring-offset-2"
+              style={{
+                background: isMaintainer ? '#0A66C2' : '#E0DFDC',
+              }}
+              role="switch"
+              aria-checked={isMaintainer}
+              aria-label="Toggle maintainer mode"
+              data-testid="maintainer-mode-toggle"
+            >
+              <span
+                className="inline-block h-5 w-5 transform rounded-full bg-white transition-transform shadow-sm"
+                style={{ transform: isMaintainer ? 'translateX(24px)' : 'translateX(3px)' }}
+              />
+            </button>
           </div>
         </div>
       </div>

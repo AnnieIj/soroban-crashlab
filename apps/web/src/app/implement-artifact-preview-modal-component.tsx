@@ -2,17 +2,22 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
+import type { Artifact, ContentType } from "./types";
+import { formatSize } from "./utils/format";
+import { absoluteShort } from "./utils/datetime";
+import { triggerBrowserDownload } from "./utils/browser-download";
+import {
+  detectContentType,
+  formatJsonContent,
+  formatHexDump,
+  decodeContent,
+} from "@/lib/artifact-content-utils";
+import JsonPreview from "@/components/JsonPreview";
+import TextPreview from "@/components/TextPreview";
+import HexPreview from "@/components/HexPreview";
 
-// Artifact interface - mirrors the shape in add-artifact-explorer.tsx
-export interface Artifact {
-  id: string;
-  name: string;
-  type: "seed" | "log" | "trace" | "coverage" | "bundle";
-  size: number; // bytes
-  updatedAt: string; // ISO 8601
-  runId?: string;
-  content_hash?: string;
-}
+export { formatSize } from "./utils/format";
+export type { Artifact, ContentType };
 
 export type ArtifactPreviewDataState = "loading" | "error" | "success";
 
@@ -24,42 +29,35 @@ export interface ArtifactPreviewModalProps {
   onRetry?: () => void;
   errorMessage?: string;
   className?: string;
+  /**
+   * Optional function to fetch raw artifact content from the backend.
+   * When provided, the modal fetches real content and renders it based on
+   * its detected content type (JSON / text / hex).
+   * When omitted, the modal falls back to simulated/derived content.
+   */
+  fetchContent?: (id: string) => Promise<ArrayBuffer>;
 }
 
-/**
- * formatSize — converts a byte count to a human-readable string.
- * Examples: 512 → "512 B", 2048 → "2.0 KB", 1572864 → "1.5 MB"
- */
-export function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
+type ContentLoadState = "idle" | "loading" | "success" | "error";
+
 
 /**
- * formatDate — formats an ISO 8601 timestamp using Intl.DateTimeFormat.
- * Falls back to the raw string if parsing fails.
+ * formatDate — formats an ISO 8601 timestamp using utils/datetime.absoluteShort.
+ * Kept as a named export for backward-compatibility with existing consumers.
  */
 export function formatDate(iso: string): string {
-  try {
-    return new Intl.DateTimeFormat("en-US", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(new Date(iso));
-  } catch {
-    return iso;
-  }
+  return absoluteShort(iso);
 }
 
 /**
  * generatePreviewContent — deterministically generates a simulated content
  * preview string for an artifact, derived from the artifact's id.
+ * Used as fallback when real content is not available.
  */
 export function generatePreviewContent(artifact: Artifact): string {
   const idBytes = Array.from(artifact.id).map((c) => c.charCodeAt(0));
 
   if (artifact.type === "seed" || artifact.type === "bundle") {
-    // Hex-dump: rows of 16 bytes, address + hex + ascii
     const rows: string[] = [];
     const totalRows = Math.max(4, Math.min(16, idBytes.length));
     for (let row = 0; row < totalRows; row++) {
@@ -189,7 +187,24 @@ const ArtifactPreviewError: React.FC<{ onRetry?: () => void; errorMessage?: stri
 );
 
 /**
- * Preview components for different artifact types
+ * Content-type-specific preview badge colors
+ */
+const contentTypeBadgeColors: Record<ContentType, string> = {
+  json: "bg-amber-600 dark:bg-amber-700 text-amber-100",
+  text: "bg-blue-600 dark:bg-blue-700 text-blue-100",
+  hex: "bg-cyan-600 dark:bg-cyan-700 text-cyan-100",
+  unknown: "bg-zinc-600 dark:bg-zinc-700 text-zinc-100",
+};
+
+const contentTypeBadgeLabels: Record<ContentType, string> = {
+  json: "JSON",
+  text: "Text",
+  hex: "Hex",
+  unknown: "Unknown",
+};
+
+/**
+ * Preview components for different artifact types (fallback simulated content)
  */
 const SeedPreview: React.FC<{ artifact: Artifact }> = ({ artifact }) => (
   <pre className="font-mono text-xs bg-zinc-900 dark:bg-zinc-950 text-green-400 p-4 rounded-lg overflow-auto max-h-64 border border-zinc-700 dark:border-zinc-800">
@@ -229,6 +244,36 @@ const CoveragePreview: React.FC<{ artifact: Artifact }> = ({ artifact }) => {
 };
 
 /**
+ * Real content preview based on detected content type (JSON, text, hex)
+ */
+const RealContentPreview: React.FC<{
+  buffer: ArrayBuffer;
+  contentType: ContentType;
+}> = ({ buffer, contentType }) => {
+  switch (contentType) {
+    case "json": {
+      const rawText = decodeContent(buffer);
+      const formatted = formatJsonContent(rawText);
+      return <JsonPreview content={formatted} />;
+    }
+    case "text": {
+      const text = decodeContent(buffer);
+      return <TextPreview content={text} />;
+    }
+    case "hex": {
+      const hexDump = formatHexDump(buffer);
+      return <HexPreview hexDump={hexDump} />;
+    }
+    default:
+      return (
+        <div className="flex items-center justify-center py-8 text-zinc-500 dark:text-zinc-400">
+          <p className="text-sm">Unable to determine content type for this artifact.</p>
+        </div>
+      );
+  }
+};
+
+/**
  * Main content preview component that switches based on artifact type
  */
 const ArtifactContentPreview: React.FC<{ artifact: Artifact }> = ({ artifact }) => {
@@ -253,7 +298,8 @@ const ArtifactContentPreview: React.FC<{ artifact: Artifact }> = ({ artifact }) 
 };
 
 /**
- * Enhanced Artifact Preview Modal with loading/error states and full accessibility
+ * Enhanced Artifact Preview Modal with loading/error states and full accessibility.
+ * Supports real content file preview for JSON, text, and hex content types.
  */
 const ArtifactPreviewModal: React.FC<ArtifactPreviewModalProps> = ({
   artifact,
@@ -263,20 +309,82 @@ const ArtifactPreviewModal: React.FC<ArtifactPreviewModalProps> = ({
   onRetry,
   errorMessage,
   className = "",
+  fetchContent,
 }) => {
   const [mounted, setMounted] = useState(false);
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
 
+  // Content state: tracks the fetched content buffer, detected type, and load state.
+  // Initialised to "idle" — the fetch starts only inside the effect below.
+  const [contentState, setContentState] = useState<{
+    buffer: ArrayBuffer | null;
+    type: ContentType;
+    loadState: ContentLoadState;
+  }>({ buffer: null, type: "unknown", loadState: "idle" });
+
   const panelRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const triggerRef = useRef<Element | null>(null);
+
+  // Fetch real content when modal opens with a fetchContent handler.
+  // Scheduling inside a microtask avoids the cascading-render lint rule.
+  const fetchIdRef = useRef(0);
+
+  useEffect(() => {
+    if (!isOpen || !artifact || !fetchContent) return;
+
+    const id = ++fetchIdRef.current;
+
+    // Schedule loading state update via microtask to avoid cascading renders
+    queueMicrotask(() => {
+      if (fetchIdRef.current !== id || !isOpen) return;
+      setContentState((prev) => ({ ...prev, loadState: "loading" }));
+    });
+
+    const loadContent = async () => {
+      try {
+        const buffer = await fetchContent(artifact.id);
+        if (fetchIdRef.current !== id) return;
+        const type = detectContentType(buffer);
+        setContentState({ buffer, type, loadState: "success" });
+      } catch (err) {
+        if (fetchIdRef.current !== id) return;
+        setContentState((prev) => ({ ...prev, loadState: "error" }));
+        console.error("Failed to fetch artifact content:", err);
+      }
+    };
+
+    loadContent();
+    return () => { fetchIdRef.current = 0; };
+  }, [isOpen, artifact, fetchContent]);
+
+  // Get the effective content for copy/download
+  const getEffectiveContent = useCallback((): string => {
+    if (contentState.buffer && contentState.type !== "unknown") {
+      switch (contentState.type) {
+        case "json":
+          return formatJsonContent(decodeContent(contentState.buffer));
+        case "text":
+          return decodeContent(contentState.buffer);
+        case "hex":
+          return formatHexDump(contentState.buffer);
+        default:
+          return "";
+      }
+    }
+    // Fallback to simulated content
+    if (artifact) {
+      return generatePreviewContent(artifact);
+    }
+    return "";
+  }, [contentState, artifact]);
 
   // Handle copy to clipboard functionality
   const handleCopy = useCallback(async () => {
     if (!artifact) return;
     
     try {
-      const content = generatePreviewContent(artifact);
+      const content = getEffectiveContent();
       await navigator.clipboard.writeText(content);
       setCopyStatus("copied");
       setTimeout(() => setCopyStatus("idle"), 2000);
@@ -284,23 +392,16 @@ const ArtifactPreviewModal: React.FC<ArtifactPreviewModalProps> = ({
       setCopyStatus("failed");
       setTimeout(() => setCopyStatus("idle"), 2000);
     }
-  }, [artifact]);
+  }, [artifact, getEffectiveContent]);
 
   // Handle download functionality
   const handleDownload = useCallback(() => {
     if (!artifact) return;
 
-    const content = generatePreviewContent(artifact);
-    const blob = new Blob([content], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${artifact.name}-preview.txt`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  }, [artifact]);
+    const content = getEffectiveContent();
+    const extension = contentState.type === "json" ? ".json" : ".txt";
+    triggerBrowserDownload(new Blob([content], { type: "text/plain" }), `${artifact.name}-preview${extension}`);
+  }, [artifact, getEffectiveContent, contentState.type]);
 
   // Scroll lock when modal is open
   useEffect(() => {
@@ -330,7 +431,6 @@ const ArtifactPreviewModal: React.FC<ArtifactPreviewModalProps> = ({
 
     triggerRef.current = document.activeElement;
     
-    // Focus the close button after a brief delay to ensure modal is rendered
     const focusTimer = setTimeout(() => {
       closeButtonRef.current?.focus();
     }, 100);
@@ -389,6 +489,10 @@ const ArtifactPreviewModal: React.FC<ArtifactPreviewModalProps> = ({
     bundle: "bg-purple-600 dark:bg-purple-700 text-purple-100",
   };
 
+  // Determine if we should show real content or fallback
+  const hasRealContent = contentState.loadState === "success" && contentState.buffer !== null;
+  const isLoadingContent = contentState.loadState === "loading" && !!fetchContent;
+
   const modal = (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
@@ -422,7 +526,7 @@ const ArtifactPreviewModal: React.FC<ArtifactPreviewModalProps> = ({
           
           {/* Action buttons */}
           <div className="flex items-center gap-2">
-            {dataState === "success" && artifact && (
+            {dataState === "success" && artifact && !isLoadingContent && (
               <>
                 <button
                   onClick={handleCopy}
@@ -498,6 +602,12 @@ const ArtifactPreviewModal: React.FC<ArtifactPreviewModalProps> = ({
                   <span className="px-3 py-1 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-full text-sm">
                     {formatDate(artifact.updatedAt)}
                   </span>
+                  {/* Content type badge for real content */}
+                  {hasRealContent && contentState.type !== "unknown" && (
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${contentTypeBadgeColors[contentState.type] ?? "bg-zinc-600 text-zinc-100"}`}>
+                      {contentTypeBadgeLabels[contentState.type]}
+                    </span>
+                  )}
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
@@ -521,7 +631,13 @@ const ArtifactPreviewModal: React.FC<ArtifactPreviewModalProps> = ({
                 <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 uppercase tracking-wide mb-3">
                   Content Preview
                 </h3>
-                <ArtifactContentPreview artifact={artifact} />
+                {isLoadingContent ? (
+                  <ArtifactPreviewSkeleton />
+                ) : hasRealContent ? (
+                  <RealContentPreview buffer={contentState.buffer!} contentType={contentState.type} />
+                ) : (
+                  <ArtifactContentPreview artifact={artifact} />
+                )}
               </div>
             </div>
           )}

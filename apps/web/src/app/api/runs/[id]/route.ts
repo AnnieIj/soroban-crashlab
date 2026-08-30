@@ -1,35 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { buildMockRuns } from '@/app/mockRuns';
 import type { FuzzingRun } from '@/app/types';
-import { logger } from '@/lib/logger';
+import { withRouteErrorHandling } from '@/lib/route-handler';
+import { errorResponse, status } from '@/lib/api-response-utils';
+import { withFixtureCaching } from '@/lib/fixture-caching';
+import { API_FETCH_TIMEOUT_MS } from '@/lib/timeouts';
+import { selectRunStorageDriver } from '@/lib/storage';
 
-/**
- * Resolves a single run by ID from the in-process mock store.
- * Exported for unit testing without the Next.js request layer.
- */
-export function findRunById(id: string): FuzzingRun | undefined {
-  return buildMockRuns().find((r) => r.id === id);
+export async function findRunById(id: string): Promise<FuzzingRun | undefined> {
+  return (await selectRunStorageDriver().getRun(id)) ?? undefined;
 }
 
-/**
- * GET /api/runs/[id]
- *
- * When RUNS_API_URL is set the request is forwarded to the Rust backend at
- * `${RUNS_API_URL}/runs/<id>`.  Otherwise the response is served from the
- * in-process mock dataset so the frontend stays functional without the backend.
- *
- * Env vars:
- *   RUNS_API_URL  – base URL of the Rust fuzzer API (e.g. http://localhost:8080)
- */
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  try {
+export const GET = withRouteErrorHandling(
+  'GET /api/runs/[id]',
+  async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
     const { id } = await params;
 
     if (!id) {
-      return NextResponse.json({ error: 'Run ID is required' }, { status: 400 });
+      return errorResponse('Run ID is required', status.badRequest);
     }
 
     const runsApiUrl = process.env.RUNS_API_URL;
@@ -37,25 +24,26 @@ export async function GET(
     if (runsApiUrl) {
       const upstream = await fetch(
         `${runsApiUrl}/runs/${encodeURIComponent(id)}`,
-        { headers: { Accept: 'application/json' } },
+{
+          headers: { Accept: 'application/json' },
+          cache: 'no-store',
+          signal: AbortSignal.timeout(API_FETCH_TIMEOUT_MS),
+        },
       );
       if (upstream.status === 404) {
-        return NextResponse.json({ error: 'Run not found' }, { status: 404 });
+        return errorResponse('Run not found', status.notFound);
       }
       if (!upstream.ok) {
-        return NextResponse.json({ error: 'Upstream error' }, { status: 502 });
+        return errorResponse('Upstream error', status.badGateway);
       }
       const data = (await upstream.json()) as unknown;
       return NextResponse.json(data, { headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' } });
     }
 
-    const run = findRunById(id);
+    const run = await findRunById(id);
     if (!run) {
-      return NextResponse.json({ error: 'Run not found' }, { status: 404 });
+      return errorResponse('Run not found', status.notFound);
     }
-    return NextResponse.json(run, { headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' } });
-  } catch (error) {
-    logger.error('GET /api/runs/[id] failed', { error });
-    return NextResponse.json({ error: 'Failed to fetch run' }, { status: 500 });
-  }
-}
+    return withFixtureCaching(request, run);
+  },
+);

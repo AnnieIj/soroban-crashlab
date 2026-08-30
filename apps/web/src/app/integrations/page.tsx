@@ -2,6 +2,10 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { MOCK_DLQ_ENTRIES } from '@/fixtures/webhook-dlq';
+
+/** Dead-letter depth, so a silently failing endpoint is visible here (#1427). */
+const DEAD_LETTER_DEPTH = MOCK_DLQ_ENTRIES.length;
 
 type Integration = {
   id: string;
@@ -11,6 +15,8 @@ type Integration = {
   href: string;
   status: 'available' | 'coming-soon';
   category: string;
+  /** Count surfaced next to the card's status chip when non-zero. */
+  badge?: number;
 };
 
 const INTEGRATIONS: Integration[] = [
@@ -107,15 +113,15 @@ const INTEGRATIONS: Integration[] = [
     category: 'Database'
   },
   {
-    id: 'ci',
-    title: 'CI Integration',
-    description: 'Integrate with CI/CD pipelines to run fuzzing tests automatically on code changes.',
+    id: 'github-actions',
+    title: 'GitHub Actions',
+    description: 'Monitor failed GitHub Actions workflows and re-run only their failed CI jobs from the dashboard.',
     icon: (
       <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
       </svg>
     ),
-    href: '/integrations/ci-replay',
+    href: '/integrations/github-actions',
     status: 'available',
     category: 'DevOps'
   },
@@ -130,7 +136,21 @@ const INTEGRATIONS: Integration[] = [
     ),
     href: '/integrations/webhooks',
     status: 'available',
-    category: 'Notifications'
+    category: 'Notifications',
+    badge: DEAD_LETTER_DEPTH
+  },
+  {
+    id: 'pagerduty',
+    title: 'PagerDuty Alerts',
+    description: 'Automatically page your on-call team when a fuzzing run encounters a critical failure. Uses PagerDuty Events API v2 with stable dedup-keys to prevent alert noise.',
+    icon: (
+      <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+      </svg>
+    ),
+    href: '/integrations/pagerduty',
+    status: 'available',
+    category: 'Alerting'
   },
   {
     id: 'prometheus',
@@ -144,6 +164,32 @@ const INTEGRATIONS: Integration[] = [
     href: '/integrations/prometheus',
     status: 'available',
     category: 'Monitoring'
+  },
+  {
+    id: 'grafana',
+    title: 'Grafana Annotations',
+    description: 'Post fuzzing run lifecycle events to your Grafana dashboards via the Annotations API. Mark starts, failures, and completions as timeline markers.',
+    icon: (
+      <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17v-2a2 2 0 012-2h2a2 2 0 012 2v2m-9 4h14a2 2 0 002-2V7.414a2 2 0 00-.586-1.414l-3.414-3.414A2 2 0 0014.586 2H5a2 2 0 00-2 2v15a2 2 0 002 2z" />
+      </svg>
+    ),
+    href: '/integrations/grafana',
+    status: 'available',
+    category: 'Monitoring'
+  },
+  {
+    id: 'smtp',
+    title: 'SMTP Email',
+    description: 'Send critical event notifications and run status updates over a standard SMTP connection using nodemailer.',
+    icon: (
+      <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+      </svg>
+    ),
+    href: '/integrations/smtp',
+    status: 'available',
+    category: 'Notifications'
   },
   {
     id: 'auth',
@@ -210,9 +256,19 @@ export default function IntegrationsHub() {
                         <h3 className="text-lg font-bold text-zinc-900 dark:text-white">
                           {integration.title}
                         </h3>
-                        <span className="inline-block mt-2 px-2 py-1 text-xs font-semibold uppercase tracking-widest rounded-full bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300">
-                          Active
-                        </span>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <span className="inline-block px-2 py-1 text-xs font-semibold uppercase tracking-widest rounded-full bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300">
+                            Active
+                          </span>
+                          {integration.badge ? (
+                            <span
+                              title={`${integration.badge} dead-lettered ${integration.badge === 1 ? 'delivery' : 'deliveries'}`}
+                              className="inline-block px-2 py-1 text-xs font-semibold uppercase tracking-widest rounded-full bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300"
+                            >
+                              {integration.badge} dead-lettered
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
                     

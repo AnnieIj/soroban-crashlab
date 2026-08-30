@@ -1,0 +1,24 @@
+[
+  {
+    "name": "route-group: shell",
+    "path": [
+      ".next/static/chunks/main-app-*.js",
+      ".next/static/chunks/webpack-*.js",
+      ".next/static/chunks/app/layout-*.js"
+    ],
+    "gzip": true,
+    "limit": "120 kB"
+  },
+  {
+    "name": "route-group: analytics-charts",
+    "path": [".next/static/chunks/app/analytics/**/*.js"],
+    "gzip": true,
+    "limit": "170 kB"
+  },
+  {
+    "name": "route-group: editor-grid",
+    "path": [".next/static/chunks/app/**/widget*/**/*.js"],
+    "gzip": true,
+    "limit": "130 kB"
+  }
+]

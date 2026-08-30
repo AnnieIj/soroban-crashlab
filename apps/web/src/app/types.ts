@@ -1,7 +1,13 @@
 /**
  * Status variants for a fuzzing run.
+ *
+ * Defined once in `src/lib/run-status.ts` alongside its label/colour/order
+ * metadata and re-exported here so existing `from './types'` imports keep
+ * working. Do not re-declare the union — see that module.
  */
-export type RunStatus = 'running' | 'completed' | 'failed' | 'cancelled';
+import type { RunStatus } from '../lib/run-status';
+
+export type { RunStatus };
 export type RunArea = 'auth' | 'state' | 'budget' | 'xdr';
 export type RunSeverity = 'low' | 'medium' | 'high' | 'critical';
 
@@ -41,6 +47,10 @@ export interface RunIssueLink {
 export interface FuzzingRun {
     /** Unique identifier for the run */
     id: string;
+    /** Parent run this run was derived from, when replaying a subset of failing seeds */
+    parentId?: string;
+    /** Ordered subset of seed indexes replayed for this lineage child */
+    seedList?: number[];
     /** Current state of the run */
     status: RunStatus;
     /** Product area primarily exercised by the run */
@@ -71,6 +81,33 @@ export interface FuzzingRun {
     annotations?: string[];
     /** User-defined tags for triage and filtering */
     tags?: string[];
+    /** Artifacts produced by this run, when available. */
+    artifacts?: Artifact[];
+    /** Deterministic replay verification fingerprint */
+    replayFingerprint?: import('./replay/fingerprint').ReplayFingerprint;
+    /** Engine coverage counter time-series telemetry */
+    corpusStats?: CorpusStatPoint[];
+}
+
+/**
+ * Single data point in corpus statistics time-series.
+ */
+export interface CorpusStatPoint {
+    ts: number;
+    corpusSize: number;
+    execsPerSec: number;
+    coveragePct: number;
+}
+
+/**
+ * Aggregated telemetry dataset from fuzzing engine coverage counters.
+ */
+export interface CorpusStatsTelemetry {
+    corpusSize: number;
+    execsPerSec: number;
+    coveragePct: number;
+    uniqueCrashes: number;
+    series: CorpusStatPoint[];
 }
 
 /**
@@ -111,6 +148,32 @@ export interface CrashTrendPoint {
     [signatureKey: string]: string | number;
 }
 
+/** Outcome of a single contract call within a run's call sequence. */
+export type ContractCallStatus = 'success' | 'failed' | 'pending';
+
+/**
+ * A single contract-to-contract call captured during a run, in the order it
+ * occurred. Used to render the run's sequence diagram.
+ */
+export interface ContractCallStep {
+    /** Stable identifier for this call within the run */
+    id: string;
+    /** 1-based position of this call in the run's overall call order */
+    sequence: number;
+    /** Contract or account that initiated the call */
+    caller: string;
+    /** Contract that was invoked */
+    callee: string;
+    /** Invoked method/function name */
+    method: string;
+    /** Nesting depth; 0 is a top-level call from the fuzz harness */
+    depth: number;
+    /** Outcome of this specific call */
+    status: ContractCallStatus;
+    /** Elapsed time for this call, in milliseconds */
+    durationMs: number;
+}
+
 export type LedgerChangeType = 'created' | 'updated' | 'deleted';
 
 export interface LedgerStateChange {
@@ -129,4 +192,34 @@ export interface CampaignConfig {
     authMode: CampaignAuthMode;
     parallelism: number;
     timeoutSeconds: number;
+}
+
+export type ArtifactType = 'seed' | 'log' | 'trace' | 'coverage' | 'bundle';
+
+/**
+ * Content type for artifact file preview.
+ * Determines how the artifact content is rendered in the preview modal.
+ */
+export type ContentType = 'json' | 'text' | 'hex' | 'unknown';
+
+/**
+ * A stored fuzzing artifact as displayed in the artifact explorer and
+ * preview modal.
+ */
+export interface Artifact {
+    id: string;
+    name: string;
+    type: ArtifactType;
+    /** Size in bytes */
+    size: number;
+    /** ISO 8601 timestamp */
+    updatedAt: string;
+    createdAt?: string;
+    runId?: string;
+    content_hash?: string;
+    /**
+     * Detected content type for file preview (json, text, hex).
+     * When absent, the preview falls back to the artifact type.
+     */
+    contentType?: ContentType;
 }

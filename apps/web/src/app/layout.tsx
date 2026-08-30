@@ -1,100 +1,75 @@
-"use client";
-
-import Link from "next/link";
+import type { Metadata } from "next";
 import "./globals.css";
-import NotificationCenter from "./add-notification-center-ui";
-import DarkModeToggle from "./add-dark-mode-support";
-import OnboardingWizard from "./components/OnboardingWizard";
-import { useOnboardingWizard } from "./hooks/useOnboardingWizard";
+import { fontVariables } from "./fonts";
+import { ThemeProvider } from "../components/ThemeProvider";
+import { LocaleProvider } from "../i18n/context";
+import { ToastProvider } from "../components/Toast";
+import NavBar from "../components/NavBar";
+import AddKeyboardShortcutCheatsheetModal from "./add-keyboard-shortcut-cheatsheet-modal";
+import OnboardingWizardHost from "./OnboardingWizardHost";
+import CommandPalette from "../components/CommandPalette";
+import Script from "next/script";
+
+export const metadata: Metadata = {
+  title: "Soroban CrashLab | Smart Contract Fuzzing Platform",
+  description:
+    "Intelligent mutation testing and runtime behavior tracing for Soroban smart contracts on the Stellar network.",
+  openGraph: {
+    title: "Soroban CrashLab",
+    description: "Advanced fuzzing framework for Soroban smart contracts",
+    type: "website",
+  },
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Soroban CrashLab",
+  },
+  formatDetection: {
+    telephone: false,
+  },
+  viewport: {
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false,
+  },
+};
 
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const { showWizard, markComplete } = useOnboardingWizard();
-
   return (
-    <html lang="en">
+    <html lang="en" className={fontVariables} suppressHydrationWarning>
       <head>
-        <title>Soroban CrashLab | Smart Contract Fuzzing</title>
-        <meta
-          name="description"
-          content="Intelligent mutation testing and runtime behavior tracing for Soroban smart contracts."
-        />
+        <script dangerouslySetInnerHTML={{
+          __html: `\n            try {\n              var t = localStorage.getItem('crashlab:theme');\n              var d = t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches);\n              document.documentElement.classList.toggle('dark', d);\n            } catch(e) {}\n            document.documentElement.classList.add('theme-ready');\n          ` }} />
+        <link rel="icon" href="/favicon/192x192/favicon.svg" type="image/svg+xml" />
+        <link rel="apple-touch-icon" href="/favicon/180x180/favicon.svg" />
+        <meta name="theme-color" content="#0A66C2" media="(prefers-color-scheme: light)" />
+        <meta name="theme-color" content="#0c0c0c" media="(prefers-color-scheme: dark)" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="CrashLab" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <Script src="/theme-script.js" strategy="beforeInteractive" />
       </head>
-      <body className={`antialiased min-h-screen flex flex-col`}
-        style={{ background: "var(--background)", color: "var(--foreground)" }}
-      >
-        <header
-          className="border-b p-6 flex items-center justify-between"
-          style={{
-            borderColor: "var(--header-border-color)",
-            background: "var(--background)",
-            color: "var(--foreground)",
-          }}
-        >
-          <div className="font-semibold text-xl tracking-tight">
-            Soroban CrashLab
-          </div>
-          <div className="flex items-center gap-4">
-            <nav className="flex gap-4 text-sm font-medium">
-              <Link
-                href="/logs"
-                className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-              >
-                Logs
-              </Link>
-              <Link
-                href="/triage"
-                className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-              >
-                Triage
-              </Link>
-              <Link
-                href="/settings/accessibility"
-                className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-              >
-                Keyboard Nav
-              </Link>
-              <Link
-                href="/settings/alerting"
-                className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-              >
-                Alerts
-              </Link>
-              <Link
-                href="/#reporting-templates"
-                className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-              >
-                Templates
-              </Link>
-              <a
-                href="https://github.com/SorobanCrashLab/soroban-crashlab"
-                className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                GitHub
-              </a>
-              <a
-                href="https://github.com/SorobanCrashLab/soroban-crashlab/issues"
-                className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Open Issues
-              </a>
-            </nav>
-            <NotificationCenter />
-            <DarkModeToggle />
-          </div>
-        </header>
-        <main className="flex-1 flex flex-col">{children}</main>
-        <footer className="border-t border-black/8 dark:border-white/15 p-6 text-center text-sm text-zinc-500">
-          Built for Stellar &middot; Soroban Ecosystem
-        </footer>
-        <OnboardingWizard isOpen={showWizard} onClose={markComplete} />
+      <body className="antialiased min-h-screen">
+        <LocaleProvider>
+          <ThemeProvider>
+            <ToastProvider>
+              <NavBar />
+              <AddKeyboardShortcutCheatsheetModal />
+              <CommandPalette />
+              <OnboardingWizardHost />
+              <main style={{ background: 'var(--bg)', paddingTop: '52px', minHeight: '100vh', transition: 'background 0.3s ease' }}>
+                {children}
+              </main>
+            </ToastProvider>
+          </ThemeProvider>
+        </LocaleProvider>
       </body>
     </html>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useMemo } from "react";
 
 import { createSentryAdapter } from "@/lib/integrations/sentry-adapter";
 import type { SentryConfig, CrashReport } from "./integrate-sentry-integration-for-crash-reporting-utils";
@@ -32,35 +32,11 @@ export default function IntegrateSentryIntegrationForCrashReporting() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [creatingIssueId, setCreatingIssueId] = useState<string | null>(null);
+  const [createdIssues, setCreatedIssues] = useState<Record<string, { key: string; url: string }>>({});
+  const [, setIssueCreationError] = useState<string | null>(null);
 
-  const sentryAdapter = createSentryAdapter();
-
-  const loadConfig = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const savedConfig = await sentryAdapter.loadConfig();
-      if (savedConfig) {
-        setConfig(savedConfig);
-      }
-    } catch (err) {
-      setError("Failed to load Sentry configuration.");
-      console.error(err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [sentryAdapter]);
-
-  const loadReports = useCallback(async () => {
-    setError(null);
-    try {
-      const reports = await sentryAdapter.fetchRecentReports();
-      setRecentReports(reports);
-    } catch (err) {
-      setError("Failed to load recent crash reports.");
-      console.error(err);
-    }
-  }, [sentryAdapter]);
+  const sentryAdapter = useMemo(() => createSentryAdapter(), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,10 +49,9 @@ export default function IntegrateSentryIntegrationForCrashReporting() {
         if (!cancelled && savedConfig) {
           setConfig(savedConfig);
         }
-      } catch (err) {
+      } catch {
         if (!cancelled) {
           setError("Failed to load Sentry configuration.");
-          console.error(err);
         }
       } finally {
         if (!cancelled) {
@@ -100,10 +75,9 @@ export default function IntegrateSentryIntegrationForCrashReporting() {
         if (!cancelled) {
           setRecentReports(reports);
         }
-      } catch (err) {
+      } catch {
         if (!cancelled) {
           setError("Failed to load recent crash reports.");
-          console.error(err);
         }
       }
     })();
@@ -120,9 +94,8 @@ export default function IntegrateSentryIntegrationForCrashReporting() {
       await sentryAdapter.saveConfig(config);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
-    } catch (err) {
+    } catch {
       setError("Failed to save Sentry configuration.");
-      console.error(err);
     }
   };
 
@@ -137,10 +110,9 @@ export default function IntegrateSentryIntegrationForCrashReporting() {
       if (!result.success && result.error) {
         setError(result.error);
       }
-    } catch (err) {
+    } catch {
       setTestResult("error");
       setError("Connection test failed.");
-      console.error(err);
     } finally {
       setIsTesting(false);
     }
@@ -149,6 +121,43 @@ export default function IntegrateSentryIntegrationForCrashReporting() {
   const formatTimestamp = (iso: string) => {
     const date = new Date(iso);
     return date.toLocaleString();
+  };
+
+  const handleCreateJiraIssue = async (report: CrashReport) => {
+    setCreatingIssueId(report.id);
+    setIssueCreationError(null);
+
+    try {
+      const response = await fetch('/api/integrations/jira', {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          summary: `Crash report: ${report.signature}`,
+          description: `Crash report created from SorobanCrashLab for ${report.id}.\n\nSignature: ${report.signature}\nEvent ID: ${report.sentryEventId}\nTimestamp: ${report.timestamp}`,
+        }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok || !payload.issue) {
+        throw new Error(payload.error || 'Could not create a Jira issue right now.');
+      }
+
+      setCreatedIssues((prev) => ({
+        ...prev,
+        [report.id]: {
+          key: payload.issue.key,
+          url: payload.issue.url,
+        },
+      }));
+    } catch (error) {
+      setIssueCreationError(error instanceof Error ? error.message : 'Could not create a Jira issue right now.');
+    } finally {
+      setCreatingIssueId(null);
+    }
   };
 
   return (
@@ -372,7 +381,8 @@ export default function IntegrateSentryIntegrationForCrashReporting() {
               recentReports.map((report) => (
                 <div
                   key={report.id}
-                  className="p-6 rounded-[2rem] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:border-orange-300 transition shadow-sm"
+                  className="p-6 rounded-[2rem] border border-[var(--border-color)] bg-[var(--surface)] shadow-[var(--card-shadow)] transition hover:shadow-[var(--card-shadow-hover)]"
+                  style={{ color: 'var(--text-primary)' }}
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div>
@@ -405,21 +415,45 @@ export default function IntegrateSentryIntegrationForCrashReporting() {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between">
-                    <div className="text-xs text-zinc-500">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
                       Event ID:{" "}
-                      <span className="font-mono text-zinc-700 dark:text-zinc-300">
+                      <span className="font-mono" style={{ color: 'var(--text-primary)' }}>
                         {report.sentryEventId}
                       </span>
                     </div>
-                    <a
-                      href={`https://sentry.io/events/${report.sentryEventId}/`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs font-bold text-orange-600 hover:text-orange-700 transition"
-                    >
-                      View in Sentry →
-                    </a>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {createdIssues[report.id] ? (
+                        <a
+                          href={createdIssues[report.id].url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs font-semibold rounded-full border border-[var(--border-color)] px-3 py-1 transition"
+                          style={{ color: 'var(--text-primary)', background: 'var(--highlight-bg)' }}
+                        >
+                          Jira • {createdIssues[report.id].key}
+                        </a>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => void handleCreateJiraIssue(report)}
+                          disabled={creatingIssueId === report.id}
+                          className="rounded-full border border-[var(--border-color)] px-3 py-1 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
+                          style={{ color: 'var(--text-primary)', background: 'var(--surface)' }}
+                        >
+                          {creatingIssueId === report.id ? 'Creating…' : 'Create Jira issue'}
+                        </button>
+                      )}
+                      <a
+                        href={`https://sentry.io/events/${report.sentryEventId}/`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-bold transition"
+                        style={{ color: 'var(--color-primary)' }}
+                      >
+                        View in Sentry →
+                      </a>
+                    </div>
                   </div>
                 </div>
               ))

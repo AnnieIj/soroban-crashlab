@@ -11,7 +11,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { FuzzingRun, RunIssueLink } from "../types";
-import { dedupedFetchJson } from "../../lib/request-dedup";
+import { fetchRuns as fetchRunsFromApi } from "../../lib/api-client";
 import {
   TRIAGE_COLUMNS,
   getColumnRuns,
@@ -19,13 +19,22 @@ import {
   getIssueCounts,
   type TriageColumnDef,
 } from "./triage-board-utils";
+import {
+  createInitialState,
+  handleLift as liftCard,
+  handleDrop,
+  handleCancel,
+  handleMove,
+  getRovingTabIndex,
+  type KeyboardBoardState,
+} from "./triage-board-keyboard";
 
 // ---------------------------------------------------------------------------
 // Data fetching
 // ---------------------------------------------------------------------------
 
 async function fetchRuns(): Promise<FuzzingRun[]> {
-  const data = await dedupedFetchJson<{ runs?: FuzzingRun[] }>('/api/runs');
+  const data = await fetchRunsFromApi();
   return data.runs ?? [];
 }
 
@@ -171,16 +180,42 @@ function IssueBadge({ issue }: { issue: RunIssueLink }) {
   );
 }
 
-function RunCard({ run }: { run: FuzzingRun }) {
+function RunCard({
+  run,
+  colId,
+  colIndex,
+  isFirstInBoard,
+  kbState,
+  onLift,
+  onKeyNav,
+}: {
+  run: FuzzingRun;
+  colId: string;
+  colIndex: number;
+  isFirstInBoard: boolean;
+  kbState: KeyboardBoardState;
+  onLift: (id: string, pos: { col: string; index: number }) => void;
+  onKeyNav: (e: React.KeyboardEvent, id: string) => void;
+}) {
   const issues = run.associatedIssues ?? [];
+  const isLifted = kbState.liftedId === run.id;
+  const tabIndex = getRovingTabIndex(run.id, kbState.focusedId, isFirstInBoard);
   return (
     <article
-      className="p-4 rounded-xl border shadow-sm hover:shadow-md focus-within:ring-2 focus-within:ring-[#0A66C2] transition-all"
+      tabIndex={tabIndex}
+      data-card-id={run.id}
+      onKeyDown={(e) => onKeyNav(e, run.id)}
+      onFocus={() => {}}
+      onClick={() => onLift(run.id, { col: colId, index: colIndex })}
+      className={`p-4 rounded-xl border shadow-sm hover:shadow-md focus-visible:ring-2 focus-visible:ring-[#0A66C2] focus-visible:ring-offset-2 transition-all outline-none ${
+        isLifted ? 'ring-2 ring-amber-500 border-amber-300 bg-amber-50 dark:bg-amber-950/20 shadow-lg scale-[1.02]' : ''
+      }`}
       style={{
-        background: 'var(--surface)',
-        borderColor: 'var(--border-color)',
+        background: isLifted ? undefined : 'var(--surface)',
+        borderColor: isLifted ? undefined : 'var(--border-color)',
       }}
-      aria-label={`Run ${run.id}, area ${run.area}, severity ${run.severity}`}
+      aria-label={`Run ${run.id}, area ${run.area}, severity ${run.severity}${isLifted ? ', lifted' : ''}`}
+      aria-selected={isLifted}
     >
       <div className="flex items-center justify-between mb-2">
         <span className="font-mono text-xs font-bold" style={{ color: '#0A66C2' }}>
@@ -222,9 +257,17 @@ function RunCard({ run }: { run: FuzzingRun }) {
 function TriageColumn({
   col,
   runs,
+  kbState,
+  onLift,
+  onKeyNav,
+  firstBoardId,
 }: {
   col: TriageColumnDef;
   runs: FuzzingRun[];
+  kbState: KeyboardBoardState;
+  onLift: (id: string, pos: { col: string; index: number }) => void;
+  onKeyNav: (e: React.KeyboardEvent, id: string) => void;
+  firstBoardId: string | null;
 }) {
   const style = COLUMN_STYLE[col.id];
   return (
@@ -258,7 +301,18 @@ function TriageColumn({
             No items
           </div>
         ) : (
-          runs.map((run) => <RunCard key={run.id} run={run} />)
+          runs.map((run, idx) => (
+            <RunCard
+              key={run.id}
+              run={run}
+              colId={col.id}
+              colIndex={idx}
+              isFirstInBoard={run.id === firstBoardId}
+              kbState={kbState}
+              onLift={onLift}
+              onKeyNav={onKeyNav}
+            />
+          ))
         )}
       </div>
     </section>
@@ -307,6 +361,65 @@ export default function TriageBoardPage() {
     activeFilter === "all"
       ? TRIAGE_COLUMNS
       : TRIAGE_COLUMNS.filter((column) => column.id === activeFilter);
+
+  // #1405: keyboard-complete triage board (roving tabindex, lift-and-move)
+  const [kbState, setKbState] = useState<KeyboardBoardState>(createInitialState(null));
+  const allVisibleRuns = visibleColumns.flatMap((c) => getColumnRuns(runs, c));
+  const firstBoardId = allVisibleRuns[0]?.id ?? null;
+
+  // Until a card has been focused, the roving tabindex points at the first
+  // card in the board. Derived during render rather than synced through an
+  // effect: setting state from an effect body triggers a cascading render.
+  const kbStateForBoard: KeyboardBoardState =
+    kbState.focusedId || !firstBoardId ? kbState : { ...kbState, focusedId: firstBoardId };
+
+  const handleLift = (id: string, pos: { col: string; index: number }) => {
+    setKbState((prev) => {
+      if (prev.liftedId === id) return handleDrop(prev, pos.col);
+      if (prev.liftedId) return handleDrop(prev, pos.col);
+      return liftCard(prev, id, pos);
+    });
+  };
+
+  const handleKeyNav = (e: React.KeyboardEvent, id: string) => {
+    const columns = visibleColumns.map((c) => c.id);
+    const colForId = visibleColumns.find((c) => getColumnRuns(runs, c).some((r) => r.id === id))?.id ?? columns[0];
+    const idx = allVisibleRuns.findIndex((r) => r.id === id);
+    if (e.key === ' ') {
+      e.preventDefault();
+      const pos = { col: colForId, index: Math.max(0, idx) };
+      handleLift(id, pos);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setKbState((prev) => handleCancel(prev));
+    } else if (['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
+      e.preventDefault();
+      const dirMap: Record<string, 'up' | 'down' | 'left' | 'right' | 'home' | 'end'> = {
+        ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', Home: 'home', End: 'end',
+      };
+      const dir = dirMap[e.key];
+      // Move focus via DOM (roving tabindex) - find next card
+      let nextIdx = idx;
+      if (dir === 'up' || dir === 'left') nextIdx = Math.max(0, idx - 1);
+      if (dir === 'down' || dir === 'right') nextIdx = Math.min(allVisibleRuns.length - 1, idx + 1);
+      if (dir === 'home') nextIdx = 0;
+      if (dir === 'end') nextIdx = allVisibleRuns.length - 1;
+      const nextId = allVisibleRuns[nextIdx]?.id;
+      if (nextId) {
+        // If lifted, announce move target
+        if (kbState.liftedId) {
+          const colSizes: Record<string, number> = {};
+          visibleColumns.forEach((c) => { colSizes[c.id] = getColumnRuns(runs, c).length; });
+          setKbState((prev) => handleMove(prev, dir, columns, colSizes));
+        }
+        setKbState((prev) => ({ ...prev, focusedId: nextId }));
+        // Focus DOM
+        requestAnimationFrame(() => {
+          document.querySelector<HTMLElement>(`[data-card-id="${nextId}"]`)?.focus();
+        });
+      }
+    }
+  };
 
   const handleFilterKeyDown = (
     event: React.KeyboardEvent<HTMLButtonElement>,
@@ -393,12 +506,23 @@ export default function TriageBoardPage() {
             })}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* #1405: aria-live announcements (assertive for drop/cancel, polite for lift/move) */}
+          <div aria-live={kbState.liftedId ? 'polite' : 'polite'} aria-atomic="true" className="sr-only" role="status">
+            {kbState.announcement}
+          </div>
+          <div aria-live="assertive" aria-atomic="true" className="sr-only" role="alert">
+            {kbState.announcement.includes('Dropped') || kbState.announcement.includes('Cancelled') ? kbState.announcement : ''}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6" role="region" aria-label="Triage board - one tab stop, arrows navigate, Space lifts/drops, Escape cancels">
             {visibleColumns.map((col) => (
             <TriageColumn
               key={col.id}
               col={col}
               runs={getColumnRuns(runs, col)}
+              kbState={kbStateForBoard}
+              onLift={handleLift}
+              onKeyNav={handleKeyNav}
+              firstBoardId={firstBoardId}
             />
             ))}
           </div>

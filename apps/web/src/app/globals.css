@@ -18,6 +18,15 @@
 }
 
 @theme {
+  /*
+   * Typography tokens. `--font-source-sans` / `--font-jetbrains-mono` are
+   * emitted by `next/font` (see src/app/fonts.ts) on the <html> element, so
+   * the self-hosted faces back the Tailwind `font-sans` / `font-mono`
+   * utilities as well as the hand-written component classes below.
+   */
+  --font-sans: var(--font-source-sans), system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, monospace;
+
   --color-primary: #0A66C2;
   --color-primary-hover: #004182;
   --color-secondary: #915907;
@@ -48,6 +57,20 @@
   --chip-bg: #E8E8E8;
   --hover-bg: #F4F2EE;
   --highlight-bg: #E7F0F9;
+
+  /* Status badge tokens — used by .status-badge-* utility classes */
+  --status-running-bg: #E7F0F9;
+  --status-running-fg: #0A66C2;
+  --status-running-border: #BADCF7;
+  --status-completed-bg: rgba(5, 118, 50, 0.10);
+  --status-completed-fg: #057642;
+  --status-completed-border: rgba(5, 118, 50, 0.25);
+  --status-failed-bg: rgba(204, 16, 22, 0.10);
+  --status-failed-fg: #CC1016;
+  --status-failed-border: rgba(204, 16, 22, 0.25);
+  --status-cancelled-bg: #E8E8E8;
+  --status-cancelled-fg: #666666;
+  --status-cancelled-border: #D0D0D0;
 }
 
 .dark {
@@ -66,15 +89,28 @@
   --chip-bg: #1a1a1a;
   --hover-bg: rgba(255, 255, 255, 0.03);
   --highlight-bg: rgba(10, 102, 194, 0.1);
+
+  /* Status badge tokens — dark mode overrides */
+  --status-running-bg: rgba(10, 102, 194, 0.15);
+  --status-running-fg: #5AA7F0;
+  --status-running-border: rgba(10, 102, 194, 0.35);
+  --status-completed-bg: rgba(5, 118, 50, 0.15);
+  --status-completed-fg: #229B6B;
+  --status-completed-border: rgba(5, 118, 50, 0.30);
+  --status-failed-bg: rgba(239, 68, 68, 0.15);
+  --status-failed-fg: #EF4444;
+  --status-failed-border: rgba(239, 68, 68, 0.30);
+  --status-cancelled-bg: #1a1a1a;
+  --status-cancelled-fg: #808080;
+  --status-cancelled-border: #2a2a2a;
 }
 
 html {
-  font-family: 'Source Sans 3', system-ui, -apple-system, sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background: var(--bg);
   color: var(--text-primary);
-  transition: background 0.3s ease, color 0.3s ease;
 }
 
 body {
@@ -83,7 +119,14 @@ body {
   font-size: 14px;
   line-height: 1.4;
   min-height: 100vh;
-  transition: background 0.3s ease;
+}
+
+/* Enable theme transitions only after the inline script has applied the
+   correct theme class.  Without this gate the transition animates the
+   initial light→dark (or dark→light) swap, producing a visible flash. */
+html.theme-ready,
+html.theme-ready body {
+  transition: background 0.3s ease, color 0.3s ease;
 }
 
 ::selection {
@@ -156,7 +199,7 @@ body {
 }
 
 .code-text {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
 }
 
@@ -190,7 +233,7 @@ body {
   color: #FFFFFF;
   font-size: 16px;
   font-weight: 600;
-  font-family: 'Source Sans 3', sans-serif;
+  font-family: var(--font-sans);
   border: none;
   border-radius: 9999px;
   cursor: pointer;
@@ -223,7 +266,7 @@ body {
   color: #0A66C2;
   font-size: 16px;
   font-weight: 600;
-  font-family: 'Source Sans 3', sans-serif;
+  font-family: var(--font-sans);
   border: 1px solid #0A66C2;
   border-radius: 9999px;
   cursor: pointer;
@@ -251,7 +294,7 @@ body {
   color: #0A66C2;
   font-size: 16px;
   font-weight: 600;
-  font-family: 'Source Sans 3', sans-serif;
+  font-family: var(--font-sans);
   border: none;
   border-radius: 9999px;
   cursor: pointer;
@@ -274,7 +317,7 @@ body {
   height: 40px;
   padding: 0 12px;
   font-size: 14px;
-  font-family: 'Source Sans 3', sans-serif;
+  font-family: var(--font-sans);
   color: var(--text-primary);
   background: var(--input-bg);
   border: 1px solid var(--input-border);
@@ -316,6 +359,7 @@ body {
 .badge-running {
   background: var(--highlight-bg);
   color: #0A66C2;
+  animation: status-pill-pulse 2s ease-in-out infinite;
 }
 
 .badge-completed {
@@ -417,6 +461,12 @@ body {
   background: var(--hover-bg);
 }
 
+.data-table tbody tr[tabindex="0"]:focus-visible td {
+  background: var(--hover-bg);
+  outline: 2px solid #0A66C2;
+  outline-offset: -2px;
+}
+
 .chip {
   display: inline-flex;
   align-items: center;
@@ -500,6 +550,26 @@ body {
   0% { transform: translateY(0); }
   50% { transform: translateY(-4px); }
   100% { transform: translateY(0); }
+}
+
+/**
+ * op-progress-indeterminate — sliding highlight for the indeterminate progress
+ * bar used by OperationProgressIndicator when no step count is available.
+ * Linear, 1.6 s loop — consistent with the shimmer skeleton timing convention.
+ */
+@keyframes op-progress-indeterminate {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+
+/**
+ * status-pill-pulse — subtle opacity/scale loop for live "running" state pills.
+ * Timing (2 s, ease-in-out) matches the parallax-drift convention in this file.
+ * Deliberately gentle: scale stays within ±2% so text remains legible.
+ */
+@keyframes status-pill-pulse {
+  0%, 100% { opacity: 1;    box-shadow: 0 0 0 0   rgba(10, 102, 194, 0);    }
+  50%       { opacity: 0.85; box-shadow: 0 0 0 3px rgba(10, 102, 194, 0.18); }
 }
 
 .parallax-slow {
@@ -798,6 +868,63 @@ nav, header, .nav-bar {
   }
 }
 
+/* ===== Reduced motion support ===== */
+@media (prefers-reduced-motion: reduce) {
+  html, body, * {
+    /* Disable animations and transitions for users who prefer reduced motion */
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+    animation-play-state: paused !important;
+    animation-name: none !important;
+    transition-duration: 0.001ms !important;
+    transition-delay: 0s !important;
+    transition-property: none !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* Turn off specific animations used across the app */
+  .skeleton {
+    animation: none !important;
+    background-size: auto !important;
+  }
+
+  .fade-in,
+  .parallax-slow,
+  .parallax-medium,
+  .parallax-fast,
+  .lazy-enter,
+  .lazy-enter-active,
+  nav,
+  header,
+  .nav-bar,
+  .card {
+    transition: none !important;
+    transform: none !important;
+    opacity: 1 !important;
+    box-shadow: none !important;
+  }
+
+  /* OperationProgressIndicator — keep the bar visible but static */
+  .op-progress-bar-indeterminate {
+    animation: none !important;
+    /* Show a 40 % filled static bar so the state is still perceptible */
+    transform: translateX(-60%) !important;
+  }
+
+  /* Status pill animations — disable the running-state pulse/glow */
+  .badge-running,
+  .status-badge-running {
+    animation: none !important;
+    box-shadow: none !important;
+  }
+
+  .drawer.open {
+    transform: translateX(0) !important;
+    opacity: 1 !important;
+  }
+}
+
 @media (min-width: 768px) {
   .stat-grid {
     grid-template-columns: repeat(5, 1fr);
@@ -864,5 +991,179 @@ nav, header, .nav-bar {
 @media (min-width: 1024px) {
   .page-padding {
     padding: 24px 48px;
+  }
+}
+
+/* ===== Breadcrumb Navigation ===== */
+
+.breadcrumb-nav {
+  padding: 8px 0 4px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.breadcrumb-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.breadcrumb-list {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.breadcrumb-item {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.breadcrumb-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-weight: 500;
+  padding: 3px 6px;
+  border-radius: 5px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.breadcrumb-link:hover {
+  color: #0A66C2;
+  background: var(--highlight-bg);
+}
+
+.breadcrumb-link:focus-visible {
+  outline: 2px solid #0A66C2;
+  outline-offset: 1px;
+}
+
+.breadcrumb-home {
+  color: var(--text-secondary);
+}
+
+.breadcrumb-home-icon {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.breadcrumb-link:hover .breadcrumb-home-icon {
+  opacity: 1;
+}
+
+.breadcrumb-separator {
+  display: flex;
+  align-items: center;
+  color: var(--border-color);
+  flex-shrink: 0;
+}
+
+.breadcrumb-current {
+  color: var(--text-primary);
+  font-weight: 600;
+  padding: 3px 6px;
+  border-radius: 5px;
+}
+
+/* Responsive: tighten spacing on small screens */
+@media (max-width: 639px) {
+  .breadcrumb-nav {
+    padding: 6px 0 2px;
+  }
+
+  .breadcrumb-item {
+    font-size: 12px;
+  }
+
+  .breadcrumb-link,
+  .breadcrumb-current {
+    padding: 2px 4px;
+  }
+}
+
+@layer utilities {
+  .bg-theme {
+    background: var(--background);
+  }
+
+  .text-theme {
+    color: var(--foreground);
+  }
+
+  .border-header {
+    border-color: var(--header-border-color);
+  }
+
+  .status-badge {
+    background-color: var(--status-badge-bg);
+    color: var(--status-badge-fg);
+    border-color: var(--status-badge-border);
+  }
+
+  .status-badge-running {
+    --status-badge-bg: var(--status-running-bg);
+    --status-badge-fg: var(--status-running-fg);
+    --status-badge-border: var(--status-running-border);
+    animation: status-pill-pulse 2s ease-in-out infinite;
+  }
+
+  .status-badge-completed {
+    --status-badge-bg: var(--status-completed-bg);
+    --status-badge-fg: var(--status-completed-fg);
+    --status-badge-border: var(--status-completed-border);
+  }
+
+  .status-badge-failed {
+    --status-badge-bg: var(--status-failed-bg);
+    --status-badge-fg: var(--status-failed-fg);
+    --status-badge-border: var(--status-failed-border);
+  }
+
+  .status-badge-cancelled {
+    --status-badge-bg: var(--status-cancelled-bg);
+    --status-badge-fg: var(--status-cancelled-fg);
+    --status-badge-border: var(--status-cancelled-border);
+  }
+
+  .text-token-primary {
+    color: var(--color-text);
+  }
+
+  .text-token-muted {
+    color: var(--color-muted);
+  }
+
+  .text-token-accent {
+    color: var(--color-accent);
+  }
+
+  .bg-token-bg {
+    background: var(--color-bg);
+  }
+
+  .bg-token-surface {
+    background: var(--color-surface);
+  }
+
+  .bg-token-elevated {
+    background: var(--color-elevated);
+  }
+
+  .border-token {
+    border-color: var(--color-border);
+  }
+
+  .text-token-border {
+    color: var(--color-border);
   }
 }

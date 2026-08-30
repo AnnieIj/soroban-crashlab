@@ -1,11 +1,40 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
+import { captureRunListContext } from './swipe/run-list-context';
+import type { BulkAction } from '../add-bulk-actions-for-runs';
+import {
+  applyBulkActionToRuns,
+  getSelectedRuns,
+  shouldClearSelectionAfterAction,
+  toggleAllRunSelection,
+  toggleRunSelection,
+} from '../runs-bulk-actions-utils';
 import { FuzzingRun } from '../types';
-import { dedupedFetchJson } from '../../lib/request-dedup';
-import VirtualizedRunTable from '../implement-virtualized-run-table-component';
+import { recordAuditEvent } from '../../lib/audit/audit-sink';
+import SavedViewsMenu from '../saved-views/SavedViewsMenu';
+import {
+  createDefaultViewState,
+  decodeViewState,
+  encodeViewState,
+  type ViewState,
+} from '../saved-views/view-state';
+import { applyRunFilters } from '../run-filter-utils';
+import type { RunArea, RunSeverity, RunStatus } from '../types';
+import { fetchRuns } from '../../lib/api-client';
+import { LoadingSpinner } from '../../components/LoadingSkeleton';
+import { ListState } from '../../components/ListState';
+
+const BulkActionsForRuns = dynamic(() => import('../add-bulk-actions-for-runs'), {
+  loading: () => <LoadingSpinner />,
+});
+const VirtualizedRunTable = dynamic(
+  () => import('../implement-virtualized-run-table-component'),
+  { loading: () => <LoadingSpinner /> },
+);
 
 const RUN_TABLE_COLUMNS = ['id', 'status', 'area', 'severity', 'duration', 'seedCount'];
 
@@ -13,17 +42,28 @@ export default function RunsPage() {
   const router = useRouter();
   const [dataState, setDataState] = useState<'loading' | 'success' | 'error'>('loading');
   const [runs, setRuns] = useState<FuzzingRun[]>([]);
+  const [selectedRunIds, setSelectedRunIds] = useState<Set<string>>(new Set());
+  const [fetchAttempt, setFetchAttempt] = useState(0);
+  // Starts at the default so server and client first paint agree; the URL is
+  // read after mount, when `window.location` exists.
+  const [viewState, setViewState] = useState<ViewState>(createDefaultViewState);
 
-  const goToRun = useCallback((runId: string) => {
-    router.push(`/runs/${runId}`);
-  }, [router]);
+  useEffect(() => {
+    queueMicrotask(() => setViewState(decodeViewState(window.location.search)));
+  }, []);
+
+  const applyView = useCallback((next: ViewState) => {
+    setViewState(next);
+    window.history.replaceState(null, '', `${window.location.pathname}?${encodeViewState(next)}`);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
     const load = async () => {
       setDataState('loading');
       try {
-        const data = await dedupedFetchJson<{ runs?: FuzzingRun[] }>('/api/runs');
+        const data = await fetchRuns(controller.signal);
         if (!cancelled) {
           const sorted = (data.runs ?? []).slice().sort((a: FuzzingRun, b: FuzzingRun) => {
             const ta = a.queuedAt ?? a.startedAt ?? '';
@@ -33,65 +73,144 @@ export default function RunsPage() {
           setRuns(sorted);
           setDataState('success');
         }
-      } catch {
-        if (!cancelled) setDataState('error');
+      } catch (err: unknown) {
+        if (!cancelled && (err as Error)?.name !== 'AbortError') {
+          setDataState('error');
+        }
       }
     };
     void load();
-    return () => { cancelled = true; };
+
+    const handleVisibility = () => {
+      if (!cancelled && document.visibilityState === 'visible') {
+        void load();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [fetchAttempt]);
+
+  const visibleRuns = useMemo(() => {
+    const filtered = applyRunFilters(runs, {
+      status: viewState.filters.status as RunStatus[],
+      area: viewState.filters.area as RunArea[],
+      severity: viewState.filters.severity as RunSeverity[],
+      searchTerm: viewState.search,
+      hasCrash: viewState.filters.hasCrash,
+    });
+
+    const direction = viewState.sort.direction === 'asc' ? 1 : -1;
+    return filtered.slice().sort((a, b) => {
+      const left = String(a[viewState.sort.key as keyof FuzzingRun] ?? '');
+      const right = String(b[viewState.sort.key as keyof FuzzingRun] ?? '');
+      return left.localeCompare(right) * direction;
+    });
+  }, [runs, viewState]);
+
+  const selectedRuns = useMemo(
+    () => getSelectedRuns(visibleRuns, selectedRunIds),
+    [visibleRuns, selectedRunIds],
+  );
+
+  // Declared after `visibleRuns` because it closes over it: hoisting the
+  // callback above the `useMemo` read the binding in its temporal dead zone.
+  const goToRun = useCallback((runId: string) => {
+    captureRunListContext(
+      visibleRuns.map((r) => r.id),
+      {
+        // The stored context is a flat string map, so multi-select filters are
+        // joined rather than passed through as arrays.
+        status: (viewState.filters.status ?? []).join(','),
+        area: (viewState.filters.area ?? []).join(','),
+        severity: (viewState.filters.severity ?? []).join(','),
+        searchTerm: viewState.search,
+      },
+      viewState.sort,
+    );
+    router.push(`/runs/${runId}`);
+  }, [router, visibleRuns, viewState]);
+
+
+  const handleToggleRunSelection = useCallback((runId: string) => {
+    setSelectedRunIds((prev) => toggleRunSelection(prev, runId));
   }, []);
+
+  const handleToggleAllRunsSelection = useCallback((runIds: string[]) => {
+    setSelectedRunIds((prev) => toggleAllRunSelection(prev, runIds));
+  }, []);
+
+  const handleBulkAction = useCallback(
+    (action: BulkAction, runIds: string[], data?: Record<string, unknown>) => {
+      if (action === 'delete') {
+        recordAuditEvent({ action: 'run.delete', target: 'runs', metadata: { runCount: runIds.length } });
+      }
+      setRuns((prev) => applyBulkActionToRuns(prev, action, runIds));
+
+      if (action === 'export' || action === 'tag' || action === 'assign') {
+        console.log('Bulk action:', action, runIds, data);
+      }
+
+      if (shouldClearSelectionAfterAction(action)) {
+        setSelectedRunIds(new Set());
+      }
+    },
+    [],
+  );
 
   return (
     <div className="container-full page-padding fade-in">
       <div className="flex items-center justify-between mb-4 sm:mb-6">
         <div>
           <h1 className="heading-page">Fuzzing Runs</h1>
-          <p className="text-meta mt-0.5 sm:mt-1">All fuzzing campaigns and their execution results</p>
+          <p className="text-meta mt-0.5 sm:mt-1">
+            Select runs to cancel, retry, delete, export, tag, or assign in bulk
+          </p>
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
           {dataState === 'success' && (
-            <span className="chip text-xs sm:text-sm">{runs.length} Total Runs</span>
+            <span className="chip text-xs sm:text-sm">
+              {visibleRuns.length === runs.length
+                ? `${runs.length} Total Runs`
+                : `${visibleRuns.length} of ${runs.length} Runs`}
+            </span>
           )}
-          <Link href="/" className="btn-outline text-xs sm:text-sm px-3 sm:px-6 h-8 sm:h-10">Dashboard</Link>
+          <SavedViewsMenu state={viewState} onApply={applyView} />
+          <Link href="/" className="btn-outline text-xs sm:text-sm px-3 sm:px-6 h-8 sm:h-10">
+            Dashboard
+          </Link>
         </div>
       </div>
 
-      {dataState === 'loading' && (
-        <div role="status" aria-live="polite" className="card card-padding">
-          <div className="space-y-3 sm:space-y-4">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="flex gap-2 sm:gap-4">
-                <div className="skeleton h-4 w-16 sm:w-20" />
-                <div className="skeleton h-4 w-12 sm:w-16" />
-                <div className="skeleton h-4 w-10 sm:w-12" />
-                <div className="skeleton h-4 w-12 sm:w-16" />
-                <div className="skeleton h-4 w-16 sm:w-24" />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {dataState === 'error' && (
-        <div role="alert" className="card card-padding text-center py-8 sm:py-12" style={{ borderLeft: '4px solid #CC1016' }}>
-          <span className="text-2xl sm:text-3xl mb-2 sm:mb-3 block">⚠</span>
-          <p className="font-semibold" style={{ color: '#CC1016' }}>Failed to load fuzzing runs</p>
-          <p className="text-meta mt-1 mb-3 sm:mb-4">Check your connection and try again.</p>
-          <button onClick={() => window.location.reload()} className="btn-primary text-xs sm:text-sm">
-            Retry
-          </button>
-        </div>
-      )}
-
-      {dataState === 'success' && (
+      <ListState
+        {...(dataState === 'loading'
+          ? { state: 'loading' }
+          : dataState === 'error'
+          ? { state: 'error', message: 'Failed to load fuzzing runs', onRetry: () => setFetchAttempt((n) => n + 1) }
+          : runs.length === 0
+          ? { state: 'empty', message: 'No fuzzing runs found.' }
+          : { state: 'success' })}
+      >
+        <BulkActionsForRuns
+          selectedRuns={selectedRuns}
+          onAction={handleBulkAction}
+          onClearSelection={() => setSelectedRunIds(new Set())}
+        />
         <VirtualizedRunTable
-          runs={runs}
+          runs={visibleRuns}
           viewportHeight={600}
           visibleColumns={RUN_TABLE_COLUMNS}
           onSelectRun={goToRun}
           onViewReport={(run) => goToRun(run.id)}
+          selectedRunIds={selectedRunIds}
+          onToggleRunSelection={handleToggleRunSelection}
+          onToggleAllRunsSelection={handleToggleAllRunsSelection}
         />
-      )}
+      </ListState>
     </div>
   );
 }

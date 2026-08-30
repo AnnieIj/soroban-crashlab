@@ -2,20 +2,8 @@
 
 import React, { useState } from 'react';
 import type { FuzzingRun } from './types';
-
-const CSV_COLUMN_DEFS: Record<string, { header: string; value: (run: FuzzingRun) => string | number }> = {
-  id: { header: 'ID', value: (run) => run.id },
-  status: { header: 'Status', value: (run) => run.status },
-  area: { header: 'Area', value: (run) => run.area },
-  severity: { header: 'Severity', value: (run) => run.severity },
-  duration: { header: 'Duration (ms)', value: (run) => run.duration.toFixed(0) },
-  seedCount: { header: 'Seed Count', value: (run) => run.seedCount },
-  cpuInstructions: { header: 'CPU Instructions', value: (run) => run.cpuInstructions },
-  memoryBytes: { header: 'Memory (Bytes)', value: (run) => run.memoryBytes },
-  minResourceFee: { header: 'Min Fee', value: (run) => run.minResourceFee },
-};
-
-const ALL_CSV_COLUMNS = Object.keys(CSV_COLUMN_DEFS);
+import { buildRunsCsv } from './export-run-csv-utils';
+import OperationProgressIndicator, { type OperationStatus } from '../components/OperationProgressIndicator';
 
 type ExportRunCsvProps = {
   runs: FuzzingRun[];
@@ -23,23 +11,16 @@ type ExportRunCsvProps = {
 };
 
 export default function AddExportRunCsv({ runs, visibleColumns }: ExportRunCsvProps) {
-  const [isExporting, setIsExporting] = useState(false);
+  const [exportStatus, setExportStatus] = useState<OperationStatus>('idle');
+  const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
 
   const handleExport = () => {
-    setIsExporting(true);
-    
+    setExportStatus('running');
+    setErrorMessage(undefined);
+
     setTimeout(() => {
       try {
-        const cols = visibleColumns
-          ? visibleColumns.filter(c => c in CSV_COLUMN_DEFS)
-          : ALL_CSV_COLUMNS;
-        const headers = cols.map(c => CSV_COLUMN_DEFS[c].header);
-        const csvRows = [
-          headers.join(','),
-          ...runs.map(run => cols.map(c => CSV_COLUMN_DEFS[c].value(run)).join(',')),
-        ];
-        
-        const csvString = csvRows.join('\n');
+        const csvString = buildRunsCsv(runs, visibleColumns);
         const blob = new Blob([csvString], { type: 'text/csv' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -49,13 +30,18 @@ export default function AddExportRunCsv({ runs, visibleColumns }: ExportRunCsvPr
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
+        setExportStatus('done');
+        // Reset to idle after a short delay so the user sees the success state
+        setTimeout(() => setExportStatus('idle'), 2500);
       } catch (error) {
         console.error('CSV Export failed:', error);
-      } finally {
-        setIsExporting(false);
+        setErrorMessage('Export failed. Please try again.');
+        setExportStatus('failed');
       }
     }, 800);
   };
+
+  const isExporting = exportStatus === 'running';
 
   return (
     <div className="group relative overflow-hidden rounded-[2rem] border border-emerald-200 bg-emerald-50/50 p-8 shadow-sm transition-all hover:shadow-md dark:border-emerald-900/30 dark:bg-emerald-950/20">
@@ -73,6 +59,19 @@ export default function AddExportRunCsv({ runs, visibleColumns }: ExportRunCsvPr
             <p className="text-sm text-zinc-600 dark:text-zinc-400">Download tabular run data for spreadsheets or reporting.</p>
           </div>
         </div>
+
+        {/* Progress indicator — shown while exporting or after completion */}
+        {exportStatus !== 'idle' && (
+          <div className="mt-4 mb-2">
+            <OperationProgressIndicator
+              status={exportStatus}
+              runningLabel="Building CSV…"
+              doneLabel="CSV ready — download started"
+              failedLabel="Export failed"
+              errorMessage={errorMessage}
+            />
+          </div>
+        )}
 
         <div className="mt-6 flex items-center justify-between">
           <div className="flex flex-col">

@@ -2,8 +2,23 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
-import { loadPreferences, filterByPreferences, isInQuietHours } from './notification-preferences-utils';
+import { loadPreferences, filterByPreferences } from './notification-preferences-utils';
 import type { NotificationType, NotificationPriority } from './notification-preferences-utils';
+import {
+  mergeNotificationFeed,
+  pruneDismissedIds,
+} from './notification-feed-utils';
+import {
+  loadReadState,
+  mergeReadState,
+  markNotificationRead,
+  markAllNotificationsRead,
+  isNotificationRead,
+  subscribeToReadStateChanges,
+  type ReadState,
+} from './notification-read-state-utils';
+import { api, type NotificationFeedItem } from '../lib/api-client';
+import { NOTIFICATION_POLL_INTERVAL_MS } from '../lib/timeouts';
 
 export type { NotificationType, NotificationPriority };
 
@@ -25,18 +40,9 @@ interface NotificationCenterProps {
   className?: string;
 }
 
-const POLL_INTERVAL_MS = 30000;
+// NOTIFICATION_POLL_INTERVAL_MS is imported from lib/timeouts
 
-type FeedItem = {
-  id: string;
-  title: string;
-  message: string;
-  severity: 'info' | 'success' | 'warning' | 'error';
-  createdAt: string;
-  read: boolean;
-};
-
-function mapFeedItemToNotification(item: FeedItem): Notification {
+function mapFeedItemToNotification(item: NotificationFeedItem): Notification {
   const priorityMap: Record<string, NotificationPriority> = {
     error: 'critical',
     warning: 'high',
@@ -57,34 +63,42 @@ function mapFeedItemToNotification(item: FeedItem): Notification {
 
 export default function NotificationCenter({ className = '' }: NotificationCenterProps) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [readState, setReadState] = useState<ReadState>(() => loadReadState());
   const [isOpen, setIsOpen] = useState(false);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const dropdownRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const readStateRef = useRef<ReadState>(readState);
+  // Ids the user dismissed locally, so a poll doesn't resurrect them (#1077).
+  const dismissedIdsRef = useRef<Set<string>>(new Set());
 
   const prefs = loadPreferences();
 
+  // Keep ref in sync so callbacks see the latest read state.
+  useEffect(() => {
+    readStateRef.current = readState;
+  }, [readState]);
+
+  // Cross-tab sync: when another tab writes to localStorage, pick it up.
+  useEffect(() => {
+    const unsub = subscribeToReadStateChanges((newState) => {
+      setReadState((prev) => mergeReadState(prev, newState));
+    });
+    return unsub;
+  }, []);
+
   const fetchNotifications = useCallback(async () => {
     try {
-      const res = await fetch('/api/notifications');
-      if (!res.ok) return;
-      const data = await res.json();
-      const feed: FeedItem[] = data.notifications ?? [];
+      const data = await api.notifications.list();
+      const feed: NotificationFeedItem[] = data.notifications ?? [];
       const mapped = feed.map(mapFeedItemToNotification);
-      setNotifications((prev) => {
-        const prevIds = new Set(prev.map((n) => n.id));
-        const merged = prev.filter((n) => feed.some((f) => f.id === n.id));
-        for (const item of mapped) {
-          if (!prevIds.has(item.id)) {
-            merged.push(item);
-          } else {
-            const existing = prev.find((n) => n.id === item.id);
-            if (existing) merged.push({ ...item, read: existing.read });
-          }
-        }
-        return merged;
-      });
+
+      dismissedIdsRef.current = pruneDismissedIds(dismissedIdsRef.current, mapped);
+
+      setNotifications((prev) =>
+        mergeNotificationFeed(prev, mapped, dismissedIdsRef.current),
+      );
     } catch {
       // silently fail — keep existing notifications
     }
@@ -94,7 +108,7 @@ export default function NotificationCenter({ className = '' }: NotificationCente
     queueMicrotask(() => {
       void fetchNotifications();
     });
-    intervalRef.current = setInterval(fetchNotifications, POLL_INTERVAL_MS);
+    intervalRef.current = setInterval(fetchNotifications, NOTIFICATION_POLL_INTERVAL_MS);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
@@ -153,27 +167,32 @@ export default function NotificationCenter({ className = '' }: NotificationCente
     }
   }, [isOpen]);
 
-  const effectiveNotifications = notifications.filter((n) =>
-    filterByPreferences(n, prefs),
-  );
-  const unreadCount = effectiveNotifications.filter(n => !n.read).length;
+  const effectiveNotifications = notifications
+    .filter((n) => filterByPreferences(n, prefs))
+    .map((n) => ({
+      ...n,
+      read: isNotificationRead(readState, n.id, n.read),
+    }));
+  const unreadCount = effectiveNotifications.filter((n) => !n.read).length;
   const filteredNotifications = filter === 'unread' 
     ? effectiveNotifications.filter(n => !n.read)
     : effectiveNotifications;
 
-  const markAsRead = (id: string) => {
-    setNotifications((prev: Notification[]) => 
-      prev.map((n: Notification) => n.id === id ? { ...n, read: true } : n)
-    );
-  };
+  const markAsRead = useCallback((id: string) => {
+    setReadState((prev) => markNotificationRead(id, prev));
+  }, []);
 
-  const markAllAsRead = () => {
-    setNotifications((prev: Notification[]) => 
-      prev.map((n: Notification) => ({ ...n, read: true }))
-    );
-  };
+  const markAllAsRead = useCallback(() => {
+    setNotifications((prev) => {
+      setReadState((rs) => markAllNotificationsRead(prev.map((n) => n.id), rs));
+      return prev.map((n) => ({ ...n, read: true }));
+    });
+  }, []);
 
   const dismissNotification = (id: string) => {
+    // Remember the dismissal, otherwise the next poll re-adds the notification
+    // and the badge count climbs back up (#1077).
+    dismissedIdsRef.current.add(id);
     setNotifications((prev: Notification[]) => prev.filter((n: Notification) => n.id !== id));
   };
 
@@ -289,7 +308,9 @@ export default function NotificationCenter({ className = '' }: NotificationCente
                     : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
                 }`}
               >
-                All ({notifications.length})
+                {/* Count what is actually listed — preference-filtered items
+                    are not shown, so including them misreported the total. */}
+                All ({effectiveNotifications.length})
               </button>
               <button
                 onClick={() => setFilter('unread')}

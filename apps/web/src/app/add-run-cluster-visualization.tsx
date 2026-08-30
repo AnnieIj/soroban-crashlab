@@ -1,8 +1,11 @@
 import React, { useMemo, useState, useCallback } from "react";
-import { FuzzingRun, RunStatus, RunArea, RunSeverity } from "./types";
+import { FuzzingRun, RunArea, RunSeverity } from "./types";
+import { RUN_STATUSES, STATUS_META } from "../lib/run-status";
 import { buildFailureClusters as buildFailureSignatures } from "./failureClusters";
 
 export type RunClusterVisualizationDataState = "loading" | "error" | "success";
+
+type ClusterMode = "status" | "area" | "severity" | "performance" | "failure";
 
 interface RunClusterVisualizationProps {
   runs?: FuzzingRun[];
@@ -12,11 +15,9 @@ interface RunClusterVisualizationProps {
   onRunSelect?: (runId: string) => void;
   showTimeline?: boolean;
   showMetrics?: boolean;
+  initialClusterMode?: ClusterMode;
 }
 
-/**
- * Represents a cluster of runs grouped by a common attribute.
- */
 export interface RunCluster {
   id: string;
   label: string;
@@ -44,13 +45,6 @@ interface ClusterMetrics {
 /**
  * Status-based cluster configuration.
  */
-const STATUS_CONFIG: Record<RunStatus, { color: string; icon: string }> = {
-  running: { color: "blue", icon: "●" },
-  completed: { color: "green", icon: "✓" },
-  failed: { color: "red", icon: "✗" },
-  cancelled: { color: "gray", icon: "○" },
-};
-
 /**
  * Area-based cluster configuration.
  */
@@ -137,7 +131,6 @@ const colorClasses: Record<
   },
 };
 
-type ClusterMode = "status" | "area" | "severity" | "performance" | "failure";
 type ViewMode = "grid" | "bubbles" | "timeline" | "metrics";
 
 const RunClusterVisualization: React.FC<RunClusterVisualizationProps> = ({
@@ -148,8 +141,9 @@ const RunClusterVisualization: React.FC<RunClusterVisualizationProps> = ({
   onRunSelect,
   showTimeline = true,
   showMetrics = true,
+  initialClusterMode = "status",
 }) => {
-  const [clusterMode, setClusterMode] = useState<ClusterMode>("status");
+  const [clusterMode, setClusterMode] = useState<ClusterMode>(initialClusterMode);
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [selectedCluster, setSelectedCluster] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<"count" | "duration" | "failure-rate">(
@@ -635,16 +629,14 @@ const ClusterBubble: React.FC<{
  * Build clusters grouped by status.
  */
 export function buildStatusClusters(runs: FuzzingRun[]): RunCluster[] {
-  const statuses: RunStatus[] = ["running", "completed", "failed", "cancelled"];
-
-  return statuses
+  return RUN_STATUSES
     .map((status) => {
-      const config = STATUS_CONFIG[status];
+      const config = STATUS_META[status];
       const clusterRuns = runs.filter((r) => r.status === status);
 
       return {
         id: `status-${status}`,
-        label: status.charAt(0).toUpperCase() + status.slice(1),
+        label: config.label,
         runs: clusterRuns,
         color: config.color,
         icon: config.icon,
@@ -1218,7 +1210,7 @@ export function buildMockClusters(seed = 123456): FuzzingRun[] {
   const rng = mulberry32(seed);
 
   return Array.from({ length: 25 }, (_, i) => {
-    const status = ["running", "completed", "failed", "cancelled"][i % 4] as RunStatus;
+    const status = RUN_STATUSES[i % RUN_STATUSES.length];
     const area = ["auth", "state", "budget", "xdr"][i % 4] as RunArea;
     const severity = ["low", "medium", "high", "critical"][i % 4] as RunSeverity;
     

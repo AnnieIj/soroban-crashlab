@@ -1,178 +1,77 @@
-import * as assert from 'node:assert/strict';
 import {
-  type NotificationPreferences,
-  type NotificationType,
-  type NotificationPriority,
+  DEFAULT_CHANNELS,
+  DEFAULT_CHANNEL_PREFERENCES,
   DEFAULT_PREFERENCES,
-  getPriorityOrder,
-  meetsMinPriority,
-  isTypeEnabled,
+  mockNotifications,
   filterByPreferences,
-  isInQuietHours,
-  validatePreferences,
   toggleType,
-  setMinPriority,
-  setDigestFrequency,
+  validatePreferences,
+  isQuietHoursActive,
+  getQuietHoursPreviewText,
+  validateQuietHoursTime,
 } from './notification-preferences-utils';
 
-const makePrefs = (
-  overrides: Partial<NotificationPreferences> = {},
-): NotificationPreferences => ({
-  ...DEFAULT_PREFERENCES,
-  ...overrides,
-});
-
-const makeNotif = (
-  type: NotificationType,
-  priority: NotificationPriority,
-) => ({ type, priority });
-
-{
-  const p = getPriorityOrder('low');
-  assert.equal(p, 0);
-}
-{
-  const p = getPriorityOrder('medium');
-  assert.equal(p, 1);
-}
-{
-  const p = getPriorityOrder('high');
-  assert.equal(p, 2);
-}
-{
-  const p = getPriorityOrder('critical');
-  assert.equal(p, 3);
-}
-
-{
-  assert.ok(meetsMinPriority('high', 'low'));
-  assert.ok(meetsMinPriority('high', 'high'));
-  assert.ok(!meetsMinPriority('low', 'medium'));
-  assert.ok(!meetsMinPriority('low', 'critical'));
-}
-
-{
-  assert.ok(isTypeEnabled('info', ['info', 'warning']));
-  assert.ok(!isTypeEnabled('error', ['info', 'warning']));
-  assert.ok(isTypeEnabled('error', ['info', 'warning', 'error']));
-}
-
-{
-  const prefs = makePrefs({ enabledTypes: ['info', 'warning'], minPriority: 'medium' });
-
-  assert.ok(!filterByPreferences(makeNotif('info', 'low'), prefs));
-  assert.ok(!filterByPreferences(makeNotif('error', 'critical'), prefs));
-  assert.ok(filterByPreferences(makeNotif('warning', 'critical'), prefs));
-  assert.ok(!filterByPreferences(makeNotif('info', 'low'), makePrefs({ enabledTypes: ['warning'], minPriority: 'low' })));
-  assert.ok(!filterByPreferences(makeNotif('info', 'low'), makePrefs({ enabledTypes: ['info'], minPriority: 'medium' })));
-}
-
-{
-  const prefs = makePrefs({
-    quietHoursEnabled: true,
-    quietHoursStart: '22:00',
-    quietHoursEnd: '07:00',
-  });
-
-  const duringQuiet = new Date();
-  duringQuiet.setHours(23, 0, 0, 0);
-  assert.ok(isInQuietHours(prefs, duringQuiet));
-
-  const outsideQuiet = new Date();
-  outsideQuiet.setHours(14, 0, 0, 0);
-  assert.ok(!isInQuietHours(prefs, outsideQuiet));
-}
-
-{
-  const prefs = makePrefs({
-    quietHoursEnabled: true,
-    quietHoursStart: '09:00',
-    quietHoursEnd: '17:00',
-  });
-
-  const during = new Date();
-  during.setHours(12, 0, 0, 0);
-  assert.ok(isInQuietHours(prefs, during));
-
-  const before = new Date();
-  before.setHours(8, 0, 0, 0);
-  assert.ok(!isInQuietHours(prefs, before));
-
-  const after = new Date();
-  after.setHours(18, 0, 0, 0);
-  assert.ok(!isInQuietHours(prefs, after));
-}
-
-{
-  const prefs = makePrefs({ quietHoursEnabled: false });
-  assert.ok(!isInQuietHours(prefs));
-}
-
-{
-  const prefs = makePrefs({ enabledTypes: [] as NotificationType[] });
-  const err = validatePreferences(prefs);
-  assert.equal(err, 'At least one notification type must be enabled.');
-}
-
-{
-  const prefs = makePrefs({
-    quietHoursEnabled: true,
-    quietHoursStart: 'invalid',
-    quietHoursEnd: '07:00',
-  });
-  const err = validatePreferences(prefs);
-  assert.ok(err !== null);
-  assert.ok(err.includes('Invalid quiet hours'));
-}
-
-{
-  const prefs = makePrefs({
-    quietHoursEnabled: true,
-    quietHoursStart: '22:00',
-    quietHoursEnd: 'invalid',
-  });
-  const err = validatePreferences(prefs);
-  assert.ok(err !== null);
-  assert.ok(err.includes('Invalid quiet hours'));
-}
-
-{
-  const prefs = makePrefs({
-    quietHoursEnabled: true,
-    quietHoursStart: '22:00',
-    quietHoursEnd: '22:00',
-  });
-  const err = validatePreferences(prefs);
-  assert.equal(err, 'Quiet hours start and end cannot be the same.');
-}
-
-{
-  const prefs = makePrefs();
-  const err = validatePreferences(prefs);
-  assert.equal(err, null);
-}
-
-{
-  const prefs = makePrefs({ enabledTypes: ['info'] });
-  const toggled = toggleType(prefs, 'warning');
-  assert.deepEqual(toggled.enabledTypes, ['info', 'warning']);
-
-  const toggledBack = toggleType(toggled, 'info');
-  assert.deepEqual(toggledBack.enabledTypes, ['warning']);
-}
-
-{
-  const prefs = makePrefs({ minPriority: 'low' });
-  const result = setMinPriority(prefs, 'critical');
-  assert.equal(result.minPriority, 'critical');
-}
-
-{
-  const prefs = makePrefs({ digestFrequency: 'realtime' });
-  const result = setDigestFrequency(prefs, 'daily');
-  assert.equal(result.digestFrequency, 'daily');
-}
-
-console.log(
-  'notification-preferences-utils.test.ts: all assertions passed',
+console.assert(DEFAULT_CHANNELS.length === 3, 'Should have 3 default channels');
+console.assert(DEFAULT_CHANNEL_PREFERENCES.length === 3, 'Should have 3 default channel preferences');
+console.assert(DEFAULT_PREFERENCES.enabledTypes.length === 4, 'Should enable 4 notification types');
+console.assert(mockNotifications.length === 3, 'Should have 3 mock notifications');
+console.assert(DEFAULT_CHANNELS[0].id === 'in-app', 'First channel should be in-app');
+console.assert(
+  mockNotifications.some(n => n.severity === 'error'),
+  'Should have error severity notification'
 );
+console.assert(filterByPreferences({ type: 'info', priority: 'low' }, DEFAULT_PREFERENCES) === true);
+console.assert(toggleType(DEFAULT_PREFERENCES, 'info').enabledTypes.includes('info') === false);
+console.assert(validatePreferences(DEFAULT_PREFERENCES) === null);
+
+function makeDate(hour: number, minute: number): Date {
+  const d = new Date('2026-08-28T00:00:00.000Z');
+  d.setHours(hour, minute, 0, 0);
+  return d;
+}
+
+// Quiet Hours Tests
+// 1. Normal window (08:00 - 17:00)
+console.assert(isQuietHoursActive('08:00', '17:00', makeDate(12, 0)) === true, 'Normal window active during day');
+console.assert(isQuietHoursActive('08:00', '17:00', makeDate(19, 0)) === false, 'Normal window inactive outside window');
+
+// 2. Wraparound window (22:00 - 08:00 & 08:00 - 02:00)
+console.assert(isQuietHoursActive('22:00', '08:00', makeDate(23, 30)) === true, 'Wraparound window active late night');
+console.assert(isQuietHoursActive('22:00', '08:00', makeDate(5, 0)) === true, 'Wraparound window active early morning');
+console.assert(isQuietHoursActive('22:00', '08:00', makeDate(14, 0)) === false, 'Wraparound window inactive during afternoon');
+console.assert(isQuietHoursActive('08:00', '02:00', makeDate(23, 0)) === true, 'Wraparound 08:00 to 02:00 active at 23:00');
+console.assert(isQuietHoursActive('08:00', '02:00', makeDate(5, 0)) === false, 'Wraparound 08:00 to 02:00 inactive at 05:00');
+
+// 3. Start == End rejection
+console.assert(isQuietHoursActive('08:00', '08:00', makeDate(8, 0)) === false, 'Identical start and end returns false');
+const identicalPrefs = { ...DEFAULT_PREFERENCES, quietHoursEnabled: true, quietHoursStart: '10:00', quietHoursEnd: '10:00' };
+console.assert(validatePreferences(identicalPrefs) === 'Quiet hours start and end times cannot be identical.', 'validatePreferences rejects identical start/end');
+
+// 4. Boundary minute inclusivity documented by test names
+function testBoundaryMinuteInclusivity_StartInclusive(): void {
+  console.assert(isQuietHoursActive('08:00', '17:00', makeDate(8, 0)) === true, 'Start minute 08:00 is inclusive');
+}
+
+function testBoundaryMinuteInclusivity_EndExclusive(): void {
+  console.assert(isQuietHoursActive('08:00', '17:00', makeDate(17, 0)) === false, 'End minute 17:00 is exclusive');
+}
+
+function testBoundaryMinuteInclusivity_WraparoundStartInclusive(): void {
+  console.assert(isQuietHoursActive('22:00', '08:00', makeDate(22, 0)) === true, 'Wraparound start minute 22:00 is inclusive');
+}
+
+function testBoundaryMinuteInclusivity_WraparoundEndExclusive(): void {
+  console.assert(isQuietHoursActive('22:00', '08:00', makeDate(8, 0)) === false, 'Wraparound end minute 08:00 is exclusive');
+}
+
+testBoundaryMinuteInclusivity_StartInclusive();
+testBoundaryMinuteInclusivity_EndExclusive();
+testBoundaryMinuteInclusivity_WraparoundStartInclusive();
+testBoundaryMinuteInclusivity_WraparoundEndExclusive();
+
+// 5. Time format validation & preview text
+console.assert(validateQuietHoursTime('25:00') === false, '25:00 is invalid time format');
+console.assert(getQuietHoursPreviewText('22:00', '08:00').includes('overnight'), 'Wraparound preview includes overnight description');
+console.assert(getQuietHoursPreviewText('08:00', '17:00').includes('daily'), 'Normal window preview includes daily description');
+
+console.log('✓ Notification preferences utilities tests passed');

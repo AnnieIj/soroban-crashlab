@@ -1,7 +1,8 @@
-import { test, expect, Page } from '@playwright/test';
+import { test, expect } from './fixtures';
+import type { Page } from '@playwright/test';
 import fs from 'fs';
 import path from 'path';
-import { createWriteStream } from 'fs';
+
 
 const TEST_FILE_CONTENT = 'test artifact content for e2e testing';
 const TEST_FILE_JSON_CONTENT = JSON.stringify({
@@ -48,8 +49,13 @@ function cleanupTestFile(filePath: string): void {
  */
 async function navigateToArtifactPage(page: Page): Promise<void> {
   await page.goto('/integrations/artifacts');
-  // Wait for the page to fully load
-  await page.waitForLoadState('networkidle');
+  // Wait for the dynamically imported page content (avoid networkidle —
+  // the app polls APIs and that wait never settles under next start).
+  await expect(page.getByText('Artifact Storage Integration')).toBeVisible({
+    timeout: 60000,
+  });
+  await expect(page.getByText('Upload New Artifact')).toBeVisible({ timeout: 15000 });
+  await expect(page.locator('input[type="file"]')).toBeAttached({ timeout: 10000 });
 }
 
 /**
@@ -59,12 +65,12 @@ async function uploadArtifactViaUI(
   page: Page,
   filePath: string
 ): Promise<void> {
-  const fileInput = page.locator('input[type="file"]');
+  const fileInput = page.getByTestId('artifact-file-input').or(page.locator('input[type="file"]'));
+  await expect(fileInput).toBeAttached({ timeout: 15000 });
   await fileInput.setInputFiles(filePath);
 
-  // Wait for the artifact to appear in the list
-  await page.waitForTimeout(1000); // Allow upload processing
-  await page.waitForLoadState('networkidle');
+  // Wait briefly for upload processing without relying on networkidle.
+  await page.waitForTimeout(1000);
 }
 
 /**
@@ -79,6 +85,8 @@ async function waitForArtifactInList(
 }
 
 test.describe('Artifact Upload/Download E2E', () => {
+  test.setTimeout(90000);
+
   test.beforeEach(async ({ page }) => {
     await navigateToArtifactPage(page);
   });
@@ -89,7 +97,7 @@ test.describe('Artifact Upload/Download E2E', () => {
 
     try {
       // Get initial artifact count
-      const initialArtifactItems = await page.locator('div[class*="border"]').count();
+      await page.locator('div[class*="border"]').count();
 
       // Upload artifact
       await uploadArtifactViaUI(page, testFilePath);
@@ -111,12 +119,8 @@ test.describe('Artifact Upload/Download E2E', () => {
   });
 
   test('should display artifact list after page load', async ({ page }) => {
-    // Wait for artifacts to load
-    await page.waitForLoadState('networkidle');
-
-    // Check if artifact list section exists
-    const listSection = page.locator('text=Stored Artifacts');
-    await expect(listSection).toBeVisible();
+    const listSection = page.getByRole('heading', { name: 'Stored Artifacts' });
+    await expect(listSection).toBeVisible({ timeout: 15000 });
   });
 
   test('should display upload section with file input', async ({ page }) => {
@@ -124,9 +128,9 @@ test.describe('Artifact Upload/Download E2E', () => {
     const uploadSection = page.locator('text=Upload New Artifact');
     await expect(uploadSection).toBeVisible();
 
-    // Verify file input exists
-    const fileInput = page.locator('input[type="file"]');
-    await expect(fileInput).toBeVisible();
+    // Verify file input exists (visually hidden, but attached for uploads)
+    const fileInput = page.getByTestId('artifact-file-input').or(page.locator('input[type="file"]'));
+    await expect(fileInput).toBeAttached();
   });
 
   test('should handle multiple artifact uploads', async ({ page }) => {
@@ -216,7 +220,9 @@ test.describe('Artifact Upload/Download E2E', () => {
 
       // Reload page
       await page.reload();
-      await page.waitForLoadState('networkidle');
+      await expect(page.getByText('Artifact Storage Integration')).toBeVisible({
+        timeout: 60000,
+      });
 
       // Verify artifact still exists
       await expect(page.locator(`text="${testFileName}"`).first()).toBeVisible();
@@ -263,7 +269,6 @@ test.describe('Artifact Upload/Download E2E', () => {
 
       // Wait for upload to complete
       await page.waitForTimeout(1000);
-      await page.waitForLoadState('networkidle');
 
       // Verify artifact appears
       await waitForArtifactInList(page, testFileName);
@@ -324,11 +329,11 @@ test.describe('Artifact Upload/Download E2E', () => {
     await navigateToArtifactPage(page);
 
     // If there's an error section, it should not be visible initially
-    const errorSection = page.locator('[class*="error"]', { has: page.locator('text=Failed') }).first();
+    page.locator('[class*="error"]', { has: page.locator('text=Failed') }).first();
 
     // This is a soft check - error handling depends on backend state
     // The page should remain functional even if errors occur
-    await expect(page.locator('input[type="file"]')).toBeVisible();
+    await expect(page.getByTestId('artifact-file-input').or(page.locator('input[type="file"]'))).toBeAttached();
   });
 
   test('should verify artifact API endpoints respond', async ({ page }) => {
@@ -383,7 +388,7 @@ test.describe('Artifact API Endpoints', () => {
     expect(Array.isArray(data.artifacts)).toBeTruthy();
   });
 
-  test('POST /api/artifacts accepts file uploads', async ({ request, page }) => {
+  test('POST /api/artifacts accepts file uploads', async ({ request }) => {
     const testFileName = `api-test-${Date.now()}.json`;
     const filePath = await createTestFile(testFileName, TEST_FILE_JSON_CONTENT);
 
@@ -405,10 +410,11 @@ test.describe('Artifact API Endpoints', () => {
       expect([200, 201]).toContain(response.status());
 
       const data = await response.json();
-      expect(data).toHaveProperty('id');
-      expect(data).toHaveProperty('name');
-      expect(data).toHaveProperty('createdAt');
-      expect(data.name).toBe(testFileName);
+      const artifact = data?.data?.artifact ?? data?.artifact ?? data;
+      expect(artifact).toHaveProperty('id');
+      expect(artifact).toHaveProperty('name');
+      expect(artifact).toHaveProperty('createdAt');
+      expect(artifact.name).toBe(testFileName);
     } finally {
       cleanupTestFile(filePath);
     }

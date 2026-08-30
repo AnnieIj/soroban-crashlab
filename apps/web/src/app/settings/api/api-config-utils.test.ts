@@ -7,6 +7,12 @@ import {
   resetStorage,
   STORAGE_KEY,
   ApiConfig,
+  DRAFT_STORAGE_KEY,
+  saveDraft,
+  loadDraft,
+  clearDraft,
+  isSameConfig,
+  resolveInitialConfig,
 } from './api-config-utils';
 
 class MockStorage {
@@ -139,8 +145,75 @@ function testStorageHelpers(): void {
   assert.deepEqual(loadedAfterReset, DEFAULT_CONFIG);
 }
 
+// #1074: unsaved edits must survive the browser discarding a backgrounded tab.
+function testDraftHelpers(): void {
+  const storage = new MockStorage() as unknown as Storage;
+
+  // No draft yet.
+  assert.equal(loadDraft(storage), null);
+
+  const draft: ApiConfig = {
+    backendUrl: 'https://api.in-progress.dev',
+    rateLimitMaxRequests: 250,
+    rateLimitWindowSeconds: 90,
+  };
+
+  assert.ok(saveDraft(draft, storage));
+  assert.deepEqual(loadDraft(storage), draft);
+
+  // The draft lives under its own key, so it never masquerades as saved config.
+  assert.deepEqual(loadFromStorage(storage), DEFAULT_CONFIG);
+  assert.notEqual(DRAFT_STORAGE_KEY, STORAGE_KEY);
+
+  // A half-typed value is preserved verbatim rather than snapped back to the
+  // default, so its validation message reappears after the tab is restored.
+  assert.ok(saveDraft({ ...draft, rateLimitMaxRequests: 0 }, storage));
+  assert.equal(loadDraft(storage)?.rateLimitMaxRequests, 0);
+  assert.ok(validateConfig(loadDraft(storage) as ApiConfig).rateLimitMaxRequests);
+
+  // A corrupt or wrongly-typed draft can never break the form.
+  storage.setItem(DRAFT_STORAGE_KEY, 'corrupted { json');
+  assert.equal(loadDraft(storage), null);
+
+  storage.setItem(DRAFT_STORAGE_KEY, JSON.stringify({ backendUrl: 42 }));
+  assert.deepEqual(loadDraft(storage), DEFAULT_CONFIG);
+
+  // Clearing removes only the draft.
+  saveToStorage(draft, storage);
+  saveDraft(draft, storage);
+  clearDraft(storage);
+  assert.equal(loadDraft(storage), null);
+  assert.deepEqual(loadFromStorage(storage), draft);
+}
+
+function testResolveInitialConfig(): void {
+  const saved: ApiConfig = {
+    backendUrl: 'https://api.saved.dev',
+    rateLimitMaxRequests: 100,
+    rateLimitWindowSeconds: 60,
+  };
+
+  // No draft => mount from the saved config.
+  assert.deepEqual(resolveInitialConfig(saved, null), saved);
+
+  // A draft matching the saved config is not a pending edit.
+  assert.deepEqual(resolveInitialConfig(saved, { ...saved }), saved);
+  assert.equal(isSameConfig(saved, { ...saved }), true);
+
+  // A genuinely different draft wins — this is the state that used to be lost.
+  const pending: ApiConfig = { ...saved, backendUrl: 'https://api.half-typed' };
+  assert.deepEqual(resolveInitialConfig(saved, pending), pending);
+  assert.equal(isSameConfig(saved, pending), false);
+
+  // Numeric-only edits count too.
+  assert.equal(isSameConfig(saved, { ...saved, rateLimitMaxRequests: 101 }), false);
+  assert.equal(isSameConfig(saved, { ...saved, rateLimitWindowSeconds: 61 }), false);
+}
+
 testDefaultConfig();
 testValidateConfig();
 testStorageHelpers();
+testDraftHelpers();
+testResolveInitialConfig();
 
 console.log('settings/api/api-config-utils.test.ts: all assertions passed');

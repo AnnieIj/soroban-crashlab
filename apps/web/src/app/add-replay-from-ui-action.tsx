@@ -3,6 +3,11 @@
 import { useEffect, useState } from "react";
 import { simulateSeedReplay } from "./replay";
 import { getReplayButtonLabel, ReplayButtonStatus } from "./replay-ui-utils";
+import {
+  buildReplayHistoryEntryFromReplay,
+  recordRunReplayHistoryEntry,
+} from "./add-run-replay-history-with-timestamps";
+import OperationProgressIndicator from "../components/OperationProgressIndicator";
 
 interface AddReplayFromUiActionProps {
   /** Run ID to replay */
@@ -42,8 +47,19 @@ export default function AddReplayFromUiAction({
     setStatus("loading");
     setErrorMessage(null);
     setReplayedRunId(null);
+    const startedAt = new Date().toISOString();
     try {
       const { newRunId } = await simulateSeedReplay(runId);
+      const completedAt = new Date().toISOString();
+      recordRunReplayHistoryEntry(
+        buildReplayHistoryEntryFromReplay({
+          id: `replay-history-${newRunId}`,
+          sourceRunId: runId,
+          replayRunId: newRunId,
+          startedAt,
+          completedAt,
+        }),
+      );
       onReplayInitiated({ id: newRunId, status: "running" });
       setReplayedRunId(newRunId);
       setStatus("success");
@@ -53,6 +69,16 @@ export default function AddReplayFromUiAction({
       setStatus("error");
     }
   };
+
+  // Map ReplayButtonStatus → OperationStatus for the progress indicator
+  const progressStatus =
+    status === "loading"
+      ? "running"
+      : status === "success"
+        ? "done"
+        : status === "error"
+          ? "failed"
+          : "idle";
 
   return (
     <div
@@ -114,17 +140,26 @@ export default function AddReplayFromUiAction({
         )}
         {getReplayButtonLabel(status)}
       </button>
+
+      {/* Progress indicator — compact, shown when not idle */}
+      {progressStatus !== "idle" && (
+        <div className="w-full max-w-[14rem]">
+          <OperationProgressIndicator
+            status={progressStatus}
+            runningLabel="Replaying…"
+            doneLabel="Queued"
+            failedLabel="Failed"
+            errorMessage={errorMessage ?? undefined}
+          />
+        </div>
+      )}
+
       {status === "success" && replayedRunId && (
         <span
           className="max-w-[14rem] truncate text-right text-[11px] text-emerald-700 dark:text-emerald-300"
           aria-label={`Replay queued as ${replayedRunId}`}
         >
           Queued: {replayedRunId}
-        </span>
-      )}
-      {status === "error" && errorMessage && (
-        <span className="max-w-[14rem] text-right text-[11px] text-rose-700 dark:text-rose-300">
-          {errorMessage}
         </span>
       )}
     </div>

@@ -1,4 +1,5 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from './fixtures';
+import type { Page } from '@playwright/test';
 
 const mobileViewport = { width: 390, height: 844 };
 
@@ -89,5 +90,61 @@ test.describe('Mobile responsive layout', () => {
 
     await page.getByRole('button', { name: 'Close navigation menu' }).click();
     await expect(page.locator('.drawer.open')).toHaveCount(0);
+  });
+
+  test('closes navigation drawer with Escape key press', async ({ page }) => {
+    await page.goto('/');
+
+    await page.getByRole('button', { name: 'Open navigation menu' }).click();
+    await expect(page.locator('.drawer.open')).toBeVisible();
+
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.drawer.open')).toHaveCount(0);
+  });
+
+  test('closes navigation drawer by clicking backdrop overlay', async ({ page }) => {
+    await page.goto('/');
+
+    await page.getByRole('button', { name: 'Open navigation menu' }).click();
+    await expect(page.locator('.drawer.open')).toBeVisible();
+
+    const backdrop = page.locator('.drawer-backdrop');
+    if (await backdrop.isVisible()) {
+      await backdrop.click();
+      await expect(page.locator('.drawer.open')).toHaveCount(0);
+    }
+  });
+
+  test('maintains responsive layout containment on narrow mobile (320px) and tablet (768px) viewports', async ({ page }) => {
+    await fulfillRunsRequest(page, { runs: mockRuns, total: mockRuns.length });
+
+    await page.setViewportSize({ width: 320, height: 568 });
+    await page.goto('/');
+    await page.waitForLoadState('domcontentloaded');
+
+    let hasHorizontalOverflow = await page.evaluate(() => {
+      return document.documentElement.scrollWidth > document.documentElement.clientWidth;
+    });
+    expect(hasHorizontalOverflow).toBe(false);
+
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await page.reload();
+    await page.waitForLoadState('domcontentloaded');
+
+    hasHorizontalOverflow = await page.evaluate(() => {
+      return document.documentElement.scrollWidth > document.documentElement.clientWidth;
+    });
+    expect(hasHorizontalOverflow).toBe(false);
+  });
+
+  test('transitions navigation UI elements seamlessly when resizing from desktop to mobile viewport', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/');
+
+    const desktopNav = page.locator('header nav');
+    await expect(desktopNav).toBeVisible();
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.getByRole('button', { name: 'Open navigation menu' })).toBeVisible();
   });
 });

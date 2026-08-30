@@ -12,12 +12,30 @@
 import { useMaintainerMode } from "../useMaintainerMode";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { FuzzingRun } from "../types";
-import CrossRunBoardWidgets from "../implement-cross-run-board-widgets-component";
-import CrossRunBoardCustomWidgets from "../create-cross-run-board-custom-widgets-63";
-import AlertPresets from "../AlertPresets";
-import WidgetLayoutEditor from "../implement-widget-layout-editor-component";
-import { ResourceFeeInsightPanel } from "../implement-resource-fee-insight-panel-component";
+import { fetchRuns as fetchRunsFromApi } from "../../lib/api-client";
+
+const CrossRunBoardWidgets = dynamic(
+  () => import("../implement-cross-run-board-widgets-component"),
+  { ssr: false },
+);
+const CrossRunBoardCustomWidgets = dynamic(
+  () => import("../create-cross-run-board-custom-widgets-63"),
+  { ssr: false },
+);
+const AlertPresets = dynamic(() => import("../AlertPresets"), { ssr: false });
+const WidgetLayoutEditor = dynamic(
+  () => import("../implement-widget-layout-editor-component"),
+  { ssr: false },
+);
+const ResourceFeeInsightPanel = dynamic(
+  () =>
+    import("../implement-resource-fee-insight-panel-component").then((mod) => ({
+      default: mod.ResourceFeeInsightPanel,
+    })),
+  { ssr: false },
+);
 
 export default function MaintainerPage() {
   const { isMaintainer, mounted } = useMaintainerMode();
@@ -28,24 +46,22 @@ export default function MaintainerPage() {
   );
   const [fetchAttempt, setFetchAttempt] = useState(0);
 
-  // Redirect if not maintainer
+  // Redirect if not maintainer (hard navigation so e2e URL assertions settle)
   useEffect(() => {
     if (mounted && !isMaintainer) {
-      router.push("/");
+      window.location.replace("/");
     }
-  }, [isMaintainer, mounted, router]);
+  }, [isMaintainer, mounted]);
 
   // Fetch runs data
   useEffect(() => {
     let cancelled = false;
     const ctrl = new AbortController();
 
-    const fetchRuns = async () => {
+    const loadRuns = async () => {
       setDataState("loading");
       try {
-        const res = await fetch("/api/runs", { signal: ctrl.signal });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
+        const data = await fetchRunsFromApi(ctrl.signal);
         if (!cancelled) {
           setRuns(data.runs || []);
           setDataState("success");
@@ -56,7 +72,7 @@ export default function MaintainerPage() {
     };
 
     const timer = window.setTimeout(() => {
-      void fetchRuns();
+      void loadRuns();
     }, 0);
 
     return () => {

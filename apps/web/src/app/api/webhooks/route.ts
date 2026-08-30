@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { WebhookConfig, RunEventType } from '@/app/webhook-manager';
+import { jsonError, readJsonBody, withRouteErrorHandling } from '@/lib/route-handler';
+import { getWebhookStore } from '@/lib/webhook-store';
+import { validateWebhookApiKey } from '@/lib/api-key-auth';
+import { WEBHOOK_DELIVERY_TIMEOUT_MS } from '@/lib/timeouts';
 
 const VALID_PROTOCOLS = new Set(['http:', 'https:']);
 
@@ -12,8 +16,7 @@ const VALID_EVENT_TYPES = new Set<RunEventType>([
   'crash.detected',
 ]);
 
-// In-memory store (persists for the lifetime of the process)
-const store = new Map<string, WebhookConfig>();
+const store = getWebhookStore();
 
 function isValidUrl(url: unknown): url is string {
   if (typeof url !== 'string') return false;
@@ -105,97 +108,99 @@ function parseWebhookBody(body: unknown): WebhookConfig | { error: string } {
  * GET /api/webhooks
  * Returns all registered webhook configurations.
  */
-export async function GET() {
-  const webhooks = [...store.values()].map((wh) => ({
+export const GET = withRouteErrorHandling('GET /api/webhooks', async (request: NextRequest) => {
+  const authError = validateWebhookApiKey(request);
+  if (authError) return authError;
+
+  const webhooks = store.getAllConfigs().map((wh) => ({
     ...wh,
     secret: wh.secret !== undefined ? '***' : undefined,
   }));
   return NextResponse.json({ webhooks, total: webhooks.length });
-}
+});
 
 /**
  * POST /api/webhooks
  * Registers a new webhook. Body: WebhookConfig JSON.
  */
-export async function POST(request: NextRequest) {
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'Request body must be valid JSON.' }, { status: 400 });
-  }
+export const POST = withRouteErrorHandling('POST /api/webhooks', async (request: NextRequest) => {
+  const authError = validateWebhookApiKey(request);
+  if (authError) return authError;
 
-  const result = parseWebhookBody(body);
+  const parsedBody = await readJsonBody(request);
+  if ('error' in parsedBody) return parsedBody.error;
+
+  const result = parseWebhookBody(parsedBody.body);
   if ('error' in result) {
-    return NextResponse.json({ error: result.error }, { status: 422 });
+    return jsonError(result.error, 422);
   }
 
-  if (store.has(result.id)) {
-    return NextResponse.json(
-      { error: `Webhook with id "${result.id}" already exists.` },
-      { status: 409 },
-    );
+  if (store.hasConfig(result.id)) {
+    return jsonError(`Webhook with id "${result.id}" already exists.`, 409);
   }
 
   const stored: WebhookConfig = {
     ...result,
     maxRetries: result.maxRetries ?? 3,
-    timeoutMs: result.timeoutMs ?? 5000,
+    timeoutMs: result.timeoutMs ?? WEBHOOK_DELIVERY_TIMEOUT_MS,
   };
-  store.set(stored.id, stored);
+  store.setConfig(stored);
 
   return NextResponse.json(
     { ...stored, secret: stored.secret !== undefined ? '***' : undefined },
     { status: 201 },
   );
-}
+});
 
 /**
  * DELETE /api/webhooks?id=<webhookId>
  * Removes a registered webhook by id.
  */
-export async function DELETE(request: NextRequest) {
+export const DELETE = withRouteErrorHandling('DELETE /api/webhooks', async (request: NextRequest) => {
+  const authError = validateWebhookApiKey(request);
+  if (authError) return authError;
+
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
 
   if (!id || !id.trim()) {
-    return NextResponse.json({ error: 'Query parameter "id" is required.' }, { status: 400 });
+    return jsonError('Query parameter "id" is required.', 400);
   }
 
-  if (!store.has(id)) {
-    return NextResponse.json({ error: `Webhook "${id}" not found.` }, { status: 404 });
+  if (!store.hasConfig(id)) {
+    return jsonError(`Webhook "${id}" not found.`, 404);
   }
 
-  store.delete(id);
+  store.deleteConfig(id);
   return NextResponse.json({ deleted: id });
-}
+});
 
 /**
  * PATCH /api/webhooks?id=<webhookId>
  * Updates an existing webhook. Body: partial WebhookConfig fields.
  */
-export async function PATCH(request: NextRequest) {
+export const PATCH = withRouteErrorHandling('PATCH /api/webhooks', async (request: NextRequest) => {
+  const authError = validateWebhookApiKey(request);
+  if (authError) return authError;
+
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
 
   if (!id || !id.trim()) {
-    return NextResponse.json({ error: 'Query parameter "id" is required.' }, { status: 400 });
+    return jsonError('Query parameter "id" is required.', 400);
   }
 
-  const existing = store.get(id);
+  const existing = store.getConfig(id);
   if (!existing) {
-    return NextResponse.json({ error: `Webhook "${id}" not found.` }, { status: 404 });
+    return jsonError(`Webhook "${id}" not found.`, 404);
   }
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'Request body must be valid JSON.' }, { status: 400 });
-  }
+  const parsedBody = await readJsonBody(request);
+  if ('error' in parsedBody) return parsedBody.error;
+  const body = parsedBody.body;
 
   if (typeof body !== 'object' || body === null) {
-    return NextResponse.json({ error: 'Request body must be a JSON object.' }, { status: 400 });
+    return jsonError('Request body must be a JSON object.', 400);
   }
 
   const patch = body as Record<string, unknown>;
@@ -203,37 +208,28 @@ export async function PATCH(request: NextRequest) {
 
   if ('url' in patch) {
     if (!isValidUrl(patch.url)) {
-      return NextResponse.json(
-        { error: 'Field "url" must be a valid http or https URL.' },
-        { status: 422 },
-      );
+      return jsonError('Field "url" must be a valid http or https URL.', 422);
     }
     updated.url = patch.url;
   }
 
   if ('events' in patch) {
     if (!Array.isArray(patch.events) || patch.events.length === 0 || !patch.events.every(isRunEventType)) {
-      return NextResponse.json(
-        { error: `Field "events" must be a non-empty array of valid event types.` },
-        { status: 422 },
-      );
+      return jsonError('Field "events" must be a non-empty array of valid event types.', 422);
     }
     updated.events = patch.events as RunEventType[];
   }
 
   if ('active' in patch) {
     if (typeof patch.active !== 'boolean') {
-      return NextResponse.json({ error: 'Field "active" must be a boolean.' }, { status: 422 });
+      return jsonError('Field "active" must be a boolean.', 422);
     }
     updated.active = patch.active;
   }
 
   if ('secret' in patch) {
     if (patch.secret !== null && typeof patch.secret !== 'string') {
-      return NextResponse.json(
-        { error: 'Field "secret" must be a string or null.' },
-        { status: 422 },
-      );
+      return jsonError('Field "secret" must be a string or null.', 422);
     }
     updated.secret = patch.secret === null ? undefined : (patch.secret as string);
   }
@@ -244,10 +240,7 @@ export async function PATCH(request: NextRequest) {
       !Number.isInteger(patch.maxRetries) ||
       patch.maxRetries < 0
     ) {
-      return NextResponse.json(
-        { error: 'Field "maxRetries" must be a non-negative integer.' },
-        { status: 422 },
-      );
+      return jsonError('Field "maxRetries" must be a non-negative integer.', 422);
     }
     updated.maxRetries = patch.maxRetries;
   }
@@ -258,10 +251,7 @@ export async function PATCH(request: NextRequest) {
       !Number.isInteger(patch.timeoutMs) ||
       patch.timeoutMs <= 0
     ) {
-      return NextResponse.json(
-        { error: 'Field "timeoutMs" must be a positive integer.' },
-        { status: 422 },
-      );
+      return jsonError('Field "timeoutMs" must be a positive integer.', 422);
     }
     updated.timeoutMs = patch.timeoutMs;
   }
@@ -273,19 +263,16 @@ export async function PATCH(request: NextRequest) {
         Array.isArray(patch.headers) ||
         !Object.values(patch.headers as object).every((v) => typeof v === 'string'))
     ) {
-      return NextResponse.json(
-        { error: 'Field "headers" must be a flat object of string values or null.' },
-        { status: 422 },
-      );
+      return jsonError('Field "headers" must be a flat object of string values or null.', 422);
     }
     updated.headers =
       patch.headers === null ? undefined : (patch.headers as Record<string, string>);
   }
 
-  store.set(id, updated);
+  store.setConfig(updated);
 
   return NextResponse.json({
     ...updated,
     secret: updated.secret !== undefined ? '***' : undefined,
   });
-}
+});
