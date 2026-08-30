@@ -75,6 +75,10 @@ export function useRuns(options: UseRunsOptions = {}): UseRunsResult {
 
   useEffect(() => {
     if (!autoFetch) return;
+    // Initial fetch on mount / refetch. loadData() sets state after the async
+    // request settles; calling it from the effect is the intended fetch-on-
+    // mount pattern here, so the set-state-in-effect lint rule is waived.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadData();
 
     return () => {
