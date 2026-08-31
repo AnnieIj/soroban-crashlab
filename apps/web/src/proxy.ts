@@ -28,3 +28,4 @@ export function generateCorrelationId(): string {
 export const config = {
   matcher: ['/api/:path*'],
 };
+
