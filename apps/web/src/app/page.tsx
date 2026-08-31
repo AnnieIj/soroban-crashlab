@@ -7,6 +7,8 @@ import dynamic from 'next/dynamic';
 import { LoadingSpinner } from "../components/LoadingSkeleton";
 import { PageHeader, PageSection, StatCard } from "../components";
 import { useRuns } from "../hooks/useRuns";
+import { usePullToRefresh } from "../hooks/usePullToRefresh";
+import { PullToRefreshIndicator } from "../components/PullToRefreshIndicator";
 import DashboardSectionLayoutEditor from "./dashboard-section-layout-editor";
 import {
   DASHBOARD_LAYOUT_STORAGE_KEY,
@@ -115,8 +117,19 @@ function DashboardContent() {
     },
   });
 
+  const handleRefresh = useCallback(async () => {
+    await refetch();
+    await new Promise<void>((resolve) => setTimeout(resolve, 600));
+  }, [refetch]);
+
+  const { isPulling, isRefreshing, pullDistance } = usePullToRefresh({
+    onRefresh: handleRefresh,
+    disabled: dataState === 'loading',
+  });
+
   return (
     <div className="container-full page-padding fade-in">
+      <PullToRefreshIndicator isPulling={isPulling} isRefreshing={isRefreshing} pullDistance={pullDistance} />
       <PageHeader
         title="Dashboard"
         description="Fuzzing campaign overview"
