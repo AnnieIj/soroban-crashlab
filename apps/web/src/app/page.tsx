@@ -195,7 +195,7 @@ function DashboardContent() {
             const sectionContent: Record<DashboardSectionId, ReactNode> = {
               stats: (
                 <PageSection>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-1 min-[360px]:grid-cols-2 md:grid-cols-4 gap-3">
                     {[
                       { label: "Total", value: filteredRuns.length },
                       { label: "Failed", value: filteredRuns.filter((r) => r.status === "failed").length },
