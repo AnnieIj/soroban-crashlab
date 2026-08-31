@@ -62,7 +62,7 @@ soroban-crashlab/
 │   └── web/                    # Next.js web dashboard
 │       └── src/
 │           ├── app/            # Pages, API routes, utilities
-│           │   ├── api/        # 34 REST API endpoints
+│           │   ├── api/        # REST API endpoints
 │           │   ├── runs/       # Run history and detail pages
 │           │   ├── analytics/  # Analytics hub with charts
 │           │   ├── triage/     # Failure triage board
