@@ -57,6 +57,10 @@ export interface CorpusStatPoint {
   corpusSize: number;
   edgesFound: number;
   totalEdges: number;
+  /** Executions per second at this sample point (engine telemetry). */
+  execsPerSec: number;
+  /** Percentage of engine code covered at this sample point. */
+  coveragePct: number;
 }
 
 export interface CrashGroupSummary {
