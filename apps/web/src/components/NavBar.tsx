@@ -5,7 +5,6 @@ import { usePathname } from 'next/navigation';
 import { useTheme } from './ThemeProvider';
 import { useEffect, useRef, useState } from 'react';
 import { useMaintainerMode } from '../app/useMaintainerMode';
-import NotificationCenter from '../app/add-notification-center-ui';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 
 const allNavItems = [
@@ -125,9 +124,6 @@ export default function NavBar() {
         </nav>
 
         <div className="flex items-center gap-2 sm:gap-3 shrink-0 ml-auto">
-          {/* Notification bell */}
-          <NotificationCenter />
-
           {/* Search - hidden on small mobile */}
           <Link
             id="navbar-search-link"

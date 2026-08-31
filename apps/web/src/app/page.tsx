@@ -5,6 +5,8 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import dynamic from 'next/dynamic';
 import { LoadingSpinner } from "../components/LoadingSkeleton";
+import { PageHeader, PageSection, StatCard } from "../components";
+import { useRuns } from "../hooks/useRuns";
 import DashboardSectionLayoutEditor from "./dashboard-section-layout-editor";
 import {
   DASHBOARD_LAYOUT_STORAGE_KEY,
@@ -25,7 +27,6 @@ const AddTaggingAndLabelsUi = dynamic(
 );
 import { runMatchesTagFilter } from "./run-tags-utils";
 import { FuzzingRun } from "./types";
-import { fetchRuns } from "../lib/api-client";
 import { useDataTableKeyboardNav } from "./use-data-table-keyboard-nav";
 
 const makeSuggestedLabels = (run: FuzzingRun): string[] => [
@@ -38,57 +39,17 @@ const makeSuggestedLabels = (run: FuzzingRun): string[] => [
 const PAGE_SIZE = 10;
 
 function DashboardContent() {
-  const [runs, setRuns] = useState<FuzzingRun[]>([]);
-  const [dataState, setDataState] = useState<"loading" | "error" | "success">("loading");
+  const { runs, dataState, refetch } = useRuns({
+    revalidateOnFocus: true,
+    revalidateOnVisibility: true,
+  });
   const [layout, setLayout] = useState<DashboardSectionConfig[]>(DEFAULT_DASHBOARD_LAYOUT);
-  const [fetchAttempt, setFetchAttempt] = useState(0);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const activeTag = searchParams.get("filter_tag") ?? "all";
   const rawPage = parseInt(searchParams.get("page") ?? "1", 10);
   const currentPage = isNaN(rawPage) ? 1 : rawPage;
-
-  useEffect(() => {
-    let cancelled = false;
-    const ctrl = new AbortController();
-    const load = async () => {
-      setDataState("loading");
-      try {
-        const data = await fetchRuns(ctrl.signal);
-        if (!cancelled) {
-          setRuns(data.runs ?? []);
-          setDataState("success");
-        }
-      } catch {
-        if (!cancelled) setDataState("error");
-      }
-    };
-    void load();
-    return () => {
-      cancelled = true;
-      ctrl.abort();
-    };
-  }, [fetchAttempt]);
-
-  useEffect(() => {
-    let mounted = true;
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible" && mounted) {
-        setFetchAttempt((n) => n + 1);
-      }
-    };
-    const handleFocus = () => {
-      if (mounted) setFetchAttempt((n) => n + 1);
-    };
-    document.addEventListener("visibilitychange", handleVisibility);
-    window.addEventListener("focus", handleFocus);
-    return () => {
-      mounted = false;
-      document.removeEventListener("visibilitychange", handleVisibility);
-      window.removeEventListener("focus", handleFocus);
-    };
-  }, []);
 
 
   useEffect(() => {
@@ -156,23 +117,23 @@ function DashboardContent() {
 
   return (
     <div className="container-full page-padding fade-in">
-      <div className="flex items-center justify-between mb-4 sm:mb-6">
-        <div>
-          <h1 className="heading-page">Dashboard</h1>
-          <p className="text-meta mt-0.5 sm:mt-1">Fuzzing campaign overview</p>
-        </div>
-        <Link href="/runs" className="btn-primary text-xs sm:text-sm px-3 sm:px-6 h-9 sm:h-10">
-          View All Runs
-        </Link>
-      </div>
+      <PageHeader
+        title="Dashboard"
+        description="Fuzzing campaign overview"
+        actions={
+          <Link href="/runs" className="btn-primary text-xs sm:text-sm px-3 sm:px-6 h-9 sm:h-10">
+            View All Runs
+          </Link>
+        }
+      />
 
       {dataState === "success" && (
-        <div className="section mb-6">
+        <PageSection className="mb-6">
           <Link href="/analytics/clusters" className="card card-padding card-interactive block">
             <h2 className="heading-section">Failure Signature Clusters</h2>
             <p className="text-meta mt-1">Group repeated crashes by signature and open representative samples for triage.</p>
           </Link>
-        </div>
+        </PageSection>
       )}
 
       {dataState === "loading" && <div className="card card-padding text-meta">Loading...</div>}
@@ -207,7 +168,7 @@ function DashboardContent() {
               <p className="text-meta">Could not reach the backend API.</p>
             </div>
             <button
-              onClick={() => setFetchAttempt((n) => n + 1)}
+              onClick={() => refetch()}
               className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white shadow transition"
               style={{ backgroundColor: "#CC1016" }}
               onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#a50d12")}
@@ -233,7 +194,7 @@ function DashboardContent() {
           {getVisibleDashboardSections(layout).map((section) => {
             const sectionContent: Record<DashboardSectionId, ReactNode> = {
               stats: (
-                <div className="section">
+                <PageSection>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     {[
                       { label: "Total", value: filteredRuns.length },
@@ -241,33 +202,29 @@ function DashboardContent() {
                       { label: "Running", value: filteredRuns.filter((r) => r.status === "running").length },
                       { label: "Critical", value: filteredRuns.filter((r) => r.severity === "critical").length },
                     ].map((stat) => (
-                      <div key={stat.label} className="card card-padding stat-card">
-                        <div className="stat-value">{stat.value}</div>
-                        <div className="stat-label">{stat.label}</div>
-                      </div>
+                      <StatCard key={stat.label} label={stat.label} value={stat.value} />
                     ))}
                   </div>
-                </div>
+                </PageSection>
               ),
               "widget-editor": (
-                <div className="section">
+                <PageSection>
                   <DashboardSectionLayoutEditor />
-                </div>
+                </PageSection>
               ),
               "recent-runs": (
                 <>
-                  <div className="section">
+                  <PageSection>
                     <AddTaggingAndLabelsUi
                       runs={filteredRuns}
                       activeTag={activeTag}
                       onActiveTagChange={setActiveTag}
                     />
-                  </div>
-                  <div className="section">
-                    <div className="flex items-center justify-between mb-3">
-                      <h2 className="heading-section">Recent Runs</h2>
-                      <Link href="/runs" className="link text-xs sm:text-sm">View all</Link>
-                    </div>
+                  </PageSection>
+                  <PageSection
+                    title="Recent Runs"
+                    actions={<Link href="/runs" className="link text-xs sm:text-sm">View all</Link>}
+                  >
                     <div className="card table-responsive">
                       <table className="data-table">
                         <thead>
@@ -312,42 +269,41 @@ function DashboardContent() {
                         onPageChange={handlePageChange}
                       />
                     )}
-                  </div>
+                  </PageSection>
                 </>
               ),
               "quick-actions": (
-                <div className="section card card-padding">
+                <PageSection className="card card-padding">
                   <h3 className="font-semibold text-sm mb-3">Quick Actions</h3>
                   <div className="flex flex-col gap-2">
                     <Link href="/runs" className="link">Browse all runs</Link>
                     <Link href="/analytics" className="link">Open analytics</Link>
                   </div>
-                </div>
+                </PageSection>
               ),
             };
             return <div key={section.id}>{sectionContent[section.id]}</div>;
           })}
-          <div className="section">
+          <PageSection>
             <RunHealthScoreWidget runs={filteredRuns} dataState={dataState} />
-          </div>
+          </PageSection>
 
-          <div className="section">
+          <PageSection>
             <ResourceFeeInsightPanel runs={filteredRuns} dataState={dataState} />
-          </div>
+          </PageSection>
 
-          <div className="section">
+          <PageSection>
             <AddTaggingAndLabelsUi
               runs={filteredRuns}
               activeTag={activeTag}
               onActiveTagChange={setActiveTag}
             />
-          </div>
+          </PageSection>
 
-          <div className="section">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="heading-section">Recent Runs</h2>
-              <Link href="/runs" className="link text-xs sm:text-sm">View all</Link>
-            </div>
+          <PageSection
+            title="Recent Runs"
+            actions={<Link href="/runs" className="link text-xs sm:text-sm">View all</Link>}
+          >
             <div className="card table-responsive">
                 <table
                   className="data-table"
@@ -394,7 +350,7 @@ function DashboardContent() {
                   </tbody>
                 </table>
               </div>
-          </div>
+          </PageSection>
         </>
       )}
     </div>

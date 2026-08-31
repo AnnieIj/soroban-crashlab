@@ -17,13 +17,14 @@ import {
 } from '../app/settings/api/api-config-utils';
 import ConfirmDialog from './ConfirmDialog';
 import { getConfirmDialogConfig } from './confirm-dialog-utils';
+import { TextField } from './TextField';
+import { Button } from './Button';
 
 const numericFields = new Set<keyof ApiConfig>([
   'rateLimitMaxRequests',
   'rateLimitWindowSeconds',
 ]);
 
-const dangerStyle = { color: '#CC1016' };
 const successStyle = { color: '#057642' };
 
 type InputProps = {
@@ -50,28 +51,17 @@ function Field({
   step,
 }: InputProps) {
   return (
-    <div>
-      <label htmlFor={id} className="input-label">
-        {label}
-      </label>
-
-      <input
-        id={id}
-        type={type}
-        className="input-field mt-1"
-        placeholder={placeholder}
-        value={value}
-        min={min}
-        step={step}
-        onChange={(e) => onChange(e.target.value)}
-      />
-
-      {error && (
-        <p className="text-xs mt-1" style={dangerStyle}>
-          {error}
-        </p>
-      )}
-    </div>
+    <TextField
+      id={id}
+      label={label}
+      type={type}
+      placeholder={placeholder}
+      value={value}
+      error={error}
+      min={min}
+      step={step}
+      onChange={(e) => onChange(e.target.value)}
+    />
   );
 }
 
@@ -329,9 +319,9 @@ export default function ApiConfigForm() {
         </div>
 
         <div className="flex items-center justify-between pt-2">
-          <button
+          <Button
             type="button"
-            className="btn-outline"
+            variant="outline"
             id="api-config-reset"
             onClick={handleReset}
             style={{
@@ -341,7 +331,7 @@ export default function ApiConfigForm() {
             }}
           >
             Reset to defaults
-          </button>
+          </Button>
 
           <div className="flex items-center gap-3">
             {saved && (
@@ -354,10 +344,10 @@ export default function ApiConfigForm() {
               </span>
             )}
 
-            <button
+            <Button
               id="api-config-save"
               type="submit"
-              className="btn-primary"
+              variant="primary"
               disabled={hasErrors}
               style={{
                 height: '36px',
@@ -366,7 +356,7 @@ export default function ApiConfigForm() {
               }}
             >
               Save configuration
-            </button>
+            </Button>
           </div>
         </div>
       </form>
