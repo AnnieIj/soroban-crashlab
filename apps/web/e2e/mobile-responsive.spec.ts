@@ -169,6 +169,27 @@ test.describe('Mobile responsive layout', () => {
     expect(hasHorizontalOverflow).toBe(false);
   });
 
+  test('uses compact, non-scrolling navigation throughout the tablet range', async ({ page }) => {
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await page.goto('/');
+
+    const desktopNav = page.locator('header nav');
+    await expect(desktopNav).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Open navigation menu' })).toBeHidden();
+
+    const navDoesNotScroll = await desktopNav.evaluate((nav) => nav.scrollWidth <= nav.clientWidth);
+    expect(navDoesNotScroll).toBe(true);
+    await expect(desktopNav.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('title', 'Dashboard');
+
+    const tabletLabelVisible = await desktopNav.locator('.tablet-nav-label').first().isVisible();
+    expect(tabletLabelVisible).toBe(false);
+    await expect(page.locator('.tablet-search-label')).toBeHidden();
+
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await expect(desktopNav.locator('.tablet-nav-label').first()).toBeVisible();
+    await expect(page.locator('.tablet-search-label')).toBeVisible();
+  });
+
   test('transitions navigation UI elements seamlessly when resizing from desktop to mobile viewport', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/');
