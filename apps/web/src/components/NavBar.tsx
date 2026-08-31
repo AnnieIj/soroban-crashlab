@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useTheme } from './ThemeProvider';
 import { useEffect, useRef, useState } from 'react';
 import { useMaintainerMode } from '../app/useMaintainerMode';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 const allNavItems = [
   { href: '/', label: 'Dashboard', icon: '◉' },
@@ -24,6 +25,7 @@ export default function NavBar() {
   const [scrolled, setScrolled] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
+  const hamburgerRef = useRef<HTMLButtonElement>(null);
   const showMaintainer = mmMounted && isMaintainer;
   const navItems = showMaintainer ? allNavItems : allNavItems.filter(i => i.href !== '/maintainer');
 
@@ -45,16 +47,34 @@ export default function NavBar() {
 
   useEffect(() => {
     if (!drawerOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setDrawerOpen(false);
-    };
-    document.addEventListener('keydown', handleKeyDown);
+    // Lock body scroll while the drawer is open. Escape and focus trapping are
+    // handled by useFocusTrap so the keydown listener is not duplicated here.
     document.body.style.overflow = 'hidden';
     return () => {
-      document.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = '';
     };
   }, [drawerOpen]);
+
+  // Make the page content (the sibling shell) inert while the drawer is open
+  // so background focus is effectively removed — the focus trap can never
+  // cycle into the page behind the drawer.
+  useEffect(() => {
+    const shell = document.getElementById('page-shell');
+    if (!shell) return;
+    shell.inert = drawerOpen;
+    shell.setAttribute('aria-hidden', String(drawerOpen));
+    return () => {
+      shell.inert = false;
+      shell.removeAttribute('aria-hidden');
+    };
+  }, [drawerOpen]);
+
+  useFocusTrap(
+    drawerRef,
+    hamburgerRef,
+    drawerOpen,
+    () => setDrawerOpen(false),
+  );
 
   const isActive = (href: string) =>
     pathname === href || (href !== '/' && pathname.startsWith(href));
@@ -142,6 +162,7 @@ export default function NavBar() {
 
           {/* Hamburger - mobile only */}
           <button
+            ref={hamburgerRef}
             onClick={() => setDrawerOpen(true)}
             className="flex md:hidden items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-lg"
             style={{
