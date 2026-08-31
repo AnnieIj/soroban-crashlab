@@ -12,6 +12,7 @@ Soroban CrashLab is an open source dashboard for monitoring and analyzing smart 
 |---|---|
 | Get up and running quickly | [Getting Started](GETTING_STARTED.md) |
 | Understand how the platform works | [Architecture Overview](ARCHITECTURE.md) |
+| Read core design decisions | [Architecture Decision Records (ADRs)](adr/README.md) |
 | Learn the dashboard features | [User Guide](USER_GUIDE.md) |
 | Connect external services | [Integrations Guide](INTEGRATIONS.md) |
 | Deploy to production | [Deployment Guide](DEPLOYMENT.md) |
